@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "noImplicitAny": false,
+    "target": "ES2022",
+    "outDir": "./bin",
+    "skipLibCheck": true
+  },
+  "exclude": [
+    "./bin",
+    "./node_modules"
+  ]
+}

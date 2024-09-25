@@ -1,0 +1,88 @@
+<!-- Copyright (c) Microsoft Corporation.
+ Licensed under the MIT License. -->
+
+<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>CodePush</title>
+    <script type="text/javascript">
+        function selectAccessKey() {
+            window.setTimeout(function () {
+                key.select();
+            }, /*timeout*/ 0);
+        }
+
+        window.onload = function () {
+            key.onclick = function () {
+                selectAccessKey();
+            };
+        };
+    </script>
+    <style>
+        @font-face {
+            font-family: 'wf_segoe-ui_normal';
+            src: url("//i.s-microsoft.com/fonts/segoe-ui/west-european/normal/latest.eot");
+            src: url("//i.s-microsoft.com/fonts/segoe-ui/west-european/normal/latest.eot?#iefix") format("embedded-opentype"), url("//i.s-microsoft.com/fonts/segoe-ui/west-european/normal/latest.woff") format("woff"), url("//i.s-microsoft.com/fonts/segoe-ui/west-european/normal/latest.ttf") format("truetype"), url("//i.s-microsoft.com/fonts/segoe-ui/west-european/normal/latest.svg#web") format("svg");
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'wf_segoe-ui_light';
+            src: url("//i.s-microsoft.com/fonts/segoe-ui/west-european/light/latest.eot");
+            src: url("//i.s-microsoft.com/fonts/segoe-ui/west-european/light/latest.eot?#iefix") format("embedded-opentype"), url("//i.s-microsoft.com/fonts/segoe-ui/west-european/light/latest.woff") format("woff"), url("//i.s-microsoft.com/fonts/segoe-ui/west-european/light/latest.ttf") format("truetype"), url("//i.s-microsoft.com/fonts/segoe-ui/west-european/light/latest.svg#web") format("svg");
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+            overflow: hidden;
+        }
+
+        .container {
+            padding-top: 4em;
+            text-align: center;
+            font-size: 1.5em;
+            font-family: 'wf_segoe-ui_light', 'wf_segoe-ui_normal', Tahoma;
+            color: white;s
+            width: 100%;
+            height: 100%;
+            filter: progid:DXImageTransform.Microsoft.AlphaImageLoader(src='/auth/images/CodePushFinal_4_bg.svg', sizingMethod='scale');
+            -ms-filter: "progid:DXImageTransform.Microsoft.AlphaImageLoader(src='/auth/images/CodePushFinal_4_bg.svg', sizingMethod='scale')";
+            background-color: black;
+            background-image: url("/auth/images/CodePushFinal_4_bg.svg");
+            background-size: cover;
+            background-position: top;
+            background-repeat: no-repeat;
+            overflow: hidden;
+        }
+
+        #key {
+            font-family: Consolas;
+            font-size: 1.3rem;
+            margin: 0px 20px 20px 20px;
+            padding: 4px;
+            text-align: center;
+            width: 30rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <% if (isNewAccount) { %>
+            Your CodePush account has been created.<br/>
+        <% } else { %>
+            Authentication succeeded.<br/>
+        <% } %>  Please copy and paste this access key to the command window:<br />
+            <br />
+            <input id="key" readonly value="<%= accessKey %>" /><br>
+            After doing so, please close this browser.
+    </div>
+</body>
+</html>

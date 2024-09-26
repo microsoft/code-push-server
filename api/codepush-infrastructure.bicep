@@ -35,6 +35,8 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   location: az_location
   properties: {
     minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: true
+    publicNetworkAccess: 'Enabled'
   }
   sku: {
     name: 'Standard_LRS'

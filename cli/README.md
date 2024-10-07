@@ -420,8 +420,6 @@ Achieving the equivalent behavior with the `release-react` command would simply 
 code-push-standalone release-react MyApp-iOS ios
 ```
 
-_NOTE: We believe that the `release-react` command should be valuable for most React Native developers, so if you're finding that it isn't flexible enough or missing a key feature, please don't hesitate to [let us know](mailto:codepushfeed@microsoft.com), so that we can improve it!_
-
 #### App name parameter
 
 This is the same parameter as the one described in the [above section](#app-name-parameter).

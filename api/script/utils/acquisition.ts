@@ -59,8 +59,11 @@ function getUpdatePackage(packageHistory: Package[], request: UpdateCheckRequest
     // Note that older client plugin versions do not send the release label. If the
     // label is supplied, we use label comparison, since developers can release the
     // same update twice. Otherwise, we fall back to hash comparison.
+    // If request is missing both label and hash we take the latest package
+    // as we cannot determine which one the client is running
     foundRequestPackageInHistory =
       foundRequestPackageInHistory ||
+      (!request.label && !request.packageHash) ||
       (request.label && packageEntry.label === request.label) ||
       (!request.label && packageEntry.packageHash === request.packageHash);
     if (packageEntry.isDisabled || (ignoreRolloutPackages && isUnfinishedRollout(packageEntry.rollout))) {

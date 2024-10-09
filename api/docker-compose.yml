@@ -1,0 +1,25 @@
+version: "3.3"
+name: codepush
+services:
+  postgres:
+    image: postgres:12-alpine
+    container_name: codepush_local_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: "codepush"
+      POSTGRES_DB: "codepushdb"
+      POSTGRES_PASSWORD: "root"
+    restart: on-failure
+    network_mode: bridge
+  localstack:
+    build : ./localstack/
+    container_name: codepush_localstack_instance
+    ports:
+      - "4510-4559:4510-4559"  # external service port range
+      - "4566:4566"            # LocalStack Edge Proxy
+    network_mode: bridge
+    environment:
+      LOCALSTACK_SERVICES: s3
+      AWS_DEFAULT_REGION: ap-south-1
+      EDGE_PORT: 4566

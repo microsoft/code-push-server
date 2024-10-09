@@ -10,7 +10,8 @@
     "build": "tsc && shx cp -r ./script/views ./bin/script",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
-    "lint:fix": "npx eslint ./script/**/*.ts --fix"
+    "lint:fix": "npx eslint ./script/**/*.ts --fix",
+    "restart": "npm run build && npm run start:env"
   },
   "repository": {
     "type": "git",
@@ -22,6 +23,7 @@
   },
   "author": "Microsoft",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.664.0",
     "@azure/data-tables": "^13.2.2",
     "@azure/identity": "^4.2.1",
     "@azure/keyvault-secrets": "^4.7.0",
@@ -42,10 +44,12 @@
     "passport-github2": "0.1.9",
     "passport-http-bearer": "1.0.1",
     "passport-windowslive": "1.0.1",
+    "pg": "^8.13.0",
     "q": "^1.4.1",
     "redis": "2.4.2",
     "sanitize-html": "^2.11.0",
     "semver": "^7.5.3",
+    "sequelize": "^6.37.3",
     "shortid": "2.2.2",
     "stream-to-array": "^2.3.0",
     "streamifier": "0.1.1",

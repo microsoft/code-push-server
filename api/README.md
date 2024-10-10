@@ -16,12 +16,26 @@ Additionally, you need to specify [EMULATED](ENVIRONMENT.md#emulated) flag equal
 
 #### Steps
 To run the CodePush Server locally, follow these steps:
-1. Clone the CodePush Service repository.
-2. Copy the `.env.example` file to a new file named `.env` in the root directory.
-3. Fill in the values for each environment variable in the `.env` file according to your development or production setup.
-4. Install dependencies by running `npm install`.
-5. Build the server by running `npm run build`.
-6. Start the server by running `npm run start:env`.
+
+1. Clone the CodePush Service repository to your local machine.
+
+2. Copy the `.env.example` file to a new file named `.env` in the root directory:
+   ````bash
+   cp .env.example .env
+   ````
+   Fill in the values for each environment variable in the `.env` file according to your development or production setup.
+3. Install all necessary dependencies:
+   ````bash
+   npm install
+   ````
+4. Compile the server code:
+   ````bash
+   npm run build
+   ````
+5. Launch the server with the environment-specific start command:
+   ````bash
+   npm run start:env
+   ````
 
 By default, local CodePush server runs on HTTP. To run CodePush Server on HTTPS:
 

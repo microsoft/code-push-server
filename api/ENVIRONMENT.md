@@ -39,8 +39,8 @@ To emulate Azure Blob Storage locally. Azurite needs to be installed and running
 ### Debugging
 
 - `LOGGING`: Turn on CodePush-specific logging of API and Storage requests. If this is insufficient, Azure Storage and Express also have their own configurable logging features.
-- `DEBUG_DISABLE_AUTH`: Disable the OAuth autentication route, allowing you to make requests as anybody without authorizing. Do not set this without going through the proper channels (see section Disabling Auth)
-- `DEBUG_USER_ID`: Backend id of user to behave as during the debugging session
+- `DEBUG_DISABLE_AUTH`: Set to 'true' to skip authentication and impersonate existing user. When set, server uses `DEBUG_USER_ID` as logged in user for all requests requiring authentication.
+- `DEBUG_USER_ID`: Backend id of existing user to impersonate when `DEBUG_DISABLE_AUTH` is set to 'true'. Default value: 'default'. 
 
 ### Redis
 To enable the Redis caching layer, set:

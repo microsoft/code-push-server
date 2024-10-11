@@ -4,7 +4,6 @@
 import * as yargs from "yargs";
 import * as cli from "../script/types/cli";
 import * as chalk from "chalk";
-const updateNotifier = require("simple-update-notifier");
 import backslash = require("backslash");
 import parseDuration = require("parse-duration");
 
@@ -28,18 +27,10 @@ export function showHelp(showRootDescription?: boolean): void {
       console.log(chalk.cyan("======================================"));
       console.log("");
       console.log("CodePush is a service that enables you to deploy mobile app updates directly to your users' devices.\n");
-      updateCheck();
     }
 
     yargs.showHelp();
     wasHelpShown = true;
-  }
-}
-
-function updateCheck(): void {
-  const notifier = updateNotifier({ pkg: packageJson });
-  if (notifier.update) {
-    notifier.notify();
   }
 }
 

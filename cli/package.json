@@ -36,7 +36,6 @@
     "rimraf": "^2.5.1",
     "semver": "^7.5.3",
     "simctl": "^2.0.3",
-    "simple-update-notifier": "^2.0.0",
     "slash": "1.0.0",
     "superagent": "^8.0.9",
     "which": "^1.2.7",

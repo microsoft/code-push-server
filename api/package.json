@@ -32,7 +32,7 @@
     "cookie-session": "^2.0.0",
     "ejs": "^3.1.10",
     "email-validator": "1.0.3",
-    "express": "^4.19.2",
+    "express": "^4.21.1",
     "express-domain-middleware": "0.1.0",
     "express-rate-limit": "^7.4.0",
     "multer": "^1.4.5-lts.1",

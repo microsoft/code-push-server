@@ -1,0 +1,22 @@
+{
+  "apps": [
+    {
+      "name": "code-push-server",
+      "script": "npm",
+      "instances": 1,
+      "merge_logs": true,
+      "exec_mode": "cluster",
+      "args": "run start:env",
+      "instance_var": "INSTANCE_ID",
+      "cwd": "./api",
+      "error_file": "log/pm2/err.log",
+      "out_file": "log/pm2/out.log",
+      "env": {
+        "NODE_ENV": "prod",
+        "EMULATED": "true",
+        "PORT": "3012",
+        "SERVER_URL": "http://localhost:3012"
+      }
+    }
+  ]
+}

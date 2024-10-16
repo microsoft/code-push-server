@@ -1,0 +1,22 @@
+{
+  "name": "code-push-server",
+  "version": "1.0.0-SNAPSHOT",
+  "team": "devX",
+  "components": [
+    {
+      "type": "application",
+      "name": "code-push-server",
+      "version": "1.0.0",
+      "config": {
+        "artifact_name": "code-push-server",
+        "artifact_version": "1.0.1-SNAPSHOT",
+        "build_type": "debian-node",
+        "build_version": "14.15.1",
+        "discovery": "both",
+        "liveness_endpoint": "healthcheck",
+        "readiness_endpoint": "healthcheck",
+        "port": 3010
+      }
+    }
+  ]
+}

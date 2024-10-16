@@ -1,0 +1,25 @@
+[
+  {
+    "component_name": "code-push-server",
+    "deployment_type": "aws_ec2",
+    "env_variables": {
+      "ENABLE_GRANULATE": "true",
+      "ENABLE_WAZUH": "false"
+    },
+    "params": {
+      "lb_type": "alb",
+      "instance_pool": [
+        "t3.medium",
+        "t3a.medium",
+        "c5a.large",
+        "c5.large"
+      ],
+      "strategy": {
+        "name": "blue-green",
+        "auto_routing": false,
+        "canary": false
+      },
+      "num_instances": 2
+    }
+  }
+]

@@ -1,0 +1,6 @@
+[
+  {
+    "component_name": "code-push-server",
+    "deployment_type": "container"
+  }
+]

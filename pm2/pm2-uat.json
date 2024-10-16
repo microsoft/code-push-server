@@ -1,0 +1,28 @@
+{
+  "apps": [
+    {
+      "name": "code-push-server",
+      "script": "server.ts",
+      "instances": 1,
+      "watch": false,
+      "merge_logs": true,
+      "exec_mode": "cluster",
+      "log_date_format": "DD-MM-YYYY HH:mm Z",
+      "cwd": "/var/www/code-push-server/api/script",
+      "node_args": "--max-semi-space-size=128",
+      "max_memory_restart": "1024M",
+      "time": false,
+      "instance_var": "INSTANCE_ID",
+      "env": {
+        "TEAM_SUFFIX": "-uat",
+        "VPC_SUFFIX": "",
+        "NODE_ENV": "uat",
+        "EMULATED": "true",
+        "PORT": "3012",
+        "SERVER_URL": "http://localhost:3012"
+      },
+      "error_file": "/var/log/pm2/err.log",
+      "out_file": "/var/log/pm2/out.log"
+    }
+  ]
+}

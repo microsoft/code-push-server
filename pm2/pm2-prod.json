@@ -1,0 +1,27 @@
+{
+  "apps": [
+    {
+      "name": "code-push-server",
+      "script": "npm",
+      "instances": 1,
+      "args": "run start:env",
+      "watch": false,
+      "merge_logs": true,
+      "exec_mode": "cluster",
+      "log_date_format": "DD-MM-YYYY HH:mm Z",
+      "cwd": "./api",
+      "node_args": "--max-semi-space-size=128",
+      "max_memory_restart": "1024M",
+      "time": false,
+      "instance_var": "INSTANCE_ID",
+      "env": {
+        "TEAM_SUFFIX": "",
+        "VPC_SUFFIX": "",
+        "NODE_ENV": "prod",
+        "EMULATED": "true",
+        "PORT": "3012",
+        "SERVER_URL": "http://localhost:3012"
+      }
+    }
+  ]
+}

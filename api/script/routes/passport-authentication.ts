@@ -167,17 +167,17 @@ export class PassportAuthentication {
 
     router.get("/auth/login", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["hostname"] = req.query.hostname;
-      res.render("authenticate", { action: "login" });
+      res.render("authenticate", { action: "login", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
     });
 
     router.get("/auth/link", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["authorization"] = req.query.access_token;
-      res.render("authenticate", { action: "link" });
+      res.render("authenticate", { action: "link", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
     });
 
     router.get("/auth/register", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["hostname"] = req.query.hostname;
-      res.render("authenticate", { action: "register" });
+      res.render("authenticate", { action: "register", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
     });
 
     return router;

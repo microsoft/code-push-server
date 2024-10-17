@@ -198,6 +198,9 @@ export interface IReleaseReactCommand extends IReleaseBaseCommand {
   sourcemapOutput?: string;
   outputDir?: string;
   config?: string;
+  useHermes?: boolean;
+  extraHermesFlags?: string[];
+  podFile?: string;
 }
 
 export interface IRollbackCommand extends ICommand {

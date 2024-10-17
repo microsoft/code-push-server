@@ -775,6 +775,28 @@ yargs
           "Path to where the bundle and sourcemap should be written. If omitted, a bundle and sourcemap will not be written.",
         type: "string",
       })
+      .option("useHermes", {
+        alias: "h",
+        default: false,
+        demand: false,
+        description: "Enable hermes and bypass automatic checks",
+        type: "boolean",
+      })
+      .option("podFile", {
+        alias: "pod",
+        default: null,
+        demand: false,
+        description:  "Path to the cocopods config file (iOS only).",
+        type: "string",
+      })
+      .option("extraHermesFlags", {
+        alias: "hf",
+        default: [],
+        demand: false,
+        description:
+          "Flags that get passed to Hermes, JavaScript to bytecode compiler. Can be specified multiple times.",
+        type: "array",
+      })
       .check((argv: any, aliases: { [aliases: string]: string }): any => {
         return checkValidReleaseOptions(argv);
       });
@@ -1169,6 +1191,9 @@ export function createCommand(): cli.ICommand {
           releaseReactCommand.rollout = getRolloutValue(argv["rollout"] as any);
           releaseReactCommand.sourcemapOutput = argv["sourcemapOutput"] as any;
           releaseReactCommand.outputDir = argv["outputDir"] as any;
+          releaseReactCommand.useHermes = argv["useHermes"] as any;
+          releaseReactCommand.extraHermesFlags = argv["extraHermesFlags"] as any;
+          releaseReactCommand.podFile = argv["podFile"] as any;
         }
         break;
 

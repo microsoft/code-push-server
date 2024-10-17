@@ -392,6 +392,9 @@ code-push-standalone release-react <appName> <platform>
 [--sourcemapOutput <sourcemapOutput>]
 [--targetBinaryVersion <targetBinaryVersion>]
 [--rollout <rolloutPercentage>]
+[--useHermes <useHermes>]
+[--podFile <podFile>]
+[--extraHermesFlags <extraHermesFlags>]
 ```
 
 The `release-react` command is a React Native-specific version of the "vanilla" [`release`](#releasing-app-updates) command, which supports all of the same parameters (e.g. `--mandatory`, `--description`), yet simplifies the process of releasing updates by performing the following additional behavior:
@@ -520,6 +523,24 @@ _NOTE: This parameter can be set using either --sourcemapOutput or -s_
 This specifies the relative path to where the assets, JS bundle and sourcemap files should be written. If left unspecified, the assets, JS bundle and sourcemap will be copied to the `/tmp/CodePush` folder.
 
 _NOTE: This parameter can be set using either --outputDir or -o_
+
+#### Use Hermes parameter
+
+This parameter enforces the use of the Hermes compiler. If not specified, the automatic checks will be performed, inspecting the `build.gradle` and `Podfile` for the Hermes flag.
+
+_NOTE: This parameter can be set using either --hermesEnabled or -h_
+
+#### Podfile parameter (iOS only)
+
+The Podfile path will be used for Hermes automatic check. Not used if `--useHermes` is specified.
+
+_NOTE: This parameter can be set using either --podfile or -pod_
+
+#### Extra hermes flags parameter
+
+Hermes flags which will be passed to Hermes compiler.
+
+_NOTE: This parameter can be set using either --extraHermesFlags or -hf_
 
 ## Debugging CodePush Integration
 

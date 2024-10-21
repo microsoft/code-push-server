@@ -7,6 +7,7 @@ import { getHeadersMiddleware, HeadersConfig } from "./routes/headers";
 import { getAcquisitionRouter, getHealthRouter, AcquisitionConfig } from "./routes/acquisition";
 import { getManagementRouter, ManagementConfig } from "./routes/management";
 import { PassportAuthentication, AuthenticationConfig } from "./routes/passport-authentication";
+import { Authentication } from "./routes/authentication";
 import { AppInsights } from "./routes/app-insights";
 import { InputSanitizer } from "./routes/input-sanitizer";
 import { RequestTimeoutHandler } from "./routes/request-timeout";
@@ -29,10 +30,10 @@ export function management(config: ManagementConfig): Router {
 
 export function auth(config: AuthenticationConfig): any {
   const passportAuthentication = new PassportAuthentication(config);
+  const autentication = new Authentication(config);
   return {
-    router: passportAuthentication.getRouter.bind(passportAuthentication),
-    legacyRouter: passportAuthentication.getLegacyRouter.bind(passportAuthentication),
-    authenticate: passportAuthentication.authenticate,
+    router: autentication.getRouter.bind(passportAuthentication),
+    authenticate: autentication.authenticate,
   };
 }
 

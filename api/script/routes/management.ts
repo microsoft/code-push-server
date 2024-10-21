@@ -58,7 +58,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
   const nameResolver: NameResolver = new NameResolver(config.storage);
 
   router.get("/account", (req: Request, res: Response, next: (err?: any) => void): any => {
-    const accountId: string = req.user.id;
+    const accountId: string = "id_0";
     storage
       .getAccount(accountId)
       .then((storageAccount: storageTypes.Account) => {

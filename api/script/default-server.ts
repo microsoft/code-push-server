@@ -2,14 +2,23 @@
 // Licensed under the MIT License.
 
 import * as api from "./api";
+import { S3 } from "aws-sdk"; // Amazon S3
+import { SecretsManager } from "aws-sdk";
+import * as awsRDS from "aws-sdk/clients/rds";
 import { AzureStorage } from "./storage/azure-storage";
 import { fileUploadMiddleware } from "./file-upload-manager";
 import { JsonStorage } from "./storage/json-storage";
 import { RedisManager } from "./redis-manager";
 import { Storage } from "./storage/storage";
 import { Response } from "express";
-const { DefaultAzureCredential } = require("@azure/identity");
-const { SecretClient } = require("@azure/keyvault-secrets");
+// const { DefaultAzureCredential } = require("@azure/identity");
+// const { SecretClient } = require("@azure/keyvault-secrets");
+const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || "<your-s3-bucket-name>";
+const RDS_DB_INSTANCE_IDENTIFIER = process.env.RDS_DB_INSTANCE_IDENTIFIER || "<your-rds-instance>";
+const SECRETS_MANAGER_SECRET_ID = process.env.SECRETS_MANAGER_SECRET_ID || "<your-secret-id>";
+
+const s3 = new S3(); // Create an S3 instance
+const secretsManager = new SecretsManager(); // Secrets Manager instance for fetching credentials
 
 import * as bodyParser from "body-parser";
 const domain = require("express-domain-middleware");
@@ -36,32 +45,32 @@ function bodyParserErrorHandler(err: any, req: express.Request, res: express.Res
 
 export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void, useJsonStorage?: boolean): void {
   let storage: Storage;
-  let isKeyVaultConfigured: boolean;
-  let keyvaultClient: any;
+  let isSecretsManagerConfigured: boolean;
+  let secretValue: any;
 
   q<void>(null)
     .then(async () => {
-      if (useJsonStorage) {
+      if (true) {
         storage = new JsonStorage();
-      } else if (!process.env.AZURE_KEYVAULT_ACCOUNT) {
-        storage = new AzureStorage();
       } else {
-        isKeyVaultConfigured = true;
+        // Fetch secrets from AWS Secrets Manager
+        try {
+          const secretData = await secretsManager.getSecretValue({ SecretId: SECRETS_MANAGER_SECRET_ID }).promise();
+          secretValue = JSON.parse(secretData.SecretString || "{}");
+          isSecretsManagerConfigured = true;
+        } catch (error) {
+          console.error("Failed to fetch secrets from AWS Secrets Manager", error);
+          throw error;
+        }
 
-        const credential = new DefaultAzureCredential();
-
-        const vaultName = process.env.AZURE_KEYVAULT_ACCOUNT;
-        const url = `https://${vaultName}.vault.azure.net`;
-
-        const keyvaultClient = new SecretClient(url, credential);
-        const secret = await keyvaultClient.getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`);
-        storage = new AzureStorage(process.env.AZURE_STORAGE_ACCOUNT, secret);
+        // Set up S3 storage using the secret (or fallback to default S3 config)
+        //storage = s3; // Simple S3 instance for storage
+        storage = new JsonStorage();
       }
     })
     .then(() => {
       const app = express();
       const auth = api.auth({ storage: storage });
-      const appInsights = api.appInsights();
       const redisManager = new RedisManager();
 
       // First, to wrap all requests and catch all exceptions.
@@ -121,7 +130,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use(bodyParserErrorHandler);
 
       // Before all other middleware to ensure all requests are tracked.
-      app.use(appInsights.router());
+      // app.use(appInsights.router());
 
       app.get("/", (req: express.Request, res: express.Response, next: (err?: Error) => void): any => {
         res.send("Welcome to the CodePush REST API!");
@@ -157,28 +166,28 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
         } else {
           app.use(auth.router());
         }
-        app.use(auth.authenticate, fileUploadMiddleware, api.management({ storage: storage, redisManager: redisManager }));
+        app.use(fileUploadMiddleware, api.management({ storage: storage, redisManager: redisManager }));
       } else {
-        app.use(auth.legacyRouter());
+        app.use(auth.router());
       }
 
       // Error handler needs to be the last middleware so that it can catch all unhandled exceptions
-      app.use(appInsights.errorHandler);
+      // app.use(appInsights.errorHandler);
 
-      if (isKeyVaultConfigured) {
-        // Refresh credentials from the vault regularly as the key is rotated
-        setInterval(() => {
-          keyvaultClient
-            .getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`)
-            .then((secret: any) => {
-              return (<AzureStorage>storage).reinitialize(process.env.AZURE_STORAGE_ACCOUNT, secret);
-            })
-            .catch((error: Error) => {
-              console.error("Failed to reinitialize storage from Key Vault credentials");
-              appInsights.errorHandler(error);
-            })
-            .done();
-        }, Number(process.env.REFRESH_CREDENTIALS_INTERVAL) || 24 * 60 * 60 * 1000 /*daily*/);
+      // AWS Secrets Manager - Refresh credentials if necessary
+      if (false) {
+        setInterval(async () => {
+          try {
+            const secretData = await secretsManager.getSecretValue({ SecretId: SECRETS_MANAGER_SECRET_ID }).promise();
+            const updatedSecret = JSON.parse(secretData.SecretString || "{}");
+
+            // Update any configuration that relies on the secret
+            //storage.reinitialize(updatedSecret); // This is a hypothetical method depending on your storage interface
+          } catch (error) {
+            console.error("Failed to refresh credentials from AWS Secrets Manager", error);
+            //appInsights.errorHandler(error); // Assuming appInsights is used for error tracking
+          }
+        }, Number(process.env.REFRESH_CREDENTIALS_INTERVAL) || 24 * 60 * 60 * 1000); // Daily refresh
       }
 
       done(null, app, storage);

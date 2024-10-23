@@ -1,9 +1,12 @@
 import * as q from "q";
 import * as storage from "./storage";
 import { S3} from "aws-sdk";
-import {HeadBucketRequest} from "aws-sdk/clients/s3"
+import {HeadBucketRequest, CreateBucketRequest} from "aws-sdk/clients/s3"
 import * as stream from "stream";
 import { Sequelize, DataTypes } from "sequelize";
+//import * from nanoid;
+import * as shortid from "shortid";
+import * as utils from "../utils/common";
 
 //Creating Access Key
 export function createAccessKey(sequelize: Sequelize) {
@@ -78,6 +81,14 @@ export function createDeployment(sequelize: Sequelize) {
             model: sequelize.models["package"],
             key: 'id',
           },},
+          appId: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            references: {
+              model: sequelize.models["apps"], // Foreign key to the App model
+              key: 'id',
+            },
+          },
         createdTime: { type: DataTypes.TIME, allowNull: false },
     })
 }
@@ -112,6 +123,43 @@ export function createPackage(sequelize: Sequelize) {
     })
 }
 
+//create App Pointer
+
+export function createAppPointer(sequelize: Sequelize) {
+    return sequelize.define("AppPointer", {
+        id: {
+          type: DataTypes.STRING,
+          primaryKey: true,
+          allowNull: false,
+          defaultValue: DataTypes.UUIDV4, // Generates a UUID by default
+        },
+        accountId: {
+          type: DataTypes.STRING,
+          allowNull: false,
+          references: {
+            model: 'Accounts', // References Account model
+            key: 'id',
+          },
+        },
+        appId: {
+          type: DataTypes.STRING,
+          allowNull: false,
+          references: {
+            model: 'Apps', // References App model
+            key: 'id',
+          },
+        },
+        partitionKeyPointer: {
+          type: DataTypes.STRING,
+          allowNull: false, // Could be useful for referencing legacy data
+        },
+        rowKeyPointer: {
+          type: DataTypes.STRING,
+          allowNull: false, // Could be useful for referencing legacy data
+        },
+      });
+}
+
 
 
 
@@ -121,6 +169,7 @@ export function createModels(sequelize: Sequelize) {
     , createDeployment(sequelize)
     , createAccount(sequelize)
     , createAccessKey(sequelize)
+    , createAppPointer(sequelize)
     , createCollaborators(sequelize)
     , createApp(sequelize)])
 }
@@ -132,6 +181,7 @@ export const MODELS = {
   PACKAGE : "package",
   ACCESSKEY : "accessKey",
   ACCOUNT : "account",
+  APPPOINTER: "AppPointer",
 }
 
 const DB_NAME = "codepushdb"
@@ -145,28 +195,61 @@ export class S3Storage implements storage.Storage {
     private sequelize:Sequelize;
     private setupPromise: q.Promise<void>
     public constructor() {
-        this.s3 = new S3();
-    
-        this.sequelize = new Sequelize(process.env["DB_NAME"] || DB_NAME, process.env["DB_USER_NAME"] || DB_USER_NAME, process.env["DB_PASS"] || DB_PASS, {
+        this.s3 = new S3({
+          endpoint: process.env.S3_ENDPOINT, // LocalStack S3 endpoint
+          s3ForcePathStyle: true,
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        });
+        shortid.characters("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-");
+        this.sequelize = new Sequelize(process.env.DB_USER || DB_NAME, process.env["DB_USER_NAME"] || DB_USER_NAME, process.env["DB_PASS"] || DB_PASS, {
             host: process.env["DB_HOST"] || DB_HOST,
-            dialect: 'postgres'
+            dialect: 'mysql'
           });
         this.setupPromise = this.setup()
           
     }
 
-    private setup():q.Promise<void> {
-    let headBucketParams : HeadBucketRequest = {
-            Bucket: this.bucketName
-     }
-      return q.all([
-        this.s3.headBucket(headBucketParams).promise(),
-        this.sequelize.authenticate(),
-          createModels(this.sequelize)
-      ]).then(() => {
-        this.sequelize.sync()
-      })
-    }
+    private setup(): q.Promise<void> {
+      let headBucketParams: HeadBucketRequest = {
+          Bucket: this.bucketName,
+      };
+  
+      let createBucketParams: CreateBucketRequest = {
+          Bucket: this.bucketName,
+      };
+  
+      // Wrap everything in q.Promise
+      return q(this.s3.headBucket(headBucketParams).promise())
+          .catch((err) => {
+              if (err.code === 'NotFound' || err.code === 'NoSuchBucket') {
+                  console.log(`Bucket ${this.bucketName} does not exist, creating it...`);
+                  return q(this.s3.createBucket(createBucketParams).promise());
+              } else if (err.code === 'Forbidden') {
+                  console.error('Forbidden: Check your credentials and S3 endpoint');
+                  throw err; // Re-throw the error after logging
+              } else {
+                  throw err; // Other errors, re-throw them
+              }
+          })
+          .then(() => {
+              // Convert Sequelize promises into q.Promise using nfcall
+              return q.call(this.sequelize.authenticate.bind(this.sequelize));
+          })
+          .then(() => {
+            console.log("Sequlized autenticated")
+              return q.call(createModels.bind(null, this.sequelize)); // Ensure model creation uses q.Promise
+          })
+          .then(() => {
+              // return q.call(this.sequelize.sync.bind(this.sequelize));
+              console.log("Sequlized Model bounded")
+              this.sequelize.sync()
+          })
+          .catch((error) => {
+              console.error('Error during setup:', error);
+              throw error;
+          });
+  }  
 
     public reinitialize(): q.Promise<void> {
       console.log("Re-initializing AWS storage");
@@ -198,7 +281,7 @@ export class S3Storage implements storage.Storage {
           .then(() => {
             return account.id;
           })
-          .catch(S3Storage.azureErrorHandler);
+          .catch(S3Storage.storageErrorHandler);
       }
   
     public getAccount(accountId: string): q.Promise<storage.Account> {
@@ -209,7 +292,7 @@ export class S3Storage implements storage.Storage {
         .then((acoount) => {
           return acoount.dataValues
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public getAccountByEmail(email: string): q.Promise<storage.Account> {
@@ -231,7 +314,7 @@ export class S3Storage implements storage.Storage {
             where: {"email" : email},
           },)
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public getAccountIdFromAccessKey(accessKey: string): q.Promise<string> {
@@ -249,7 +332,7 @@ export class S3Storage implements storage.Storage {
   
           return accessKey.dataValues["accountId"];
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public addApp(accountId: string, app: storage.App): q.Promise<storage.App> {
@@ -283,7 +366,7 @@ export class S3Storage implements storage.Storage {
         .then(() => {
           return app;
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public getApps(accountId: string): q.Promise<storage.App[]> {
@@ -302,7 +385,7 @@ export class S3Storage implements storage.Storage {
           }
           return apps;
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public getApp(accountId: string, appId: string, keepCollaboratorIds: boolean = false): q.Promise<storage.App> {
@@ -315,7 +398,7 @@ export class S3Storage implements storage.Storage {
         .then((app) => {
           return app; 
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public removeApp(accountId: string, appId: string): q.Promise<void> {
@@ -331,7 +414,7 @@ export class S3Storage implements storage.Storage {
             where :{id : appId, accountId: accountId}
           })
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public updateApp(accountId: string, app: storage.App): q.Promise<void> {
@@ -342,84 +425,108 @@ export class S3Storage implements storage.Storage {
         .then(() => {
           return this.updateAppWithPermission(accountId,app,true)
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
+
+    
   
+    //P1
+
+    //MARK: TODO
     public transferApp(accountId: string, appId: string, email: string): q.Promise<void> {
-      // let app: storage.App;
-      // let targetCollaboratorAccountId: string;
-      // let requestingCollaboratorEmail: string;
-      // let isTargetAlreadyCollaborator: boolean;
+      let app: storage.App;
+      let targetCollaboratorAccountId: string;
+      let requestingCollaboratorEmail: string;
+      let isTargetAlreadyCollaborator: boolean;
   
-      // return this.setupPromise
-      //   .then(() => {
-      //     const getAppPromise: q.Promise<storage.App> = this.getApp(accountId, appId, /*keepCollaboratorIds*/ true);
-      //     const accountPromise: q.Promise<storage.Account> = this.getAccountByEmail(email);
-      //     return q.all<any>([getAppPromise, accountPromise]);
-      //   })
-      //   .spread((appPromiseResult: storage.App, accountPromiseResult: storage.Account) => {
-      //     targetCollaboratorAccountId = accountPromiseResult.id;
-      //     email = accountPromiseResult.email; // Use the original email stored on the account to ensure casing is consistent
-      //     app = appPromiseResult;
-      //     requestingCollaboratorEmail = S3Storage.getEmailForAccountId(app.collaborators, accountId);
+      return this.setupPromise
+        .then(() => {
+          const getAppPromise: q.Promise<storage.App> = this.getApp(accountId, appId, /*keepCollaboratorIds*/ true);
+          const accountPromise: q.Promise<storage.Account> = this.getAccountByEmail(email);
+          return q.all<any>([getAppPromise, accountPromise]);
+        })
+        .spread((appPromiseResult: storage.App, accountPromiseResult: storage.Account) => {
+          targetCollaboratorAccountId = accountPromiseResult.id;
+          email = accountPromiseResult.email; // Use the original email stored on the account to ensure casing is consistent
+          app = appPromiseResult;
+          requestingCollaboratorEmail = S3Storage.getEmailForAccountId(app.collaborators, accountId);
   
-      //     if (requestingCollaboratorEmail === email) {
-      //       throw storage.storageError(storage.ErrorCode.AlreadyExists, "The given account already owns the app.");
-      //     }
+          if (requestingCollaboratorEmail === email) {
+            throw storage.storageError(storage.ErrorCode.AlreadyExists, "The given account already owns the app.");
+          }
   
-      //     return this.getApps(targetCollaboratorAccountId);
-      //   })
-      //   .then((appsForCollaborator: storage.App[]) => {
-      //     if (storage.NameResolver.isDuplicate(appsForCollaborator, app.name)) {
-      //       throw storage.storageError(
-      //         storage.ErrorCode.AlreadyExists,
-      //         'Cannot transfer ownership. An app with name "' + app.name + '" already exists for the given collaborator.'
-      //       );
-      //     }
+          return this.getApps(targetCollaboratorAccountId);
+        })
+        .then((appsForCollaborator: storage.App[]) => {
+          if (storage.NameResolver.isDuplicate(appsForCollaborator, app.name)) {
+            throw storage.storageError(
+              storage.ErrorCode.AlreadyExists,
+              'Cannot transfer ownership. An app with name "' + app.name + '" already exists for the given collaborator.'
+            );
+          }
   
-      //     isTargetAlreadyCollaborator = S3Storage.isCollaborator(app.collaborators, email);
+          isTargetAlreadyCollaborator = S3Storage.isCollaborator(app.collaborators, email);
   
-      //     // Update the current owner to be a collaborator
-      //     S3Storage.setCollaboratorPermission(app.collaborators, requestingCollaboratorEmail, storage.Permissions.Collaborator);
+          // Update the current owner to be a collaborator
+          S3Storage.setCollaboratorPermission(app.collaborators, requestingCollaboratorEmail, storage.Permissions.Collaborator);
   
-      //     // set target collaborator as an owner.
-      //     if (isTargetAlreadyCollaborator) {
-      //       S3Storage.setCollaboratorPermission(app.collaborators, email, storage.Permissions.Owner);
-      //     } else {
-      //       const targetOwnerProperties: storage.CollaboratorProperties = {
-      //         accountId: targetCollaboratorAccountId,
-      //         permission: storage.Permissions.Owner,
-      //       };
-      //       S3Storage.addToCollaborators(app.collaborators, email, targetOwnerProperties);
-      //     }
+          // set target collaborator as an owner.
+          if (isTargetAlreadyCollaborator) {
+            S3Storage.setCollaboratorPermission(app.collaborators, email, storage.Permissions.Owner);
+          } else {
+            const targetOwnerProperties: storage.CollaboratorProperties = {
+              accountId: targetCollaboratorAccountId,
+              permission: storage.Permissions.Owner,
+            };
+            S3Storage.addToCollaborators(app.collaborators, email, targetOwnerProperties);
+          }
   
-      //     return this.updateAppWithPermission(accountId, app, /*updateCollaborator*/ true);
-      //   })
-      //   .then(() => {
-      //     if (!isTargetAlreadyCollaborator) {
-      //       // Added a new collaborator as owner to the app, create a corresponding entry for app in target collaborator's account.
-      //       return this.addAppPointer(targetCollaboratorAccountId, app.id);
-      //     }
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
+          return this.updateAppWithPermission(accountId, app, /*updateCollaborator*/ true);
+        })
+        .then(() => {
+          if (!isTargetAlreadyCollaborator) {
+            // Added a new collaborator as owner to the app, create a corresponding entry for app in target collaborator's account.
+            return this.addAppPointer(targetCollaboratorAccountId, app.id);
+          }
+        })
+        .catch(S3Storage.storageErrorHandler);
     }
   
+
+    private addAppPointer(accountId: string, appId: string): q.Promise<void> {
+        return this.setupPromise
+          .then(() => {
+            // Directly create the pointer in the DB using foreign keys (instead of partition/row keys)
+            return this.sequelize.models[MODELS.APPPOINTER].create({
+              accountId,
+              appId,
+              partitionKeyPointer: `accountId ${accountId}`,
+              rowKeyPointer: `appId ${appId}`,
+            });
+          })
+          .then(() => {
+            console.log('App pointer added successfully');
+          })
+          .catch(S3Storage.storageErrorHandler);
+      }
+      
+    //P0
     public addCollaborator(accountId: string, appId: string, email: string): q.Promise<void> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     const getAppPromise: q.Promise<storage.App> = this.getApp(accountId, appId, /*keepCollaboratorIds*/ true);
-      //     const accountPromise: q.Promise<storage.Account> = this.getAccountByEmail(email);
-      //     return q.all<any>([getAppPromise, accountPromise]);
-      //   })
-      //   .spread((app: storage.App, account: storage.Account) => {
-      //     // Use the original email stored on the account to ensure casing is consistent
-      //     email = account.email;
-      //     return this.addCollaboratorWithPermissions(accountId, app, email, {
-      //       accountId: account.id,
-      //       permission: storage.Permissions.Collaborator,
-      //     });
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
+      return this.setupPromise
+        .then(() => {
+          const getAppPromise: q.Promise<storage.App> = this.getApp(accountId, appId, /*keepCollaboratorIds*/ true);
+          const accountPromise: q.Promise<storage.Account> = this.getAccountByEmail(email);
+          return q.all<any>([getAppPromise, accountPromise]);
+        })
+        .spread((app: storage.App, account: storage.Account) => {
+          // Use the original email stored on the account to ensure casing is consistent
+          email = account.email;
+          return this.addCollaboratorWithPermissions(accountId, app, email, {
+            accountId: account.id,
+            permission: storage.Permissions.Collaborator,
+          });
+        })
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public getCollaborators(accountId: string, appId: string): q.Promise<storage.CollaboratorMap> {
@@ -430,456 +537,605 @@ export class S3Storage implements storage.Storage {
         .then((app: storage.App) => {
           return q<storage.CollaboratorMap>(app.collaborators);
         })
-        .catch(S3Storage.azureErrorHandler);
+        .catch(S3Storage.storageErrorHandler);
     }
   
     public removeCollaborator(accountId: string, appId: string, email: string): q.Promise<void> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.getApp(accountId, appId, /*keepCollaboratorIds*/ true);
-      //   })
-      //   .then((app: storage.App) => {
-      //     const removedCollabProperties: storage.CollaboratorProperties = app.collaborators[email];
-  
-      //     if (!removedCollabProperties) {
-      //       throw storage.storageError(storage.ErrorCode.NotFound, "The given email is not a collaborator for this app.");
-      //     }
-  
-      //     if (!S3Storage.isOwner(app.collaborators, email)) {
-      //       delete app.collaborators[email];
-      //     } else {
-      //       throw storage.storageError(storage.ErrorCode.AlreadyExists, "Cannot remove the owner of the app from collaborator list.");
-      //     }
-  
-      //     return this.updateAppWithPermission(accountId, app, /*updateCollaborator*/ true).then(() => {
-      //       return this.removeAppPointer(removedCollabProperties.accountId, app.id);
-      //     });
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public addDeployment(accountId: string, appId: string, deployment: storage.Deployment): q.Promise<string> {
-      // let deploymentId: string;
-      // return this.setupPromise
-      //   .then(() => {
-      //     const flatDeployment: any = S3Storage.flattenDeployment(deployment);
-      //     flatDeployment.id = shortid.generate();
-  
-      //     return this.insertByAppHierarchy(flatDeployment, appId, flatDeployment.id);
-      //   })
-      //   .then((returnedId: string) => {
-      //     deploymentId = returnedId;
-      //     return this.uploadToHistoryBlob(deploymentId, JSON.stringify([]));
-      //   })
-      //   .then(() => {
-      //     const shortcutPartitionKey: string = Keys.getShortcutDeploymentKeyPartitionKey(deployment.key);
-      //     const shortcutRowKey: string = Keys.getShortcutDeploymentKeyRowKey();
-      //     const pointer: DeploymentKeyPointer = {
-      //       appId: appId,
-      //       deploymentId: deploymentId,
-      //     };
-  
-      //     const entity: any = this.wrap(pointer, shortcutPartitionKey, shortcutRowKey);
-      //     return this._tableClient.createEntity(entity);
-      //   })
-      //   .then(() => {
-      //     return deploymentId;
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public getDeploymentInfo(deploymentKey: string): q.Promise<storage.DeploymentInfo> {
-      // const partitionKey: string = Keys.getShortcutDeploymentKeyPartitionKey(deploymentKey);
-      // const rowKey: string = Keys.getShortcutDeploymentKeyRowKey();
-  
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.retrieveByKey(partitionKey, rowKey);
-      //   })
-      //   .then((pointer: DeploymentKeyPointer): storage.DeploymentInfo => {
-      //     if (!pointer) {
-      //       return null;
-      //     }
-  
-      //     return { appId: pointer.appId, deploymentId: pointer.deploymentId };
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public getPackageHistoryFromDeploymentKey(deploymentKey: string): q.Promise<storage.Package[]> {
-      // const pointerPartitionKey: string = Keys.getShortcutDeploymentKeyPartitionKey(deploymentKey);
-      // const pointerRowKey: string = Keys.getShortcutDeploymentKeyRowKey();
-  
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.retrieveByKey(pointerPartitionKey, pointerRowKey);
-      //   })
-      //   .then((pointer: DeploymentKeyPointer) => {
-      //     if (!pointer) return null;
-  
-      //     return this.getPackageHistoryFromBlob(pointer.deploymentId);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public getDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Deployment> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.retrieveByAppHierarchy(appId, deploymentId);
-      //   })
-      //   .then((flatDeployment: any) => {
-      //     return S3Storage.unflattenDeployment(flatDeployment);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public getDeployments(accountId: string, appId: string): q.Promise<storage.Deployment[]> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.getCollectionByHierarchy(accountId, appId);
-      //   })
-      //   .then((flatDeployments: any[]) => {
-      //     const deployments: storage.Deployment[] = [];
-      //     flatDeployments.forEach((flatDeployment: any) => {
-      //       deployments.push(S3Storage.unflattenDeployment(flatDeployment));
-      //     });
-  
-      //     return deployments;
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public removeDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.cleanUpByAppHierarchy(appId, deploymentId);
-      //   })
-      //   .then(() => {
-      //     return this.deleteHistoryBlob(deploymentId);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public updateDeployment(accountId: string, appId: string, deployment: storage.Deployment): q.Promise<void> {
-      // const deploymentId: string = deployment.id;
-      // if (!deploymentId) throw new Error("No deployment id");
-  
-      // return this.setupPromise
-      //   .then(() => {
-      //     const flatDeployment: any = S3Storage.flattenDeployment(deployment);
-      //     return this.mergeByAppHierarchy(flatDeployment, appId, deploymentId);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public commitPackage(
-      accountId: string,
-      appId: string,
-      deploymentId: string,
-      appPackage: storage.Package
-    ): q.Promise<storage.Package> {
-      // if (!deploymentId) throw new Error("No deployment id");
-      // if (!appPackage) throw new Error("No package specified");
-  
-      // appPackage = storage.clone(appPackage); // pass by value
-  
-      // let packageHistory: storage.Package[];
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.getPackageHistoryFromBlob(deploymentId);
-      //   })
-      //   .then((history: storage.Package[]) => {
-      //     packageHistory = history;
-      //     appPackage.label = this.getNextLabel(packageHistory);
-      //     return this.getAccount(accountId);
-      //   })
-      //   .then((account: storage.Account) => {
-      //     appPackage.releasedBy = account.email;
-  
-      //     // Remove the rollout value for the last package.
-      //     const lastPackage: storage.Package =
-      //       packageHistory && packageHistory.length ? packageHistory[packageHistory.length - 1] : null;
-      //     if (lastPackage) {
-      //       lastPackage.rollout = null;
-      //     }
-  
-      //     packageHistory.push(appPackage);
-  
-      //     if (packageHistory.length > S3Storage.MAX_PACKAGE_HISTORY_LENGTH) {
-      //       packageHistory.splice(0, packageHistory.length - S3Storage.MAX_PACKAGE_HISTORY_LENGTH);
-      //     }
-  
-      //     const flatPackage: any = { id: deploymentId, package: JSON.stringify(appPackage) };
-      //     return this.mergeByAppHierarchy(flatPackage, appId, deploymentId);
-      //   })
-      //   .then(() => {
-      //     return this.uploadToHistoryBlob(deploymentId, JSON.stringify(packageHistory));
-      //   })
-      //   .then((): storage.Package => {
-      //     return appPackage;
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public clearPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.retrieveByAppHierarchy(appId, deploymentId);
-      //   })
-      //   .then((flatDeployment: any) => {
-      //     delete flatDeployment.package;
-      //     return this.updateByAppHierarchy(flatDeployment, appId, deploymentId);
-      //   })
-      //   .then(() => {
-      //     return this.uploadToHistoryBlob(deploymentId, JSON.stringify([]));
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public getPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Package[]> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.getPackageHistoryFromBlob(deploymentId);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public updatePackageHistory(accountId: string, appId: string, deploymentId: string, history: storage.Package[]): q.Promise<void> {
-      // If history is null or empty array we do not update the package history, use clearPackageHistory for that.
-      // if (!history || !history.length) {
-      //   throw storage.storageError(storage.ErrorCode.Invalid, "Cannot clear package history from an update operation");
-      // }
-  
-      // return this.setupPromise
-      //   .then(() => {
-      //     const flatDeployment: any = { id: deploymentId, package: JSON.stringify(history[history.length - 1]) };
-      //     return this.mergeByAppHierarchy(flatDeployment, appId, deploymentId);
-      //   })
-      //   .then(() => {
-      //     return this.uploadToHistoryBlob(deploymentId, JSON.stringify(history));
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public addBlob(blobId: string, stream: stream.Readable, streamLength: number): q.Promise<string> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return utils.streamToBuffer(stream);
-      //   })
-      //   .then((buffer) => {
-      //     return this._blobService.getContainerClient(S3Storage.TABLE_NAME).uploadBlockBlob(blobId, buffer, buffer.byteLength);
-      //   })
-      //   .then(() => {
-      //     return blobId;
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public getBlobUrl(blobId: string): q.Promise<string> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this._blobService.getContainerClient(S3Storage.TABLE_NAME).getBlobClient(blobId).url;
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public removeBlob(blobId: string): q.Promise<void> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this._blobService.getContainerClient(S3Storage.TABLE_NAME).deleteBlob(blobId);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public addAccessKey(accountId: string, accessKey: storage.AccessKey): q.Promise<string> {
-      accessKey = storage.clone(accessKey); // pass by value
-      accessKey.id = shortid.generate();
-  
-      return this.setupPromise
+        return this.setupPromise
         .then(() => {
-          return this.sequelize.models[MODELS.ACCESSKEY].findOrCreate({
-            where: {id :accessKey.id}, defaults: {
-              ...accessKey,
-              "accountId" : accountId
+          // Get the App and Collaborators from the DB
+          return this.getApp(accountId, appId, true);
+        })
+        .then((app: storage.App) => {
+          const removedCollabProperties: storage.CollaboratorProperties = app.collaborators[email];
+  
+          if (!removedCollabProperties) {
+            throw storage.storageError(storage.ErrorCode.NotFound, "The given email is not a collaborator for this app.");
           }
-        })
-        })
-        .then((): string => {
-          return accessKey.id;
-        })
-        .catch(S3Storage.azureErrorHandler);
-    }
   
-    public getAccessKey(accountId: string, accessKeyId: string): q.Promise<storage.AccessKey> {
-      // const partitionKey: string = Keys.getAccountPartitionKey(accountId);
-      // const rowKey: string = Keys.getAccessKeyRowKey(accountId, accessKeyId);
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.retrieveByKey(partitionKey, rowKey);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
-    }
-  
-    public getAccessKeys(accountId: string): q.Promise<storage.AccessKey[]> {
-      const deferred = q.defer<storage.AccessKey[]>();
-  
-      // const partitionKey: string = Keys.getAccountPartitionKey(accountId);
-      // const rowKey: string = Keys.getHierarchicalAccountRowKey(accountId);
-      // const searchKey: string = Keys.getAccessKeyRowKey(accountId);
-  
-      // // Fetch both the parent account (for error-checking purposes) and the access tokens
-      // const query = `PartitionKey eq '${partitionKey}' and (RowKey eq '${rowKey}' or (RowKey gt '${searchKey}' and RowKey lt '${searchKey}~'))`;
-      // const options = { queryOptions: { filter: query } };
-  
-      this.setupPromise.then(() => {
-        this.sequelize.models[MODELS.ACCESSKEY].findAll({
-          where: {
-            "accountId": accountId
+          // Cannot remove the owner
+          if (removedCollabProperties.permission === storage.Permissions.Owner) {
+            throw storage.storageError(storage.ErrorCode.AlreadyExists, "Cannot remove the owner of the app from collaborator list.");
           }
-        }).then((accessKeys) => {
-          const keys = accessKeys.map(val => val.dataValues);
-          deferred.resolve(keys)
+  
+          // Remove the collaborator
+          delete app.collaborators[email];
+  
+          // Update the App in the DB
+          return this.updateAppWithPermission(accountId, app, true).then(() => {
+            return this.removeAppPointer(removedCollabProperties.accountId, app.id);
+          });
         })
+        .catch(S3Storage.storageErrorHandler);
+    }
+
+    private removeAppPointer(accountId: string, appId: string): q.Promise<void> {
+        return this.setupPromise
+        .then(() => {
+          // Use Sequelize to destroy (delete) the record
+          return this.sequelize.models[MODELS.APPPOINTER].destroy({
+            where: {
+              accountId: accountId,
+              appId: appId,
+            },
+          });
+        })
+        .then((deletedCount: number) => {
+          if (deletedCount === 0) {
+            throw new Error('AppPointer not found');
+          }
+          console.log('AppPointer successfully removed');
+        })
+        .catch((error: any) => {
+          console.error('Error removing AppPointer:', error);
+          throw error;
+        });
+      }
+
+    //Utility Collaboratos methods
+    private static isOwner(collaboratorsMap: storage.CollaboratorMap, email: string): boolean {
+        return (
+          collaboratorsMap &&
+          email &&
+          collaboratorsMap[email] &&
+          (<storage.CollaboratorProperties>collaboratorsMap[email]).permission === storage.Permissions.Owner
+        );
+      }
+
+      private static isCollaborator(collaboratorsMap: storage.CollaboratorMap, email: string): boolean {
+        return (
+          collaboratorsMap &&
+          email &&
+          collaboratorsMap[email] &&
+          (<storage.CollaboratorProperties>collaboratorsMap[email]).permission === storage.Permissions.Collaborator
+        );
+      }
+
+      private static setCollaboratorPermission(collaboratorsMap: storage.CollaboratorMap, email: string, permission: string): void {
+        if (collaboratorsMap && email && !storage.isPrototypePollutionKey(email) && collaboratorsMap[email]) {
+          (<storage.CollaboratorProperties>collaboratorsMap[email]).permission = permission;
+        }
+      }
+    
+      private static addToCollaborators(
+        collaboratorsMap: storage.CollaboratorMap,
+        email: string,
+        collabProps: storage.CollaboratorProperties
+      ): void {
+        if (collaboratorsMap && email && !storage.isPrototypePollutionKey(email) && !collaboratorsMap[email]) {
+          collaboratorsMap[email] = collabProps;
+        }
+      }
+
+      private addCollaboratorWithPermissions(
+        accountId: string,
+        app: storage.App,
+        email: string,
+        collabProperties: storage.CollaboratorProperties
+      ): q.Promise<void> {
+        if (app && app.collaborators && !app.collaborators[email]) {
+          app.collaborators[email] = collabProperties;
+          return this.updateAppWithPermission(accountId, app, /*updateCollaborator*/ true).then(() => {
+            return this.addAppPointer(collabProperties.accountId, app.id);
+          });
+        } else {
+          throw storage.storageError(storage.ErrorCode.AlreadyExists, "The given account is already a collaborator for this app.");
+        }
+      }
+
+
+      //Deployment Methods
+
+    
+      public addDeployment(accountId: string, appId: string, deployment: storage.Deployment): q.Promise<string> {
+        let deploymentId: string;
+        return this.setupPromise
+          .then(() => {
+            // Generate deployment ID
+            deployment.id = shortid.generate();
+            deploymentId = deployment.id;
+    
+            // Insert the deployment in the DB
+            return this.sequelize.models[MODELS.DEPLOYMENT].create({ ...deployment, appId });
+          })
+          .then(() => {
+            // Upload an empty package history to S3
+            return this.uploadToHistoryBlob(deploymentId, JSON.stringify([]));
+          })
+          .then(() => {
+            // Return deployment ID
+            return deploymentId;
+          })
+          .catch(S3Storage.storageErrorHandler);
+    }
+
+    public getDeploymentInfo(deploymentKey: string): q.Promise<storage.DeploymentInfo> {
+        return this.setupPromise
+          .then(() => {
+            return this.sequelize.models[MODELS.DEPLOYMENT].findOne({ where: { key: deploymentKey } });
+          })
+          .then((deployment: any): storage.DeploymentInfo => {
+            if (!deployment) {
+              throw storage.storageError(storage.ErrorCode.NotFound, "Deployment not found");
+            }
+    
+            return { appId: deployment.appId, deploymentId: deployment.id };
+          })
+          .catch(S3Storage.storageErrorHandler);
+    }
+
+
+    public getDeployments(accountId: string, appId: string): q.Promise<storage.Deployment[]> {
+        return this.setupPromise
+          .then(() => {
+            // Retrieve deployments for the given appId using Sequelize
+            return this.sequelize.models[MODELS.DEPLOYMENT].findAll({
+              where: { appId: appId },
+            });
+          })
+          .then((flatDeployments: any[]) => {
+            const deployments: storage.Deployment[] = [];
+            flatDeployments.forEach((flatDeployment: any) => {
+              deployments.push(flatDeployment); // No need for unflattening, Sequelize gives structured data
+            });
+            return deployments;
+          })
+          .catch((error) => {
+            console.error("Error retrieving deployments:", error);
+            throw error;
+          });
+    }
+
+    public removeDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
+        return this.setupPromise
+          .then(() => {
+            // Delete the deployment from the database using Sequelize
+            return this.sequelize.models[MODELS.DEPLOYMENT].destroy({
+              where: { id: deploymentId, appId: appId },
+            });
+          })
+          .then(() => {
+            // Delete history from S3
+            return this.deleteHistoryBlob(deploymentId);
+          })
+          .catch((error) => {
+            console.error("Error deleting deployment:", error);
+            throw error;
+          });
+    }
+
+    public updateDeployment(accountId: string, appId: string, deployment: storage.Deployment): q.Promise<void> {
+        const deploymentId: string = deployment.id;
+        if (!deploymentId) throw new Error("No deployment id");
+    
+        return this.setupPromise
+          .then(() => {
+            // Update deployment details in the database
+            return this.sequelize.models[MODELS.DEPLOYMENT].update(deployment, {
+              where: { id: deploymentId, appId: appId },
+            });
+          })
+          .catch((error) => {
+            console.error("Error updating deployment:", error);
+            throw error;
+          });
+    }
+    
+    
+    public commitPackage(accountId: string, appId: string, deploymentId: string, appPackage: storage.Package): q.Promise<storage.Package> {
+        if (!deploymentId) throw new Error("No deployment id");
+        if (!appPackage) throw new Error("No package specified");
+    
+        let packageHistory: storage.Package[];
+        return this.setupPromise
+          .then(() => {
+            // Fetch the package history from S3
+            return this.getPackageHistoryFromBlob(deploymentId);
+          })
+          .then((history: storage.Package[]) => {
+            packageHistory = history;
+            appPackage.label = this.getNextLabel(packageHistory);
+            return this.getAccount(accountId);
+          })
+          .then((account: storage.Account) => {
+            appPackage.releasedBy = account.email;
+    
+            // Remove the rollout value for the last package.
+            const lastPackage: storage.Package = packageHistory.length ? packageHistory[packageHistory.length - 1] : null;
+            if (lastPackage) {
+              lastPackage.rollout = null;
+            }
+    
+            packageHistory.push(appPackage);
+    
+            if (packageHistory.length > 100) { // Define your max history length
+              packageHistory.splice(0, packageHistory.length - 100);
+            }
+    
+            // Update deployment with the new package information
+            return this.sequelize.models[MODELS.DEPLOYMENT].update({
+              package: JSON.stringify(appPackage),
+            }, {
+              where: { id: deploymentId, appId: appId },
+            });
+          })
+          .then(() => {
+            // Upload updated package history to S3
+            return this.uploadToHistoryBlob(deploymentId, JSON.stringify(packageHistory));
+          })
+          .then(() => appPackage)
+          .catch((error) => {
+            console.error("Error committing package:", error);
+            throw error;
+          });
+    }
+    public clearPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
+        return this.setupPromise
+          .then(() => {
+            // Clear the package from the deployment
+            return this.sequelize.models[MODELS.DEPLOYMENT].update({
+              package: null,
+            }, {
+              where: { id: deploymentId, appId: appId },
+            });
+          })
+          .then(() => {
+            // Clear the package history in S3
+            return this.uploadToHistoryBlob(deploymentId, JSON.stringify([]));
+          })
+          .catch((error) => {
+            console.error("Error clearing package history:", error);
+            throw error;
+          });
+    }
+    public getPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Package[]> {
+        return this.setupPromise
+          .then(() => {
+            // Fetch the package history from S3
+            return this.getPackageHistoryFromBlob(deploymentId);
+          })
+          .catch((error) => {
+            console.error("Error retrieving package history:", error);
+            throw error;
+          });
+    }
+
+    public updatePackageHistory(accountId: string, appId: string, deploymentId: string, history: storage.Package[]): q.Promise<void> {
+        if (!history || !history.length) {
+          throw new Error("Cannot clear package history from an update operation");
+        }
+    
+        return this.setupPromise
+          .then(() => {
+            // Update the deployment's package with the latest package from the history
+            return this.sequelize.models[MODELS.DEPLOYMENT].update({
+              package: JSON.stringify(history[history.length - 1]),
+            }, {
+              where: { id: deploymentId, appId: appId },
+            });
+          })
+          .then(() => {
+            // Upload the updated package history to S3
+            return this.uploadToHistoryBlob(deploymentId, JSON.stringify(history));
+          })
+          .catch((error) => {
+            console.error("Error updating package history:", error);
+            throw error;
+          });
+    }
+
+    //blobs
+    public addBlob(blobId: string, stream: stream.Readable, streamLength: number): q.Promise<string> {
+        return this.setupPromise
+          .then(() => {
+            // Convert the stream to a buffer
+            return utils.streamToBuffer(stream);
+          })
+          .then((buffer) => {
+            // Upload the buffer to S3
+            return this.s3.putObject({
+              Bucket: this.bucketName,
+              Key: blobId,
+              Body: buffer,
+            }).promise();
+          })
+          .then(() => blobId)
+          .catch((error) => {
+            console.error("Error adding blob:", error);
+            throw error;
+          });
+    }
+
+    public getBlobUrl(blobId: string): q.Promise<string> {
+        return this.setupPromise
+          .then(() => {
+            // Get the signed URL from S3
+            return this.s3.getSignedUrlPromise('getObject', {
+              Bucket: this.bucketName,
+              Key: blobId,
+              Expires: 60 * 60, // URL valid for 1 hour
+            });
+          })
+          .catch((error) => {
+            console.error("Error getting blob URL:", error);
+            throw error;
+          });
+    }
+
+
+    public removeBlob(blobId: string): q.Promise<void> {
+        return this.setupPromise
+          .then(() => {
+            // Delete the blob from S3
+            return this.s3.deleteObject({
+              Bucket: this.bucketName,
+              Key: blobId,
+            }).promise();
+          })
+          .catch((error) => {
+            console.error("Error removing blob:", error);
+            throw error;
+          });
+    }
+    
+    
+    
+    
+            
+
+    public getPackageHistoryFromDeploymentKey(deploymentKey: string): q.Promise<storage.Package[]> {
+        return this.setupPromise
+          .then(() => {
+            return this.getDeploymentInfo(deploymentKey);
+          })
+          .then((deploymentInfo: storage.DeploymentInfo) => {
+            // Fetch package history from S3
+            return this.getPackageHistoryFromBlob(deploymentInfo.deploymentId);
+          })
+          .catch(S3Storage.storageErrorHandler);
+    }
+
+    private getPackageHistoryFromBlob(deploymentId: string): q.Promise<storage.Package[]> {
+        const deferred = q.defer<storage.Package[]>();
+    
+        // Use AWS SDK to download the blob from S3
+        this.s3
+          .getObject({ Bucket: this.bucketName, Key: `${deploymentId}/history.json` })
+          .promise()
+          .then((data) => {
+            const packageHistory = JSON.parse(data.Body.toString());
+            deferred.resolve(packageHistory);
+          })
+          .catch((error) => {
+            deferred.reject(error);
+          });
+    
+        return deferred.promise;
+    }
+
+    //blob utility methods
+    private deleteHistoryBlob(blobId: string): q.Promise<void> {
+        const deferred = q.defer<void>();
+    
+        this.s3
+          .deleteObject({
+            Bucket: this.bucketName,  // Your S3 bucket name
+            Key: blobId               // The blob (file) ID to be deleted
+          })
+          .promise()
+          .then(() => {
+            deferred.resolve();
+          })
           .catch((error: any) => {
             deferred.reject(error);
           });
-      });
-  
-      return deferred.promise;
+    
+        return deferred.promise;
     }
-  
+    
+
+    private uploadToHistoryBlob(deploymentId: string, content: string): q.Promise<void> {
+        const deferred = q.defer<void>();
+    
+        this.s3
+          .putObject({
+            Bucket: this.bucketName,
+            Key: `${deploymentId}/history.json`,
+            Body: content,
+            ContentType: "application/json",
+          })
+          .promise()
+          .then(() => {
+            deferred.resolve();
+          })
+          .catch((error) => {
+            deferred.reject(error);
+          });
+    
+        return deferred.promise;
+    }
+
+
+    //Access Key Conformation
+    public addAccessKey(accountId: string, accessKey: storage.AccessKey): q.Promise<string> {
+        accessKey.id = shortid.generate();
+        return this.setupPromise
+          .then(() => {
+            // Insert the access key into the database
+            return this.sequelize.models[MODELS.ACCESSKEY].create({ ...accessKey, accountId });
+          })
+          .then(() => {
+            return accessKey.id;
+          });
+    }
+
+
+    public getAccessKey(accountId: string, accessKeyId: string): q.Promise<storage.AccessKey> {
+        return this.setupPromise
+          .then(() => {
+            // Find the access key in the database using Sequelize
+            return this.sequelize.models.AccessKey.findOne({
+              where: {
+                accountId: accountId,
+                id: accessKeyId,
+              },
+            });
+          })
+          .then((accessKey: any) => {
+            if (!accessKey) {
+              throw new Error("Access key not found");
+            }
+            return accessKey.dataValues; // Return the access key data
+          })
+          .catch((error: any) => {
+            console.error("Error retrieving access key:", error);
+            throw error;
+          });
+    }
+
     public removeAccessKey(accountId: string, accessKeyId: string): q.Promise<void> {
-      // return this.setupPromise
-      //   .then(() => {
-      //     return this.getAccessKey(accountId, accessKeyId);
-      //   })
-      //   .then((accessKey) => {
-      //     const partitionKey: string = Keys.getAccountPartitionKey(accountId);
-      //     const rowKey: string = Keys.getAccessKeyRowKey(accountId, accessKeyId);
-      //     const shortcutAccessKeyPartitionKey: string = Keys.getShortcutAccessKeyPartitionKey(accessKey.name, false);
-  
-      //     return q.all<any>([
-      //       this._tableClient.deleteEntity(partitionKey, rowKey),
-      //       this._tableClient.deleteEntity(shortcutAccessKeyPartitionKey, ""),
-      //     ]);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
+        return this.setupPromise
+          .then(() => {
+            // First, retrieve the access key
+            return this.getAccessKey(accountId, accessKeyId);
+          })
+          .then((accessKey) => {
+            if (!accessKey) {
+              throw new Error("Access key not found");
+            }
+    
+            // Remove the access key from the database
+            return this.sequelize.models.AccessKey.destroy({
+              where: {
+                accountId: accountId,
+                id: accessKeyId,
+              },
+            });
+          })
+          .then(() => {
+            console.log("Access key removed successfully");
+          })
+          .catch((error: any) => {
+            console.error("Error removing access key:", error);
+            throw error;
+          });
     }
-  
+
     public updateAccessKey(accountId: string, accessKey: storage.AccessKey): q.Promise<void> {
-      // if (!accessKey) {
-      //   throw new Error("No access key");
-      // }
-  
-      // if (!accessKey.id) {
-      //   throw new Error("No access key id");
-      // }
-  
-      // const partitionKey: string = Keys.getAccountPartitionKey(accountId);
-      // const rowKey: string = Keys.getAccessKeyRowKey(accountId, accessKey.id);
-  
-      // return this.setupPromise
-      //   .then(() => {
-      //     const entity: any = this.wrap(accessKey, partitionKey, rowKey);
-      //     return this._tableClient.updateEntity(entity);
-      //   })
-      //   .then(() => {
-      //     const newAccessKeyPointer: AccessKeyPointer = {
-      //       accountId,
-      //       expires: accessKey.expires,
-      //     };
-  
-      //     const accessKeyPointerEntity: any = this.wrap(
-      //       newAccessKeyPointer,
-      //       Keys.getShortcutAccessKeyPartitionKey(accessKey.name, false),
-      //       ""
-      //     );
-      //     return this._tableClient.updateEntity(accessKeyPointerEntity);
-      //   })
-      //   .catch(S3Storage.azureErrorHandler);
+        if (!accessKey) {
+          throw new Error("No access key provided");
+        }
+    
+        if (!accessKey.id) {
+          throw new Error("No access key ID provided");
+        }
+    
+        return this.setupPromise
+          .then(() => {
+            // Update the access key in the database
+            return this.sequelize.models.AccessKey.update(accessKey, {
+              where: {
+                accountId: accountId,
+                id: accessKey.id,
+              },
+            });
+          })
+          .then(() => {
+            console.log("Access key updated successfully");
+          })
+          .catch((error: any) => {
+            console.error("Error updating access key:", error);
+            throw error;
+          });
     }
-  
+    
+    
+    
+
+    public getAccessKeys(accountId: string): q.Promise<storage.AccessKey[]> {
+        return this.setupPromise
+          .then(() => {
+            // Retrieve all access keys for the account
+            return this.sequelize.models[MODELS.ACCESSKEY].findAll({ where: { accountId } });
+          })
+          .then((accessKeys: any[]) => {
+            return accessKeys.map((accessKey: any) => accessKey.dataValues);
+          });
+    }
+    public getDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Deployment> {
+        return this.setupPromise
+          .then(() => {
+            // Fetch the deployment by appId and deploymentId using Sequelize
+            return this.retrieveByAppHierarchy(appId, deploymentId);
+          })
+          .then((flatDeployment: any) => {
+            // Convert the retrieved Sequelize object to the desired format
+            return this.unflattenDeployment(flatDeployment);
+          })
+          .catch((error) => {
+            // Handle any Sequelize errors here
+            console.error("Error fetching deployment:", error);
+            throw error;
+          });
+    }
+
+    private unflattenDeployment(flatDeployment: any): storage.Deployment {
+        if (!flatDeployment) throw new Error("Deployment not found");
+    
+        // Parse the package field if it's stored as a JSON string in the DB
+        flatDeployment.package = flatDeployment.package ? JSON.parse(flatDeployment.package) : null;
+    
+        // Return the unflattened deployment
+        return flatDeployment;
+    }
+    
+
+    private retrieveByAppHierarchy(appId: string, deploymentId: string): q.Promise<any> {
+        return q(
+          this.sequelize.models[MODELS.DEPLOYMENT].findOne({
+            where: {
+              appId: appId,
+              id: deploymentId, // Assuming 'id' is the deploymentId
+            },
+            include: [{
+              model: this.sequelize.models.Package, // Eager load the associated package
+              as: 'package', // Alias for the associated model if needed
+            }]
+          })
+        );
+    }
+    
+    
+    
+    
+
     // No-op for safety, so that we don't drop the wrong db, pending a cleaner solution for removing test data.
     public dropAll(): q.Promise<void> {
       return q(<void>null);
     }
   
-    // private setup(accountName?: string, accountKey?: string): q.Promise<void> {
-    //   let tableServiceClient: TableServiceClient;
-    //   let tableClient: TableClient;
-    //   let blobServiceClient: BlobServiceClient;
-  
-    //   if (process.env.EMULATED) {
-    //     const devConnectionString = "UseDevelopmentStorage=true";
-  
-    //     tableServiceClient = TableServiceClient.fromConnectionString(devConnectionString);
-    //     tableClient = TableClient.fromConnectionString(devConnectionString, S3Storage.TABLE_NAME);
-    //     blobServiceClient = BlobServiceClient.fromConnectionString(devConnectionString);
-    //   } else {
-    //     if ((!accountName && !process.env.AZURE_STORAGE_ACCOUNT) || (!accountKey && !process.env.AZURE_STORAGE_ACCESS_KEY)) {
-    //       throw new Error("Azure credentials not set");
-    //     }
-  
-    //     const _accountName = accountName ?? process.env.AZURE_STORAGE_ACCOUNT;
-    //     const _accountKey = accountKey ?? process.env.AZURE_STORAGE_ACCESS_KEY;
-  
-    //     const tableStorageCredential = new AzureNamedKeyCredential(_accountName, _accountKey);
-    //     const blobStorageCredential = new StorageSharedKeyCredential(_accountName, _accountKey);
-  
-    //     const tableServiceUrl = `https://${_accountName}.table.core.windows.net`;
-    //     const blobServiceUrl = `https://${_accountName}.blob.core.windows.net`;
-  
-    //     tableServiceClient = new TableServiceClient(tableServiceUrl, tableStorageCredential, {
-    //       retryOptions: {
-    //         maxRetries: 3,
-    //         maxRetryDelayInMs: 2000,
-    //         retryDelayInMs: 500,
-    //       },
-    //     });
-    //     tableClient = new TableClient(tableServiceUrl, S3Storage.TABLE_NAME, tableStorageCredential);
-    //     blobServiceClient = new BlobServiceClient(blobServiceUrl, blobStorageCredential, {
-    //       retryOptions: {
-    //         maxTries: 4,
-    //         maxRetryDelayInMs: 2000,
-    //         retryDelayInMs: 500,
-    //       },
-    //     });
-    //   }
-  
-    //   const tableHealthEntity: any = this.wrap({ health: "health" }, /*partitionKey=*/ "health", /*rowKey=*/ "health");
-  
-    //   return q
-    //     .all([
-    //       tableServiceClient.createTable(S3Storage.TABLE_NAME),
-    //       blobServiceClient.createContainer(S3Storage.TABLE_NAME, { access: "blob" }),
-    //       blobServiceClient.createContainer(S3Storage.HISTORY_BLOB_CONTAINER_NAME),
-    //     ])
-    //     .then(() => {
-    //       return q.all<any>([
-    //         tableClient.createEntity(tableHealthEntity),
-    //         blobServiceClient.getContainerClient(S3Storage.TABLE_NAME).uploadBlockBlob("health", "health", "health".length),
-    //         blobServiceClient
-    //           .getContainerClient(S3Storage.HISTORY_BLOB_CONTAINER_NAME)
-    //           .uploadBlockBlob("health", "health", "health".length),
-    //       ]);
-    //     })
-    //     .then(() => {
-    //       // Do not assign these unless everything completes successfully, as this will cause in-flight promise chains to start using
-    //       // the initialized services
-    //       this._tableClient = tableClient;
-    //       this._blobService = blobServiceClient;
-    //     })
-    //     .catch((error) => {
-    //       if (error.code == "ContainerAlreadyExists") {
-    //         this._tableClient = tableClient;
-    //         this._blobService = blobServiceClient;
-    //       } else {
-    //         throw error;
-    //       }
-    //     });
-    // }
 
-    private async getCollabrators(app:App,accountId) {
+    private async getCollabrators(app:storage.App, accountId) {
       const collabModel = await this.sequelize.models[MODELS.COLLABORATOR].findAll({where : {appId: app.id}})
       const collabMap = {}
       collabModel.map((collab) => {
@@ -896,22 +1152,98 @@ export class S3Storage implements storage.Storage {
       return app;
     }
 
-    private async  updateAppWithPermission(accountId: string, app: storage.App, updateCollaborator: boolean = false) {
-      const appId: string = app.id;
-      if (!appId) throw new Error("No app id");
+    
 
-      if (updateCollaborator) {
-        // TODO UPDATE COLLAB
-      }
-      return this.sequelize.models[MODELS.APPS].update({
-        ...app
-      },{
-        where: {id:appId , accountId:accountId}
-      })
+    public updateAppWithPermission(accountId: string, app: any, updateCollaborator: boolean = false): q.Promise<void> {
+        const appId: string = app.id;
+        if (!appId) throw new Error("No app id");
+    
+        const flatApp = this.flattenAppForSequelize(app, updateCollaborator);
+    
+        // Start a transaction since we may be updating multiple tables (app + collaborators)
+        return this.setupPromise
+            .then(() => {
+                return this.sequelize.transaction((t) => {
+                    // Update the App in the database
+                    return this.sequelize.models[MODELS.APPS].update(flatApp, {
+                        where: { id: appId },
+                        transaction: t,
+                    }).then(() => {
+                        if (updateCollaborator && app.collaborators) {
+                            // Remove 'isCurrentAccount' flag before updating collaborators
+                            this.deleteIsCurrentAccountProperty(app.collaborators);
+    
+                            // First, remove existing collaborators for this app
+                            return this.sequelize.models[MODELS.COLLABORATOR].destroy({
+                                where: { appId: appId },
+                                transaction: t,
+                            }).then(() => {
+                                // Then, add updated collaborators
+                                const collaborators = Object.keys(app.collaborators).map((email) => {
+                                    const collaborator = app.collaborators[email];
+                                    return {
+                                        email,
+                                        accountId: collaborator.accountId,
+                                        appId: appId,
+                                        permission: collaborator.permission,
+                                    };
+                                });
+    
+                                // Add updated collaborators
+                                return this.sequelize.models[MODELS.COLLABORATOR].bulkCreate(collaborators, { transaction: t }).then(() => {
+                                    // Explicitly return void to satisfy the function's return type
+                                    return;
+                                });
+                            });
+                        } else {
+                            // No collaborator update, just resolve the promise
+                            return;
+                        }
+                    });
+                });
+            });
+    }
+    
+
+    private flattenAppForSequelize(app: any, updateCollaborator: boolean = false): any {
+        if (!app) {
+            return app;
+        }
+    
+        const flatApp: any = {};
+        for (const property in app) {
+            if (property === "collaborators" && updateCollaborator) {
+                this.deleteIsCurrentAccountProperty(app.collaborators); // Remove unnecessary properties from collaborators
+            } else if (property !== "collaborators") {
+                flatApp[property] = app[property];  // Copy all other properties
+            }
+        }
+    
+        return flatApp;
     }
 
+    private getNextLabel(packageHistory: storage.Package[]): string {
+        if (packageHistory.length === 0) {
+          return "v1";
+        }
+    
+        const lastLabel: string = packageHistory[packageHistory.length - 1].label;
+        const lastVersion: number = parseInt(lastLabel.substring(1)); // Trim 'v' from the front
+        return "v" + (lastVersion + 1);
+      }
+    
+
+    private deleteIsCurrentAccountProperty(map: any): void {
+        if (map) {
+            Object.keys(map).forEach((key: string) => {
+                delete map[key].isCurrentAccount;
+            });
+        }
+    }
+    
+
   
-    private static azureErrorHandler(
+    private static storageErrorHandler(
       azureError: any,
       overrideMessage: boolean = false,
       overrideCondition?: string,

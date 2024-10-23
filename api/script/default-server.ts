@@ -24,6 +24,7 @@ import * as bodyParser from "body-parser";
 const domain = require("express-domain-middleware");
 import * as express from "express";
 import * as q from "q";
+import { S3Storage } from "./storage/aws-storage";
 
 interface Secret {
   id: string;
@@ -51,7 +52,8 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
   q<void>(null)
     .then(async () => {
       if (true) {
-        storage = new JsonStorage();
+        //storage = new JsonStorage();
+        storage = new S3Storage();
       } else {
         // Fetch secrets from AWS Secrets Manager
         try {
@@ -80,6 +82,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use((req: express.Request, res: express.Response, next: (err?: any) => void): any => {
         const originalSend = res.send;
         const originalSetHeader = res.setHeader;
+        req.user = {
+          id: "default",
+        }
         res.setHeader = (name: string, value: string | number | readonly string[]): Response => {
           if (!res.headersSent) {
             originalSetHeader.apply(res, [name, value]);

@@ -3,6 +3,7 @@ import * as chalk from "chalk";
 import * as path from "path";
 import * as childProcess from "child_process";
 import { coerce, compare } from "semver";
+import { fileDoesNotExistOrIsDirectory } from "./utils/file-utils";
 
 const g2js = require("gradle-to-js/lib/parser");
 
@@ -117,14 +118,6 @@ export async function runHermesEmitBinaryCommand(
       });
     });
   });
-}
-
-export function fileDoesNotExistOrIsDirectory(filePath: string): boolean {
-  try {
-    return fs.lstatSync(filePath).isDirectory();
-  } catch (error) {
-    return true;
-  }
 }
 
 function parseBuildGradleFile(gradleFile: string) {

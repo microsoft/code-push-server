@@ -797,6 +797,13 @@ yargs
           "Flags that get passed to Hermes, JavaScript to bytecode compiler. Can be specified multiple times.",
         type: "array",
       })
+      .option("privateKeyPath", {
+        alias: "k",
+        default: null,
+        demand: false,
+        description: "Path to private key used for code signing.",
+        type: "string",
+      })
       .check((argv: any, aliases: { [aliases: string]: string }): any => {
         return checkValidReleaseOptions(argv);
       });
@@ -1194,6 +1201,7 @@ export function createCommand(): cli.ICommand {
           releaseReactCommand.useHermes = argv["useHermes"] as any;
           releaseReactCommand.extraHermesFlags = argv["extraHermesFlags"] as any;
           releaseReactCommand.podFile = argv["podFile"] as any;
+          releaseReactCommand.privateKeyPath = argv["privateKeyPath"] as any;
         }
         break;
 

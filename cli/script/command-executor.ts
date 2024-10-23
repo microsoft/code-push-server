@@ -21,6 +21,7 @@ const Table = require("cli-table");
 const which = require("which");
 import wordwrap = require("wordwrap");
 import * as cli from "../script/types/cli";
+import sign from "./sign";
 import {
   AccessKey,
   Account,
@@ -37,11 +38,14 @@ import {
   UpdateMetrics,
 } from "../script/types";
 import {
-  fileDoesNotExistOrIsDirectory,
   getAndroidHermesEnabled,
   getiOSHermesEnabled,
   runHermesEmitBinaryCommand
 } from "./react-native-utils";
+import {
+  fileDoesNotExistOrIsDirectory,
+  isBinaryOrZip
+} from "./utils/file-utils";
 
 const configFilePath: string = path.join(process.env.LOCALAPPDATA || process.env.HOME, ".code-push.config");
 const emailValidator = require("email-validator");
@@ -1321,7 +1325,14 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
             command.gradleFile
           );
         }
-
+      })
+      .then(async () => {
+        if (command.privateKeyPath) {
+          log(chalk.cyan("\nSigning the bundle:\n"));
+          await sign(command.privateKeyPath, outputFolder);
+        } else {
+          console.log("private key was not provided");
+        }
       })
       .then(() => {
         log(chalk.cyan("\nReleasing update contents to CodePush:\n"));
@@ -1488,10 +1499,6 @@ function releaseErrorHandler(error: CodePushError, command: cli.ICommand): void 
   } else {
     throw error;
   }
-}
-
-function isBinaryOrZip(path: string): boolean {
-  return path.search(/\.zip$/i) !== -1 || path.search(/\.apk$/i) !== -1 || path.search(/\.ipa$/i) !== -1;
 }
 
 function throwForInvalidEmail(email: string): void {

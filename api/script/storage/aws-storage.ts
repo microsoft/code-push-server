@@ -185,7 +185,7 @@ export const MODELS = {
 }
 
 const DB_NAME = "codepushdb"
-const DB_USER_NAME = "codepush"
+const DB_USER = "codepush"
 const DB_PASS = "root"
 const DB_HOST = "localhost"
 
@@ -202,8 +202,8 @@ export class S3Storage implements storage.Storage {
           secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
         });
         shortid.characters("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-");
-        this.sequelize = new Sequelize(process.env.DB_USER || DB_NAME, process.env["DB_USER_NAME"] || DB_USER_NAME, process.env["DB_PASS"] || DB_PASS, {
-            host: process.env["DB_HOST"] || DB_HOST,
+        this.sequelize = new Sequelize(process.env.DB_NAME || DB_NAME, process.env.DB_USER || DB_USER, process.env.DB_PASS || DB_PASS, {
+            host: process.env.DB_HOST || DB_HOST,
             dialect: 'mysql'
           });
         this.setupPromise = this.setup()

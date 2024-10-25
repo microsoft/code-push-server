@@ -8,6 +8,7 @@
     "start:env": "node -r dotenv/config ./bin/script/server.js dotenv_config_path=.env dotenv_config_silent=true",
     "clean": "rimraf bin",
     "build": "tsc && shx cp -r ./script/views ./bin/script",
+    "restart": "npm run build && npm run start:env",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
     "lint:fix": "npx eslint ./script/**/*.ts --fix"

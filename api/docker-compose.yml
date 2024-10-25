@@ -5,7 +5,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: codepushdb
-      MYSQL_USER: codepush
+      MYSQL_USER: root
       MYSQL_PASSWORD: root
     ports:
       - "3306:3306"  # MySQL running on localhost:3306

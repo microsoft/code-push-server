@@ -28,16 +28,14 @@ export function createAccessKey(sequelize: Sequelize) {
 
 //Creating Account Type
 export function createAccount(sequelize: Sequelize) {
-    return sequelize.define("account", {
-        azureAdId: { type: DataTypes.STRING, allowNull: true },
-        createdTime: { type: DataTypes.FLOAT, allowNull: false },
-        name: { type: DataTypes.STRING, allowNull: false },
-        email: { type: DataTypes.STRING, allowNull: false },
-        id: { type: DataTypes.STRING, allowNull: false, primaryKey:true},
-        microsoftId: { type: DataTypes.STRING, allowNull: true},
-        gitHubId: { type: DataTypes.STRING, allowNull: true},
-    })
+  return sequelize.define("account", {
+    createdTime: { type: DataTypes.FLOAT, allowNull: false, defaultValue: () => new Date().getTime() },  // Set default value
+    name: { type: DataTypes.STRING, allowNull: false },
+    email: { type: DataTypes.STRING, allowNull: false },
+    id: { type: DataTypes.STRING, allowNull: false, primaryKey: true },
+  });
 }
+
 
 //Creating App
 
@@ -73,54 +71,56 @@ export function createCollaborators(sequelize: Sequelize) {
 //Create Deployment
 
 export function createDeployment(sequelize: Sequelize) {
-    return sequelize.define("deployment", {
-        id: { type: DataTypes.STRING, allowNull: true , primaryKey: true},
-        name: { type: DataTypes.STRING, allowNull: false },
-        key: { type: DataTypes.STRING, allowNull: false },
-        package: { type: DataTypes.STRING, allowNull: true, references: {
-            model: sequelize.models["package"],
-            key: 'id',
-          },},
-          appId: {
-            type: DataTypes.STRING,
-            allowNull: false,
-            references: {
+  return sequelize.define("deployment", {
+      id: { type: DataTypes.STRING, allowNull: true, primaryKey: true },
+      name: { type: DataTypes.STRING, allowNull: false },
+      key: { type: DataTypes.STRING, allowNull: false },
+      packageId: {  // Ensure this has the same type as the 'id' in 'packages'
+          type: DataTypes.UUID,  // Use UUID type if 'packages.id' is a UUID
+          allowNull: true,
+          references: {
+              model: sequelize.models["package"],
+              key: 'id',
+          },
+      },
+      appId: {
+          type: DataTypes.STRING,
+          allowNull: false,
+          references: {
               model: sequelize.models["apps"], // Foreign key to the App model
               key: 'id',
-            },
           },
-        createdTime: { type: DataTypes.TIME, allowNull: false },
-    })
+      },
+      createdTime: { type: DataTypes.TIME, allowNull: false },
+  });
 }
+
 
 //Create Package
 export function createPackage(sequelize: Sequelize) {
-    return sequelize.define("package", {
-        appVersion: {
-            type: DataTypes.INTEGER,
-            allowNull: false,
-        },
-        blobUrl: { type: DataTypes.STRING },
-        description: { type: DataTypes.STRING },
-        diffPackageMap: { type: DataTypes.JSON, allowNull: true },
-        isDisabled: DataTypes.BOOLEAN,
-        isMandatory: DataTypes.BOOLEAN,
-        label: { type: DataTypes.STRING, allowNull: true },
-        manifestBlobUrl: { type: DataTypes.STRING, allowNull: true },
-        originalDeployment: { type: DataTypes.STRING, allowNull: true },
-        originalLabel: { type: DataTypes.STRING, allowNull: true },
-        packageHash: { type: DataTypes.STRING, allowNull: false },
-        releasedBy: { type: DataTypes.STRING, allowNull: true },
-        releaseMethod: {
-            type: DataTypes.ENUM({
-                values: ["Upload", "Promote", "Rollback"]
-            })
-        },
-        rollout: { type: DataTypes.FLOAT, allowNull: true },
-        size: { type: DataTypes.FLOAT, allowNull: false },
-        uploadTime: { type: DataTypes.TIME, allowNull: false },
-        id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, allowNull: false , primaryKey: true},
-    })
+  return sequelize.define("package", {
+      id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, allowNull: false, primaryKey: true },
+      appVersion: { type: DataTypes.INTEGER, allowNull: false },
+      blobUrl: { type: DataTypes.STRING },
+      description: { type: DataTypes.STRING },
+      diffPackageMap: { type: DataTypes.JSON, allowNull: true },
+      isDisabled: DataTypes.BOOLEAN,
+      isMandatory: DataTypes.BOOLEAN,
+      label: { type: DataTypes.STRING, allowNull: true },
+      manifestBlobUrl: { type: DataTypes.STRING, allowNull: true },
+      originalDeployment: { type: DataTypes.STRING, allowNull: true },
+      originalLabel: { type: DataTypes.STRING, allowNull: true },
+      packageHash: { type: DataTypes.STRING, allowNull: false },
+      releasedBy: { type: DataTypes.STRING, allowNull: true },
+      releaseMethod: {
+          type: DataTypes.ENUM({
+              values: ["Upload", "Promote", "Rollback"],
+          }),
+      },
+      rollout: { type: DataTypes.FLOAT, allowNull: true },
+      size: { type: DataTypes.FLOAT, allowNull: false },
+      uploadTime: { type: DataTypes.TIME, allowNull: false },
+  });
 }
 
 //create App Pointer
@@ -137,7 +137,7 @@ export function createAppPointer(sequelize: Sequelize) {
           type: DataTypes.STRING,
           allowNull: false,
           references: {
-            model: 'Accounts', // References Account model
+            model: 'accounts', // References Account model
             key: 'id',
           },
         },
@@ -145,7 +145,7 @@ export function createAppPointer(sequelize: Sequelize) {
           type: DataTypes.STRING,
           allowNull: false,
           references: {
-            model: 'Apps', // References App model
+            model: 'apps', // References App model
             key: 'id',
           },
         },
@@ -160,6 +160,42 @@ export function createAppPointer(sequelize: Sequelize) {
       });
 }
 
+
+export function createModelss(sequelize: Sequelize) {
+  // Create models and register them
+  const Package = createPackage(sequelize);
+  const Deployment = createDeployment(sequelize);
+  const Account = createAccount(sequelize);
+  const AccessKey = createAccessKey(sequelize);
+  const AppPointer = createAppPointer(sequelize);
+  const Collaborator = createCollaborators(sequelize);
+  const App = createApp(sequelize);
+
+  // Define associations
+  Account.hasMany(App, { foreignKey: 'accountId' });
+  App.belongsTo(Account, { foreignKey: 'accountId' });
+
+  App.hasMany(Deployment, { foreignKey: 'appId' });
+  Deployment.belongsTo(App, { foreignKey: 'appId' });
+
+  Deployment.belongsTo(Package, { foreignKey: 'packageId', as: 'packageDetails' });  // Renamed association
+  Package.hasMany(Deployment, { foreignKey: 'packageId', as: 'deployments' });        // Renamed association
+
+  // Add other associations as needed
+  Collaborator.belongsTo(Account, { foreignKey: 'accountId' });
+  Collaborator.belongsTo(App, { foreignKey: 'appId' });
+
+  // Return all models for convenience (optional)
+  return {
+    Package,
+    Deployment,
+    Account,
+    AccessKey,
+    AppPointer,
+    Collaborator,
+    App,
+  };
+}
 
 
 
@@ -212,44 +248,47 @@ export class S3Storage implements storage.Storage {
 
     private setup(): q.Promise<void> {
       let headBucketParams: HeadBucketRequest = {
-          Bucket: this.bucketName,
+        Bucket: this.bucketName,
       };
-  
+    
       let createBucketParams: CreateBucketRequest = {
-          Bucket: this.bucketName,
+        Bucket: this.bucketName,
       };
-  
-      // Wrap everything in q.Promise
+    
       return q(this.s3.headBucket(headBucketParams).promise())
-          .catch((err) => {
-              if (err.code === 'NotFound' || err.code === 'NoSuchBucket') {
-                  console.log(`Bucket ${this.bucketName} does not exist, creating it...`);
-                  return q(this.s3.createBucket(createBucketParams).promise());
-              } else if (err.code === 'Forbidden') {
-                  console.error('Forbidden: Check your credentials and S3 endpoint');
-                  throw err; // Re-throw the error after logging
-              } else {
-                  throw err; // Other errors, re-throw them
-              }
-          })
-          .then(() => {
-              // Convert Sequelize promises into q.Promise using nfcall
-              return q.call(this.sequelize.authenticate.bind(this.sequelize));
-          })
-          .then(() => {
-            console.log("Sequlized autenticated")
-              return q.call(createModels.bind(null, this.sequelize)); // Ensure model creation uses q.Promise
-          })
-          .then(() => {
-              // return q.call(this.sequelize.sync.bind(this.sequelize));
-              console.log("Sequlized Model bounded")
-              this.sequelize.sync()
-          })
-          .catch((error) => {
-              console.error('Error during setup:', error);
-              throw error;
-          });
-  }  
+        .catch((err) => {
+          if (err.code === 'NotFound' || err.code === 'NoSuchBucket') {
+            console.log(`Bucket ${this.bucketName} does not exist, creating it...`);
+            return q(this.s3.createBucket(createBucketParams).promise());
+          } else if (err.code === 'Forbidden') {
+            console.error('Forbidden: Check your credentials and S3 endpoint');
+            throw err; // Re-throw the error after logging
+          } else {
+            throw err; // Other errors, re-throw them
+          }
+        })
+        .then(() => {
+          // Authenticate Sequelize and ensure models are registered
+          return q.call(this.sequelize.authenticate.bind(this.sequelize));
+        })
+        .then(() => {
+          // Create and associate models
+          const models = createModelss(this.sequelize);
+          console.log("Models registered");
+    
+          // Sync models with the database
+          return q.call(this.sequelize.sync.bind(this.sequelize)); // Await Sequelize sync
+        })
+        .then(() => {
+          console.log("Sequelize models synced");
+          console.log(this.sequelize.models);  // This should list all the registered models
+        })
+        .catch((error) => {
+          console.error('Error during setup:', error);
+          throw error;
+        });
+    }
+      
 
     public reinitialize(): q.Promise<void> {
       console.log("Re-initializing AWS storage");

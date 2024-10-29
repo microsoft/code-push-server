@@ -79,6 +79,15 @@ export class Authentication {
   
       if (!user) {
         return res.status(401).send("User not found in the system");
+      } else {
+        // Update user info if it has changed
+        if (user.name !== payload.name) {
+          user.name = payload.name;
+          await this._storageInstance.addAccount(user);
+          //return this._storageInstance
+          // .addAccount(newUser)
+          // .then((accountId: string): Promise<void> => issueAccessKey(accountId));
+        }
       }
   
       // Attach the user to the request object

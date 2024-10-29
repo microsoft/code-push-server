@@ -69,6 +69,21 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  router.post("/account", (req: Request, res: Response, next: (err?: any) => void): any => {
+    const account = req.body.account;
+    //validate blah blah
+    storage
+      .addAccount(account)
+      .then((accountId: string)=>  {
+        //issueAccessKey(accountId);
+        // const restAccount: restTypes.Account = converterUtils.toRestAccount(storageAccount);
+        console.log("accounId created");
+        res.send({ account: accountId });
+      })
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
+      .done();
+  });
+
   router.get("/accessKeys", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
 

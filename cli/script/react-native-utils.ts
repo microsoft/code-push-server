@@ -2,10 +2,14 @@ import * as fs from "fs";
 import * as chalk from "chalk";
 import * as path from "path";
 import * as childProcess from "child_process";
-import { coerce, compare } from "semver";
+import { coerce, compare, valid } from "semver";
 import { fileDoesNotExistOrIsDirectory } from "./utils/file-utils";
 
 const g2js = require("gradle-to-js/lib/parser");
+
+export function isValidVersion(version: string): boolean {
+  return !!valid(version) || /^\d+\.\d+$/.test(version);
+}
 
 export async function runHermesEmitBinaryCommand(
     bundleName: string,

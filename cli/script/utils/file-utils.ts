@@ -11,6 +11,14 @@ export function isDirectory(path: string): boolean {
   return fs.statSync(path).isDirectory();
 }
 
+export function fileExists(file: string): boolean {
+  try {
+    return fs.statSync(file).isFile();
+  } catch (e) {
+    return false;
+  }
+};
+
 export function copyFileToTmpDir(filePath: string): string {
   if (!isDirectory(filePath)) {
     const outputFolderPath: string = temp.mkdirSync("code-push");

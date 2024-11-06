@@ -396,6 +396,9 @@ code-push-standalone release-react <appName> <platform>
 [--podFile <podFile>]
 [--extraHermesFlags <extraHermesFlags>]
 [--privateKeyPath <privateKeyPath>]
+[--xcodeProjectFile <xcodeProjectFile>]
+[--xcodeTargetName <xcodeTargetName>]
+[--buildConfigurationName <buildConfigurationName>]
 ```
 
 The `release-react` command is a React Native-specific version of the "vanilla" [`release`](#releasing-app-updates) command, which supports all of the same parameters (e.g. `--mandatory`, `--description`), yet simplifies the process of releasing updates by performing the following additional behavior:
@@ -548,6 +551,24 @@ _NOTE: This parameter can be set using either --extraHermesFlags or -hf_
 Private key path which is used for code signing.
 
 _NOTE: This parameter can be set using either --privateKeyPath or -k_
+
+#### Xcode project file parameter
+
+Path to the Xcode project or project.pbxproj file.
+
+_NOTE: This parameter can be set using either --xcodeProjectFile or -xp_
+
+#### Xcode target name parameter
+
+Name of target (PBXNativeTarget) which specifies the binary version you want to target this release at (iOS only).
+
+_NOTE: This parameter can be set using either --xcodeTargetName or -xt_
+
+#### Build configuration name parameter
+
+Name of build configuration which specifies the binary version you want to target this release at. For example, 'Debug' or 'Release' (iOS only).
+
+_NOTE: This parameter can be set using either --buildConfigurationName or -c_
 
 ## Debugging CodePush Integration
 

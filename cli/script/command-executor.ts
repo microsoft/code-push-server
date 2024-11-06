@@ -22,6 +22,7 @@ const which = require("which");
 import wordwrap = require("wordwrap");
 import * as cli from "../script/types/cli";
 import sign from "./sign";
+const xcode = require("xcode");
 import {
   AccessKey,
   Account,
@@ -40,11 +41,13 @@ import {
 import {
   getAndroidHermesEnabled,
   getiOSHermesEnabled,
-  runHermesEmitBinaryCommand
+  runHermesEmitBinaryCommand,
+  isValidVersion
 } from "./react-native-utils";
 import {
   fileDoesNotExistOrIsDirectory,
-  isBinaryOrZip
+  isBinaryOrZip,
+  fileExists
 } from "./utils/file-utils";
 
 const configFilePath: string = path.join(process.env.LOCALAPPDATA || process.env.HOME, ".code-push.config");
@@ -855,16 +858,6 @@ function getPackageMetricsString(obj: Package): string {
 }
 
 function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, projectName: string): Promise<string> {
-  const fileExists = (file: string): boolean => {
-    try {
-      return fs.statSync(file).isFile();
-    } catch (e) {
-      return false;
-    }
-  };
-
-  const isValidVersion = (version: string): boolean => !!semver.valid(version) || /^\d+\.\d+$/.test(version);
-
   log(chalk.cyan(`Detecting ${command.platform} app version:\n`));
 
   if (command.platform === "ios") {
@@ -914,9 +907,13 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
         log(`Using the target binary version value "${parsedPlist.CFBundleShortVersionString}" from "${resolvedPlistFile}".\n`);
         return Q(parsedPlist.CFBundleShortVersionString);
       } else {
-        throw new Error(
-          `The "CFBundleShortVersionString" key in the "${resolvedPlistFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
-        );
+        if (parsedPlist.CFBundleShortVersionString !== "$(MARKETING_VERSION)") {
+          throw new Error(
+            `The "CFBundleShortVersionString" key in the "${resolvedPlistFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
+          );
+        }
+
+        return getAppVersionFromXcodeProject(command, projectName);
       }
     } else {
       throw new Error(`The "CFBundleShortVersionString" key doesn't exist within the "${resolvedPlistFile}" file.`);
@@ -1050,6 +1047,53 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
         }
       });
   }
+}
+
+function getAppVersionFromXcodeProject(command: cli.IReleaseReactCommand, projectName: string): Promise<string> {
+  const pbxprojFileName = "project.pbxproj";
+  let resolvedPbxprojFile: string = command.xcodeProjectFile;
+  if (resolvedPbxprojFile) {
+    // If the xcode project file path is explicitly provided, then we don't
+    // need to attempt to "resolve" it within the well-known locations.
+    if (!resolvedPbxprojFile.endsWith(pbxprojFileName)) {
+      // Specify path to pbxproj file if the provided file path is an Xcode project file.
+      resolvedPbxprojFile = path.join(resolvedPbxprojFile, pbxprojFileName);
+    }
+    if (!fileExists(resolvedPbxprojFile)) {
+      throw new Error("The specified pbx project file doesn't exist. Please check that the provided path is correct.");
+    }
+  } else {
+    const iOSDirectory = "ios";
+    const xcodeprojDirectory = `${projectName}.xcodeproj`;
+    const pbxprojKnownLocations = [
+      path.join(iOSDirectory, xcodeprojDirectory, pbxprojFileName),
+      path.join(iOSDirectory, pbxprojFileName),
+    ];
+    resolvedPbxprojFile = pbxprojKnownLocations.find(fileExists);
+
+    if (!resolvedPbxprojFile) {
+      throw new Error(
+        `Unable to find either of the following pbxproj files in order to infer your app's binary version: "${pbxprojKnownLocations.join(
+          '", "'
+        )}".`
+      );
+    }
+  }
+
+  const xcodeProj = xcode.project(resolvedPbxprojFile).parseSync();
+  const marketingVersion = xcodeProj.getBuildProperty(
+    "MARKETING_VERSION",
+    command.buildConfigurationName,
+    command.xcodeTargetName
+  );
+  if (!isValidVersion(marketingVersion)) {
+    throw new Error(
+      `The "MARKETING_VERSION" key in the "${resolvedPbxprojFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
+    );
+  }
+  console.log(`Using the target binary version value "${marketingVersion}" from "${resolvedPbxprojFile}".\n`);
+
+  return marketingVersion;
 }
 
 function printJson(object: any): void {
@@ -1278,10 +1322,6 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           }
         }
 
-        if (command.appStoreVersion) {
-          throwForInvalidSemverRange(command.appStoreVersion);
-        }
-
         const appVersionPromise: Promise<string> = command.appStoreVersion
           ? Q(command.appStoreVersion)
           : getReactNativeProjectAppVersion(command, projectName);
@@ -1293,7 +1333,9 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
         return appVersionPromise;
       })
       .then((appVersion: string) => {
+        throwForInvalidSemverRange(appVersion);
         releaseCommand.appStoreVersion = appVersion;
+
         return createEmptyTempReleaseFolder(outputFolder);
       })
       // This is needed to clear the react native bundler cache:

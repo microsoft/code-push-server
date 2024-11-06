@@ -804,6 +804,27 @@ yargs
         description: "Path to private key used for code signing.",
         type: "string",
       })
+      .option("xcodeProjectFile", {
+        alias: "xp",
+        default: null,
+        demand: false,
+        description: "Path to the Xcode project or project.pbxproj file",
+        type: "string",
+      })
+      .option("xcodeTargetName", {
+        alias: "xt",
+        default: undefined,
+        demand: false,
+        description: "Name of target (PBXNativeTarget) which specifies the binary version you want to target this release at (iOS only)",
+        type: "string",
+      })
+      .option("buildConfigurationName", {
+        alias: "c",
+        default: undefined,
+        demand: false,
+        description: "Name of build configuration which specifies the binary version you want to target this release at. For example, 'Debug' or 'Release' (iOS only)",
+        type: "string",
+      })
       .check((argv: any, aliases: { [aliases: string]: string }): any => {
         return checkValidReleaseOptions(argv);
       });
@@ -1202,6 +1223,9 @@ export function createCommand(): cli.ICommand {
           releaseReactCommand.extraHermesFlags = argv["extraHermesFlags"] as any;
           releaseReactCommand.podFile = argv["podFile"] as any;
           releaseReactCommand.privateKeyPath = argv["privateKeyPath"] as any;
+          releaseReactCommand.xcodeProjectFile = argv["xcodeProjectFile"] as any;
+          releaseReactCommand.xcodeTargetName = argv["xcodeTargetName"] as any;
+          releaseReactCommand.buildConfigurationName = argv["buildConfigurationName"] as any;
         }
         break;
 

@@ -7,7 +7,7 @@ import * as stream from "stream";
 import * as storage from "./storage";
 import * as utils from "../utils/common";
 
-import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-blob";
+import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-blob"; // //TODO REPLACE S3
 import {
   TableServiceClient,
   TableClient,
@@ -17,7 +17,7 @@ import {
   odata,
   TransactionAction,
   CreateDeleteEntityAction,
-} from "@azure/data-tables";
+} from "@azure/data-tables"; // //TODO REPLACE S3
 import { isPrototypePollutionKey } from "./storage";
 
 module Keys {
@@ -158,6 +158,7 @@ interface AccessKeyPointer {
   expires: number;
 }
 
+//TODO REPLACE S3
 export class AzureStorage implements storage.Storage {
   public static NO_ID_ERROR = "No id set";
 

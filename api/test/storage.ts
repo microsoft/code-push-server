@@ -5,7 +5,7 @@ import * as assert from "assert";
 import * as shortid from "shortid";
 import * as q from "q";
 
-import { AzureStorage } from "../script/storage/azure-storage";
+import { AzureStorage } from "../script/storage/azure-storage"; // //TODO REPLACE S3
 import { JsonStorage } from "../script/storage/json-storage";
 import * as storageTypes from "../script/storage/storage";
 import * as utils from "./utils";
@@ -15,20 +15,20 @@ import Promise = q.Promise;
 describe("JSON Storage", () => storageTests(JsonStorage));
 
 if (process.env.TEST_AZURE_STORAGE) {
-  describe("Azure Storage", () => storageTests(AzureStorage));
+  describe("Azure Storage", () => storageTests(AzureStorage)); // //TODO REPLACE S3
 }
 
 function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage, disablePersistence?: boolean) {
   var storage: storageTypes.Storage;
 
   before(() => {
-    if (StorageType === AzureStorage) {
+    if (StorageType === AzureStorage) { // //TODO REPLACE S3
       storage = new StorageType(disablePersistence);
     }
   });
 
   beforeEach(() => {
-    if (StorageType === JsonStorage) {
+    if (StorageType === JsonStorage) { // //TODO REPLACE S3
       storage = new StorageType(disablePersistence);
     }
   });
@@ -43,7 +43,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
     it("should be healthy if and only if running Azure storage", () => {
       return storage.checkHealth().then(
         /*returnedHealthy*/ () => {
-          assert.equal(StorageType, AzureStorage, "Should only return healthy if running Azure storage");
+          assert.equal(StorageType, AzureStorage, "Should only return healthy if running Azure storage"); // //TODO REPLACE S3
         },
         /*returnedUnhealthy*/ () => {
           assert.equal(StorageType, JsonStorage, "Should only return unhealthy if running JSON storage");
@@ -51,18 +51,18 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
       );
     });
 
-    if (StorageType === AzureStorage) {
+    if (StorageType === AzureStorage) { // //TODO REPLACE S3
       it("should allow reconfiguring of Azure storage credentials", () => {
-        var azureStorage: AzureStorage = <AzureStorage>storage;
-        return azureStorage
+        var azureStorage: AzureStorage = <AzureStorage>storage; // //TODO REPLACE S3
+        return azureStorage // //TODO REPLACE S3
           .reinitialize("wrongaccount", "wrongkey")
           .then(
             failOnCallSucceeded,
             /*returnedUnhealthy*/ () => {
-              if (!process.env.EMULATED && process.env.AZURE_STORAGE_ACCOUNT && process.env.AZURE_STORAGE_ACCESS_KEY) {
-                return azureStorage.reinitialize(process.env.AZURE_STORAGE_ACCOUNT, process.env.AZURE_STORAGE_ACCESS_KEY);
+              if (!process.env.EMULATED && process.env.AZURE_STORAGE_ACCOUNT && process.env.AZURE_STORAGE_ACCESS_KEY) { // //TODO REPLACE S3
+                return azureStorage.reinitialize(process.env.AZURE_STORAGE_ACCOUNT, process.env.AZURE_STORAGE_ACCESS_KEY); // //TODO REPLACE S3
               } else {
-                return azureStorage.reinitialize();
+                return azureStorage.reinitialize(); // //TODO REPLACE S3
               }
             }
           )
@@ -1100,7 +1100,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
         });
     });
 
-    if (storage instanceof AzureStorage) {
+    if (storage instanceof AzureStorage) { // //TODO REPLACE S3
       it("raises error on uncaught injection attempt", () => {
         assert.throws(() => {
           storage.getPackageHistoryFromDeploymentKey("possible injection attempt");

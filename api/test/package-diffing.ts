@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { AzureStorage } from "../script/storage/azure-storage";
+import { AzureStorage } from "../script/storage/azure-storage"; //TODO REPLACE S3
 import { JsonStorage } from "../script/storage/json-storage";
 import * as assert from "assert";
 import * as diffErrorUtils from "../script/utils/diff-error-handling";
@@ -25,8 +25,8 @@ import Promise = q.Promise;
 
 describe("Package diffing with JSON storage", () => packageDiffTests(JsonStorage));
 
-if (process.env.TEST_AZURE_STORAGE) {
-  describe("Package diffing with Azure Storage", () => packageDiffTests(AzureStorage));
+if (process.env.TEST_AZURE_STORAGE) { //TODO REPLACE S3
+  describe("Package diffing with Azure Storage", () => packageDiffTests(AzureStorage)); //TODO REPLACE S3
 }
 
 interface PackageInfo {
@@ -237,7 +237,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
     });
   });
 
-  if (StorageType === AzureStorage) {
+  if (StorageType === AzureStorage) { // //TODO REPLACE S3
     // These tests can only be run against azure storage because diffing downloads blob from url
     // while json storage serves the blobs from memory, which for some reason yazl/yauzl treats as corrupt file.
     describe("Package diffing utility (with Azure)", () => {

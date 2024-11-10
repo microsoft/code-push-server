@@ -48,9 +48,49 @@ export function createApp(sequelize: Sequelize) {
             model: sequelize.models["account"],
             key: 'id',
           },
-        }
+        },
+        tenantId: {
+          type: DataTypes.UUID,
+          allowNull: true,
+          references: {
+            model: 'tenants',
+            key: 'id',
+          },
+        },
     })
 }
+
+
+//Creating Tenants/Orgs
+
+export function createTenant(sequelize: Sequelize) {
+  return sequelize.define("tenant", {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+      allowNull: false,
+    },
+    displayName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    createdBy: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      references: {
+        model: 'accounts',
+        key: 'id',
+      },
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+  });
+}
+
 
 //Create Collabarorators
 
@@ -119,7 +159,7 @@ export function createPackage(sequelize: Sequelize) {
       },
       rollout: { type: DataTypes.FLOAT, allowNull: true },
       size: { type: DataTypes.FLOAT, allowNull: false },
-      uploadTime: { type: DataTypes.TIME, allowNull: false },
+      uploadTime: { type: DataTypes.BIGINT, allowNull: false },
   });
 }
 
@@ -163,6 +203,7 @@ export function createAppPointer(sequelize: Sequelize) {
 
 export function createModelss(sequelize: Sequelize) {
   // Create models and register them
+  const Tenant = createTenant(sequelize);
   const Package = createPackage(sequelize);
   const Deployment = createDeployment(sequelize);
   const Account = createAccount(sequelize);
@@ -172,21 +213,34 @@ export function createModelss(sequelize: Sequelize) {
   const App = createApp(sequelize);
 
   // Define associations
+
+  // Account and App
   Account.hasMany(App, { foreignKey: 'accountId' });
   App.belongsTo(Account, { foreignKey: 'accountId' });
 
+  // Account and Tenant
+  Account.hasMany(Tenant, { foreignKey: 'createdBy' });
+  Tenant.belongsTo(Account, { foreignKey: 'createdBy' });
+
+  // Tenant and App (One Tenant can have many Apps)
+  Tenant.hasMany(App, { foreignKey: 'tenantId' });
+  App.belongsTo(Tenant, { foreignKey: 'tenantId' });
+
+  // App and Deployment (One App can have many Deployments)
   App.hasMany(Deployment, { foreignKey: 'appId' });
   Deployment.belongsTo(App, { foreignKey: 'appId' });
 
-  Deployment.belongsTo(Package, { foreignKey: 'packageId', as: 'packageDetails' });  // Renamed association
-  Package.hasMany(Deployment, { foreignKey: 'packageId', as: 'deployments' });        // Renamed association
+  // Deployment and Package (One Package can be linked to many Deployments)
+  Deployment.belongsTo(Package, { foreignKey: 'packageId', as: 'packageDetails' });
+  Package.hasMany(Deployment, { foreignKey: 'packageId', as: 'deployments' });
 
-  // Add other associations as needed
+  // Collaborator associations (Collaborators belong to both Account and App)
   Collaborator.belongsTo(Account, { foreignKey: 'accountId' });
   Collaborator.belongsTo(App, { foreignKey: 'appId' });
 
   // Return all models for convenience (optional)
   return {
+    Tenant,
     Package,
     Deployment,
     Account,
@@ -199,16 +253,17 @@ export function createModelss(sequelize: Sequelize) {
 
 
 
-export function createModels(sequelize: Sequelize) {
-    return q.all([ 
-      createPackage(sequelize)
-    , createDeployment(sequelize)
-    , createAccount(sequelize)
-    , createAccessKey(sequelize)
-    , createAppPointer(sequelize)
-    , createCollaborators(sequelize)
-    , createApp(sequelize)])
-}
+
+// export function createModels(sequelize: Sequelize) {
+//     return q.all([ 
+//       createPackage(sequelize)
+//     , createDeployment(sequelize)
+//     , createAc=count(sequelize)
+//     , createAccessKey(sequelize)
+//     , createAppPointer(sequelize)
+//     , createCollaborators(sequelize)
+//     , createApp(sequelize)])
+// }
 
 export const MODELS = {
   COLLABORATOR : "collaborator",
@@ -218,6 +273,7 @@ export const MODELS = {
   ACCESSKEY : "accessKey",
   ACCOUNT : "account",
   APPPOINTER: "AppPointer",
+  TENANT : "tenant"
 }
 
 const DB_NAME = "codepushdb"
@@ -377,84 +433,105 @@ export class S3Storage implements storage.Storage {
     public addApp(accountId: string, app: storage.App): q.Promise<storage.App> {
       app = storage.clone(app); // pass by value
       app.id = shortid.generate();
-  
+
       return this.setupPromise
         .then(() => {
           return this.getAccount(accountId);
         })
         .then(async (account: storage.Account) => {
-          const collabMap = { email: account.email, accountId: accountId, permission: storage.Permissions.Owner, appId :app.id };
-          await this.sequelize.models[MODELS.COLLABORATOR].findOrCreate({
-            where : { appId: app.id , email: account.email},
-            defaults: {...collabMap}})
-          const updatedApp = {
-            ...app
-            ,"accountId": accountId
-          }
-          if (updatedApp.collaborators) {
-            delete updatedApp.collaborators;
-          }
-          const addApp = this.sequelize.models[MODELS.APPS].findOrCreate({
-            where : { name: app.name},
-            defaults : {
-              
+          // Check if tenantId is provided in app data
+          let tenantId = app.tenantId || accountId; // Default to accountId if no tenant specified
+          app.tenantId = tenantId;
+
+          // If tenantId is provided, check if tenant exists and user has Admin role
+          if (app.tenantId !== accountId) {
+            const tenant = await this.sequelize.models[MODELS.TENANT].findByPk(app.tenantId);
+            if (!tenant) {
+              throw new Error("Specified tenant does not exist.");
             }
-          })
-          return addApp
+            const isAdmin = await this.sequelize.models[MODELS.COLLABORATOR].findOne({
+              where: { accountId, tenantId: app.tenantId, role: 'Admin' },
+            });
+            if (!isAdmin) {
+              throw new Error("User does not have admin permissions for the specified tenant.");
+            }
+          }
+
+          // Add Collaborator entry for the app owner
+          const collabMap = { email: account.email, accountId, permission: storage.Permissions.Owner, appId: app.id };
+          await this.sequelize.models[MODELS.COLLABORATOR].findOrCreate({
+            where: { appId: app.id, email: account.email },
+            defaults: { ...collabMap },
+          });
+
+          // Add the App
+          const addedApp = await this.sequelize.models[MODELS.APPS].create({
+            ...app,
+            accountId,
+          });
+          return addedApp;
         })
         .then(() => {
           return app;
         })
         .catch(S3Storage.storageErrorHandler);
     }
-  
+
+      
     public getApps(accountId: string): q.Promise<storage.App[]> {
       return this.setupPromise
         .then(() => {
-          return this.sequelize.models[MODELS.APPS].findAll({where : {
-            accountId: accountId
-          }});
+          return this.sequelize.models[MODELS.APPS].findAll({
+            where: { accountId },
+            include: [{ model: this.sequelize.models[MODELS.TENANT], as: 'tenant' }], // Include tenant details if available
+          });
         })
         .then(async (flatAppsModel) => {
-          const flatApps = flatAppsModel.map (val => val.dataValues)
+          const flatApps = flatAppsModel.map((val) => val.dataValues);
           const apps = [];
-          for (let i = 0; i< flatApps.length; i++) {
-            const updatedApp = await this.getCollabrators(flatApps[i],accountId)
+          for (let i = 0; i < flatApps.length; i++) {
+            const updatedApp = await this.getCollabrators(flatApps[i], accountId);
             apps.push(updatedApp);
           }
           return apps;
         })
         .catch(S3Storage.storageErrorHandler);
-    }
+    }    
+
   
     public getApp(accountId: string, appId: string, keepCollaboratorIds: boolean = false): q.Promise<storage.App> {
       return this.setupPromise
         .then(() => {
-          return this.sequelize.models[MODELS.APPS].findByPk(appId).then((flatAppModel) => {
-            return this.getCollabrators(flatAppModel.dataValues,accountId);
+          return this.sequelize.models[MODELS.APPS].findByPk(appId, {
+            include: [{ model: this.sequelize.models[MODELS.TENANT], as: 'tenant' }], // Include tenant details if available
           });
         })
+        .then((flatAppModel) => {
+          return this.getCollabrators(flatAppModel.dataValues, accountId);
+        })
         .then((app) => {
-          return app; 
+          return app;
         })
         .catch(S3Storage.storageErrorHandler);
     }
+    
   
     public removeApp(accountId: string, appId: string): q.Promise<void> {
-      // remove entries for all collaborators account before removing the app
       return this.setupPromise
         .then(() => {
+          // Remove all collaborator entries for this app
           return this.sequelize.models[MODELS.COLLABORATOR].destroy({
-            where :{appId : appId, accountId: accountId}
-          })
+            where: { appId, accountId },
+          });
         })
         .then(() => {
+          // Remove the app entry
           return this.sequelize.models[MODELS.APPS].destroy({
-            where :{id : appId, accountId: accountId}
-          })
+            where: { id: appId, accountId },
+          });
         })
         .catch(S3Storage.storageErrorHandler);
-    }
+    }    
   
     public updateApp(accountId: string, app: storage.App): q.Promise<void> {
       const appId: string = app.id;

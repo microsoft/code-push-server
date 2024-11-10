@@ -35,7 +35,7 @@ if [ ! -f ".env" ]; then
     cat <<EOL > .env
 # Mandatory variables
 EMULATED=true
-PORT=3000
+PORT=3010
 EOL
     echo ".env file created and configured."
 else

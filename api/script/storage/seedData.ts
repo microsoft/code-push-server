@@ -10,20 +10,25 @@ const sequelize = new Sequelize('codepushdb', 'codepush', 'root', {
 // Seed data
 const seedData = {
   accounts: [
-    { id: 'id_0', email: 'user1@example.com', name: 'User One', tenant_id: 'id_0', createdTime: new Date().getTime() },
-    { id: 'id_1', email: 'user2@example.com', name: 'User Two', tenant_id: 'id_1', createdTime: new Date().getTime() },
+    { id: 'id_0', email: 'user1@example.com', name: 'User One', createdTime: new Date().getTime() },
+    { id: 'id_1', email: 'user2@example.com', name: 'User Two', createdTime: new Date().getTime() },
+  ],
+  tenants: [
+    { id: 'tenant_1', displayName: 'Organization One', createdBy: 'id_0' },
+    { id: 'tenant_2', displayName: 'Organization Two', createdBy: 'id_1' },
   ],
   apps: [
-    { id: 'id_2', name: 'App One', tenant_id: 'id_0', accountId: 'id_0', createdTime: new Date().getTime() },
-    { id: 'id_3', name: 'App Two', tenant_id: 'id_1', accountId: 'id_1', createdTime: new Date().getTime() },
+    { id: 'id_2', name: 'App One', accountId: 'id_0', tenantId: 'tenant_1', createdTime: new Date().getTime() },
+    { id: 'id_3', name: 'App Two', accountId: 'id_1', tenantId: 'tenant_2', createdTime: new Date().getTime() },
+    { id: 'id_4', name: 'Independent App', accountId: 'id_0', createdTime: new Date().getTime() },  // App without a tenant association
   ],
   collaborators: [
-    { email: 'user1@example.com', accountId: 'id_0', appId: 'id_2', permission: 'Owner' },
-    { email: 'user2@example.com', accountId: 'id_1', appId: 'id_3', permission: 'Owner' },
+    { email: 'user1@example.com', accountId: 'id_0', appId: 'id_2', permission: 'Owner', role: 'Admin' },
+    { email: 'user2@example.com', accountId: 'id_1', appId: 'id_3', permission: 'Owner', role: 'Admin' },
   ],
   deployments: [
     {
-      id: 'id_4',
+      id: 'id_5',
       name: 'Deployment One',
       key: 'O25dwjupnmTCC-q70qC1CzWfO73NkSR75brivk',
       appId: 'id_2',
@@ -43,13 +48,13 @@ const seedData = {
       releasedBy: 'user1@example.com',
       releaseMethod: 'Upload',
       size: 256994,
-      uploadTime: new Date(),
-      deploymentId: 'id_4', // Linked to deployment
+      uploadTime: 1731269070,
+      deploymentId: 'id_5', // Linked to deployment
     },
   ],
   accessKeys: [
     {
-      id: 'id_5',
+      id: 'id_6',
       name: 'accessKey1',
       accountId: 'id_0',
       createdBy: 'admin',
@@ -65,12 +70,12 @@ async function seed() {
   try {
     // Initialize models
     const models = createModelss(sequelize);
-
     // Sync database
-    await sequelize.sync();
+    await sequelize.sync({ force: true });
 
-    // Insert seed data
-    //await models.Account.bulkCreate(seedData.accounts);
+    // Insert seed data in order
+    await models.Account.bulkCreate(seedData.accounts);
+    await models.Tenant.bulkCreate(seedData.tenants);
     await models.App.bulkCreate(seedData.apps);
     await models.Collaborator.bulkCreate(seedData.collaborators);
     await models.Deployment.bulkCreate(seedData.deployments);

@@ -61,6 +61,7 @@ export interface App {
   /*generated*/ createdTime: number;
   /*generated*/ id?: string;
   name: string;
+  tenantId?: string;
 }
 
 export interface Deployment {

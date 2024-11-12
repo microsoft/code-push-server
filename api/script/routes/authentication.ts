@@ -65,15 +65,15 @@ export class Authentication {
   public async authenticate(req: Request, res: Response, next: (err?: Error) => void) {
     // Bypass authentication in development mode
     if (process.env.NODE_ENV === "development") {
-      if(req.body.user === undefined) {
+      if (req.body.user === undefined) {
         req.user = {
-            id: "id_0",
-            email: "localdev@example.com",
-            name: "Local Developer",
+          id: "id_0",
+          email: "localdev@example.com",
+          name: "Local Developer",
         };
-    } else {
-       req.user = req.body.user 
-    }
+      } else {
+        req.user = req.headers.userId;
+      }
       return next();
     }
 

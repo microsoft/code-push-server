@@ -300,6 +300,17 @@ export class AzureStorage implements storage.Storage {
       .catch(AzureStorage.azureErrorHandler);
   }
 
+  public getTenants(accountId: string): q.Promise<storage.Organization[]> {
+    return this._setupPromise
+      .then(() => {
+        return this.getAccount(accountId);
+      })
+      .then((account: storage.Account) => {
+        return [];
+      })
+      .catch(AzureStorage.azureErrorHandler);
+  }
+
   public addApp(accountId: string, app: storage.App): q.Promise<storage.App> {
     app = storage.clone(app); // pass by value
     app.id = shortid.generate();

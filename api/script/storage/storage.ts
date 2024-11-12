@@ -64,6 +64,14 @@ export interface App {
   tenantId?: string;
 }
 
+export interface Organization {
+  /*generated*/ createdBy: string;
+  /*generated*/ createdTime: number;
+  /*generated*/ id?: string;
+  displayName: string;
+  role: string;
+}
+
 export interface Deployment {
   /*generated*/ createdTime: number;
   /*generated*/ id?: string;
@@ -134,6 +142,8 @@ export interface Storage {
   getAccountByEmail(email: string): Promise<Account>;
   getAccountIdFromAccessKey(accessKey: string): Promise<string>;
   updateAccount(email: string, updates: Account): Promise<void>;
+
+  getTenants(accountId: string): Promise<Organization[]>;
 
   addApp(accountId: string, app: App): Promise<App>;
   getApps(accountId: string): Promise<App[]>;

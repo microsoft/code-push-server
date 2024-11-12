@@ -450,7 +450,7 @@ export class S3Storage implements storage.Storage {
               throw new Error("Specified tenant does not exist.");
             }
             const isAdmin = await this.sequelize.models[MODELS.COLLABORATOR].findOne({
-              where: { accountId, tenantId: app.tenantId, role: 'Admin' },
+              where: { accountId, tenantId: app.tenantId, permission: 'Owner' },
             });
             if (!isAdmin) {
               throw new Error("User does not have admin permissions for the specified tenant.");
@@ -496,9 +496,39 @@ export class S3Storage implements storage.Storage {
           return apps;
         })
         .catch(S3Storage.storageErrorHandler);
-    }    
+    }
+    
 
-  
+    public getTenants(accountId: string): q.Promise<storage.Organization[]> {
+      return this.setupPromise
+        .then(() => {
+          // Fetch all tenants where the account is a collaborator
+          return this.sequelize.models[MODELS.TENANT].findAll({
+            include: [
+              {
+                model: this.sequelize.models[MODELS.APPS],
+                where: { accountId },
+              },
+            ],
+          });
+        })
+        .then((tenantsModel) => {
+          // Format tenants into the desired response structure
+          const tenants = tenantsModel.map((tenantModel) => {
+            const tenant = tenantModel.dataValues;
+            return {
+              id: tenant.id,
+              displayName: tenant.displayName, // Assuming `displayName` in Tenant model holds org name
+              role: "Owner",
+            };
+          });
+    
+          return tenants;
+        })
+        .catch(S3Storage.storageErrorHandler);
+    }
+    
+    
     public getApp(accountId: string, appId: string, keepCollaboratorIds: boolean = false): q.Promise<storage.App> {
       return this.setupPromise
         .then(() => {

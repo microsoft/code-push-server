@@ -23,6 +23,7 @@ export class JsonStorage implements storage.Storage {
   public static NextIdNumber: number = 0;
   public accounts: { [id: string]: storage.Account } = {};
   public apps: { [id: string]: storage.App } = {};
+  public tenants: {[id: string]: storage.Organization} = {};
   public deployments: { [id: string]: storage.Deployment } = {};
   public packages: { [id: string]: storage.Package } = {};
   public blobs: { [id: string]: string } = {};
@@ -31,6 +32,7 @@ export class JsonStorage implements storage.Storage {
   public accountToAppsMap: { [id: string]: string[] } = {};
   public appToAccountMap: { [id: string]: string } = {};
   public emailToAccountMap: { [email: string]: string } = {};
+  public accountToTenantsMap: { [id: string]: string[] } = {};
 
   public appToDeploymentsMap: { [id: string]: string[] } = {};
   public deploymentToAppMap: { [id: string]: string } = {};
@@ -65,6 +67,7 @@ export class JsonStorage implements storage.Storage {
               JsonStorage.NextIdNumber = obj.NextIdNumber || 0;
               this.accounts = obj.accounts || {};
               this.apps = obj.apps || {};
+              this.tenants = obj.tenants || {};
               this.deployments = obj.deployments || {};
               this.deploymentKeys = obj.deploymentKeys || {};
               this.blobs = obj.blobs || {};
@@ -141,6 +144,18 @@ export class JsonStorage implements storage.Storage {
     }
 
     return q(clone(this.accounts[accountId]));
+  }
+
+  public getTenants(accountId: string): Promise<storage.Organization[]> {
+    const tenantIds = this.accountToTenantsMap[accountId];
+    if (tenantIds) {
+      const tenants = tenantIds.map((id: string) => {
+        return this.tenants[id];
+      });
+      return q(clone(tenants));
+    }
+
+    return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
   public getAccountByEmail(email: string): Promise<storage.Account> {

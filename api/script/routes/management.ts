@@ -58,7 +58,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
   const nameResolver: NameResolver = new NameResolver(config.storage);
 
   router.get("/account", (req: Request, res: Response, next: (err?: any) => void): any => {
-    const accountId: string = "id_0";
+    const accountId: string = req.user.id;
     storage
       .getAccount(accountId)
       .then((storageAccount: storageTypes.Account) => {
@@ -259,6 +259,19 @@ export function getManagementRouter(config: ManagementConfig): Router {
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
+  });
+
+  router.get("/tenants", (req: Request, res: Response,  next: (err?: any) => void): any => {
+    const accountId: string = req.user.id;
+  
+    storage
+      .getTenants(accountId) // Calls the storage method we’ll define next
+      .then((tenants: storageTypes.Organization[]) => {
+        res.send({ organisations: tenants });
+      })
+      .catch((error: any) => {
+        next(error); // Forward error to error handler
+      });
   });
 
   router.get("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {

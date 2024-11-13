@@ -115,3 +115,15 @@ Both work and personal accounts use the same application for authentication. The
 
 1. Only letters are allowed.
 1. Maximum 15 characters.
+
+## Metrics
+
+Installation metrics allow monitoring release activity via the CLI. For detailed usage instructions, please refer to the [CLI documentation](../cli/README.md#development-parameter).
+
+Redis is required for Metrics to work.
+
+### Steps
+
+1. Install Redis by following [official installation guide](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/).
+1. TLS is required. Follow [official Redis TLS run guide](https://redis.io/docs/latest/operate/oss_and_stack/management/security/encryption/#running-manually).
+1. Set the necessary environment variables for [Redis](./ENVIRONMENT.md#redis).

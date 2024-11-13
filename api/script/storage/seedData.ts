@@ -32,14 +32,15 @@ const seedData = {
       name: "Deployment One",
       key: "O25dwjupnmTCC-q70qC1CzWfO73NkSR75brivk",
       appId: "id_2",
+      packageId: "pkg_1", // Link deployment to package
       createdTime: new Date(),
     },
   ],
   packages: [
     {
+      id: "pkg_1",  // Assign a UUID or specific ID here
       appVersion: "1.0",
-      blobUrl:
-        "https://codepush-secondary.blob.core.windows.net/storagev2/z98_ktyhgijjKQai7fIvDj6z_t6pb984637d-14f4-409d-9646-13a0665a3902",
+      blobUrl: "https://codepush-secondary.blob.core.windows.net/storagev2/z98_ktyhgijjKQai7fIvDj6z_t6pb984637d-14f4-409d-9646-13a0665a3902",
       description: "Minor improvements",
       isDisabled: false,
       isMandatory: false,
@@ -50,7 +51,6 @@ const seedData = {
       releaseMethod: "Upload",
       size: 256994,
       uploadTime: 1731269070,
-      deploymentId: "id_5", // Linked to deployment
     },
   ],
   accessKeys: [
@@ -79,8 +79,8 @@ async function seed() {
     await models.Tenant.bulkCreate(seedData.tenants);
     await models.App.bulkCreate(seedData.apps);
     await models.Collaborator.bulkCreate(seedData.collaborators);
-    await models.Deployment.bulkCreate(seedData.deployments);
     await models.Package.bulkCreate(seedData.packages);
+    await models.Deployment.bulkCreate(seedData.deployments);
     await models.AccessKey.bulkCreate(seedData.accessKeys);
 
     console.log("Seed data has been inserted successfully.");

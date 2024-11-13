@@ -832,24 +832,21 @@ export class S3Storage implements storage.Storage {
 
 
     public getDeployments(accountId: string, appId: string): q.Promise<storage.Deployment[]> {
-        return this.setupPromise
-          .then(() => {
-            // Retrieve deployments for the given appId using Sequelize
-            return this.sequelize.models[MODELS.DEPLOYMENT].findAll({
-              where: { appId: appId },
-            });
-          })
-          .then((flatDeployments: any[]) => {
-            const deployments: storage.Deployment[] = [];
-            flatDeployments.forEach((flatDeployment: any) => {
-              deployments.push(flatDeployment); // No need for unflattening, Sequelize gives structured data
-            });
-            return deployments;
-          })
-          .catch((error) => {
-            console.error("Error retrieving deployments:", error);
-            throw error;
+      return this.setupPromise
+        .then(() => {
+          // Retrieve deployments for the given appId, including the associated Package
+          return this.sequelize.models[MODELS.DEPLOYMENT].findAll({
+            where: { appId: appId },
           });
+        })
+        .then((flatDeployments: any[]) => {
+          // Use Promise.all to wait for all unflattenDeployment promises to resolve
+          return Promise.all(flatDeployments.map((flatDeployment) => this.attachPackageToDeployment(flatDeployment)));
+        })
+        .catch((error) => {
+          console.error("Error retrieving deployments:", error);
+          throw error;
+        });
     }
 
     public removeDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
@@ -1254,6 +1251,57 @@ export class S3Storage implements storage.Storage {
         // Return the unflattened deployment
         return flatDeployment;
     }
+
+    private async attachPackageToDeployment(flatDeployment: any): Promise<storage.Deployment> {
+      if (!flatDeployment) throw new Error("Deployment not found");
+    
+      // Retrieve the package details from the Package table using packageId
+      let packageData: storage.Package | null = null;
+    
+      if (flatDeployment.packageId) {
+        const packageRecord = await this.sequelize.models[MODELS.PACKAGE].findOne({
+          where: { id: flatDeployment.packageId },
+        });
+    
+        if (packageRecord) {
+          packageData = this.formatPackage(packageRecord.dataValues); // Format to match storage.Package interface
+        }
+      }
+    
+      // Construct and return the full deployment object
+      return {
+        id: flatDeployment.id,
+        name: flatDeployment.name,
+        key: flatDeployment.key,
+        createdTime: flatDeployment.createdTime,
+        package: packageData, // Include the resolved package data
+      };
+    }
+    
+    // Helper function to format package data to storage.Package
+    private formatPackage(pkgData: any): storage.Package | null {
+      if (!pkgData) return null;
+    
+      return {
+        appVersion: pkgData.appVersion,
+        blobUrl: pkgData.blobUrl,
+        description: pkgData.description,
+        diffPackageMap: pkgData.diffPackageMap ? JSON.parse(pkgData.diffPackageMap) : undefined,
+        isDisabled: pkgData.isDisabled,
+        isMandatory: pkgData.isMandatory,
+        label: pkgData.label,
+        manifestBlobUrl: pkgData.manifestBlobUrl,
+        originalDeployment: pkgData.originalDeployment,
+        originalLabel: pkgData.originalLabel,
+        packageHash: pkgData.packageHash,
+        releasedBy: pkgData.releasedBy,
+        releaseMethod: pkgData.releaseMethod,
+        rollout: pkgData.rollout,
+        size: pkgData.size,
+        uploadTime: pkgData.uploadTime,
+      };
+    }
+    
     
 
     private retrieveByAppHierarchy(appId: string, deploymentId: string): q.Promise<any> {

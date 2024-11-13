@@ -47,19 +47,24 @@ export class JsonStorage implements storage.Storage {
   private static CollaboratorNotFound: string = "The specified e-mail address doesn't represent a registered user";
   private _blobServerPromise: Promise<http.Server>;
 
-  constructor(public disablePersistence: boolean = true) {
+  constructor(public disablePersistence: boolean = false) {
     this.loadStateAsync(); // Attempts to load real data if any exists
   }
 
   private loadStateAsync(): void {
     if (this.disablePersistence) return;
-
+    console.log(__dirname)
+    let pathName = __dirname + "/JsonStorage.json";
+        
+    fs.access(pathName, fs.constants.F_OK, (err) => {
+            console.log(err ? "File does not exist" : "File exists");
+    });
     fs.exists(
-      "JsonStorage.json",
+      pathName,
       function (exists: boolean) {
         if (exists) {
           fs.readFile(
-            "JsonStorage.json",
+            pathName,
             function (err: any, data: string) {
               if (err) throw err;
 

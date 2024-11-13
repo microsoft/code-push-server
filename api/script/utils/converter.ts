@@ -150,6 +150,7 @@ export function toRestDeployment(storageDeployment: Storage.Deployment): Deploym
     name: storageDeployment.name,
     key: storageDeployment.key,
     package: storageDeployment.package,
+    packageHistory: storageDeployment.packageHistory,
   };
 
   if (restDeployment.package) {

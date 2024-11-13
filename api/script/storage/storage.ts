@@ -73,11 +73,12 @@ export interface Organization {
 }
 
 export interface Deployment {
-  /*generated*/ createdTime: number;
+  /*generated*/ createdTime?: number;
   /*generated*/ id?: string;
   name: string;
   key: string;
   package?: Package;
+  packageHistory?: Package[];
 }
 
 export interface DeploymentInfo {

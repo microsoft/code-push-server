@@ -140,7 +140,7 @@ export function createDeployment(sequelize: Sequelize) {
 export function createPackage(sequelize: Sequelize) {
   return sequelize.define("package", {
       id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, allowNull: false, primaryKey: true },
-      appVersion: { type: DataTypes.INTEGER, allowNull: false },
+      appVersion: { type: DataTypes.STRING, allowNull: false },
       blobUrl: { type: DataTypes.STRING },
       description: { type: DataTypes.STRING },
       diffPackageMap: { type: DataTypes.JSON, allowNull: true },
@@ -160,6 +160,14 @@ export function createPackage(sequelize: Sequelize) {
       rollout: { type: DataTypes.FLOAT, allowNull: true },
       size: { type: DataTypes.FLOAT, allowNull: false },
       uploadTime: { type: DataTypes.BIGINT, allowNull: false },
+      deploymentId: { // Foreign key to associate this package with a deployment history
+        type: DataTypes.STRING,
+        allowNull: true,
+        references: {
+          model: sequelize.models["deployment"],
+          key: 'id',
+        },
+      },
   });
 }
 
@@ -231,8 +239,11 @@ export function createModelss(sequelize: Sequelize) {
   Deployment.belongsTo(App, { foreignKey: 'appId' });
 
   // Deployment and Package (One Package can be linked to many Deployments)
+  //
+  Deployment.hasMany(Package, { foreignKey: 'deploymentId', as: 'packageHistory' });
+  Package.belongsTo(Deployment, { foreignKey: 'deploymentId' });
   Deployment.belongsTo(Package, { foreignKey: 'packageId', as: 'packageDetails' });
-  Package.hasMany(Deployment, { foreignKey: 'packageId', as: 'deployments' });
+  //Package.hasMany(Deployment, { foreignKey: 'packageId', as: 'deployments' });
 
   // Collaborator associations (Collaborators belong to both Account and App)
   Collaborator.belongsTo(Account, { foreignKey: 'accountId' });
@@ -250,20 +261,6 @@ export function createModelss(sequelize: Sequelize) {
     App,
   };
 }
-
-
-
-
-// export function createModels(sequelize: Sequelize) {
-//     return q.all([ 
-//       createPackage(sequelize)
-//     , createDeployment(sequelize)
-//     , createAc=count(sequelize)
-//     , createAccessKey(sequelize)
-//     , createAppPointer(sequelize)
-//     , createCollaborators(sequelize)
-//     , createApp(sequelize)])
-// }
 
 export const MODELS = {
   COLLABORATOR : "collaborator",
@@ -841,7 +838,7 @@ export class S3Storage implements storage.Storage {
         })
         .then((flatDeployments: any[]) => {
           // Use Promise.all to wait for all unflattenDeployment promises to resolve
-          return Promise.all(flatDeployments.map((flatDeployment) => this.attachPackageToDeployment(flatDeployment)));
+          return Promise.all(flatDeployments.map((flatDeployment) => this.attachPackageToDeployment(accountId,flatDeployment)));
         })
         .catch((error) => {
           console.error("Error retrieving deployments:", error);
@@ -952,16 +949,24 @@ export class S3Storage implements storage.Storage {
           });
     }
     public getPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Package[]> {
-        return this.setupPromise
-          .then(() => {
-            // Fetch the package history from S3
-            return this.getPackageHistoryFromBlob(deploymentId);
-          })
-          .catch((error) => {
-            console.error("Error retrieving package history:", error);
-            throw error;
+      return this.setupPromise
+        .then(() => {
+          // Fetch all packages associated with the deploymentId, ordered by uploadTime
+          return this.sequelize.models[MODELS.PACKAGE].findAll({
+            where: { deploymentId: deploymentId },
+            order: [['uploadTime', 'ASC']], // Sort by upload time to maintain historical order
           });
+        })
+        .then((packageRecords: any[]) => {
+          // Map each package record to the storage.Package format
+          return packageRecords.map((pkgRecord) => this.formatPackage(pkgRecord.dataValues));
+        })
+        .catch((error) => {
+          console.error("Error retrieving package history:", error);
+          throw error;
+        });
     }
+    
 
     public updatePackageHistory(accountId: string, appId: string, deploymentId: string, history: storage.Package[]): q.Promise<void> {
         if (!history || !history.length) {
@@ -1040,11 +1045,7 @@ export class S3Storage implements storage.Storage {
             throw error;
           });
     }
-    
-    
-    
-    
-            
+       
 
     public getPackageHistoryFromDeploymentKey(deploymentKey: string): q.Promise<storage.Package[]> {
         return this.setupPromise
@@ -1252,11 +1253,12 @@ export class S3Storage implements storage.Storage {
         return flatDeployment;
     }
 
-    private async attachPackageToDeployment(flatDeployment: any): Promise<storage.Deployment> {
+    private async attachPackageToDeployment(accounId: string, flatDeployment: any): Promise<storage.Deployment> {
       if (!flatDeployment) throw new Error("Deployment not found");
     
       // Retrieve the package details from the Package table using packageId
       let packageData: storage.Package | null = null;
+      let packageHistory: storage.Package[] = [];
     
       if (flatDeployment.packageId) {
         const packageRecord = await this.sequelize.models[MODELS.PACKAGE].findOne({
@@ -1267,14 +1269,16 @@ export class S3Storage implements storage.Storage {
           packageData = this.formatPackage(packageRecord.dataValues); // Format to match storage.Package interface
         }
       }
+
+      packageHistory = await this.getPackageHistory(accounId, flatDeployment.appId, flatDeployment.id);
     
       // Construct and return the full deployment object
       return {
         id: flatDeployment.id,
         name: flatDeployment.name,
         key: flatDeployment.key,
-        createdTime: flatDeployment.createdTime,
         package: packageData, // Include the resolved package data
+        packageHistory: packageHistory,
       };
     }
     
@@ -1302,8 +1306,6 @@ export class S3Storage implements storage.Storage {
       };
     }
     
-    
-
     private retrieveByAppHierarchy(appId: string, deploymentId: string): q.Promise<any> {
         return q(
           this.sequelize.models[MODELS.DEPLOYMENT].findOne({

@@ -30,6 +30,7 @@ To emulate Azure Blob Storage locally. Azurite needs to be installed and running
 
 - `MICROSOFT_CLIENT_ID`
 - `MICROSOFT_CLIENT_SECRET`
+- `MICROSOFT_TENANT_ID`: Required if application registration is single tenant.
 
 ## Optional parameters
 

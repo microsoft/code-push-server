@@ -488,7 +488,9 @@ export class PassportAuthentication {
       redirectUrl: this.getCallbackUrl(providerName),
       clientID: microsoftClientId,
       clientSecret: microsoftClientSecret,
-      identityMetadata: "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration",
+      identityMetadata: `https://login.microsoftonline.com/${
+        process.env["MICROSOFT_TENANT_ID"] || "common"
+      }/v2.0/.well-known/openid-configuration`,
       responseMode: "query",
       responseType: "code",
       scope: ["email", "profile"],

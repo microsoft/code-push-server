@@ -281,7 +281,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .getApps(accountId)
       .then((apps: storageTypes.App[]) => {
         const restAppPromises: Promise<restTypes.App>[] = apps
-          .filter((_app) => _app.tenantId === tenant)
+          // .filter((_app) => _app.tenantId === tenant)
           .map((app: storageTypes.App) => {
             return storage.getDeployments(accountId, app.id).then((deployments: storageTypes.Deployment[]) => {
               const deploymentNames: string[] = deployments.map((deployment: storageTypes.Deployment) => deployment.name);

@@ -12,12 +12,14 @@ interface AccessKeyBase {
 export interface AccessKey extends AccessKeyBase {
   /*generated*/ createdTime?: number;
   expires: number;
+  scope?: string;
   /*generated*/ isSession?: boolean;
 }
 
 /*in*/
 export interface AccessKeyRequest extends AccessKeyBase {
   ttl?: number;
+  scope?: string;
 }
 
 /*out*/
@@ -107,11 +109,17 @@ export interface CollaboratorMap {
   [email: string]: CollaboratorProperties;
 }
 
+export interface Organisation {
+  orgId?: string;
+  orgName? : string;
+}
+
 /*inout*/
 export interface App {
   /*generated*/ collaborators?: CollaboratorMap;
   /*key*/ name: string;
   /*generated*/ deployments?: string[];
+  organisation?: Organisation;
 }
 
 /*in*/

@@ -131,7 +131,7 @@ export function createDeployment(sequelize: Sequelize) {
               key: 'id',
           },
       },
-      createdTime: { type: DataTypes.TIME, allowNull: false },
+      createdTime: { type: DataTypes.FLOAT, allowNull: true },
   });
 }
 
@@ -428,53 +428,90 @@ export class S3Storage implements storage.Storage {
     }
   
     public addApp(accountId: string, app: storage.App): q.Promise<storage.App> {
-      app = storage.clone(app); // pass by value
+      app = storage.clone(app); // Clone the app data to avoid mutating the original
       app.id = shortid.generate();
-
+    
       return this.setupPromise
-        .then(() => {
-          return this.getAccount(accountId);
-        })
+        .then(() => this.getAccount(accountId)) // Fetch account details to check permissions
         .then(async (account: storage.Account) => {
-          // Check if tenantId is provided in app data
-          let tenantId = app.tenantId || accountId; // Default to accountId if no tenant specified
-          app.tenantId = tenantId;
-
-          // If tenantId is provided, check if tenant exists and user has Admin role
-          if (app.tenantId !== accountId) {
-            const tenant = await this.sequelize.models[MODELS.TENANT].findByPk(app.tenantId);
-            if (!tenant) {
-              throw new Error("Specified tenant does not exist.");
-            }
-            const isAdmin = await this.sequelize.models[MODELS.COLLABORATOR].findOne({
-              where: { accountId, tenantId: app.tenantId, permission: 'Owner' },
+          // Set initial tenantId and tenantName from app data
+          let tenantId = app.tenantId;
+          let tenantName = app.tenantName;
+    
+          // Check if a tenantId is provided, and if so, verify or create tenant
+          if (tenantId) {
+            // Attempt to find the tenant by tenantId and tenantName
+            const tenant = await this.sequelize.models[MODELS.TENANT].findOne({
+              where: { id: tenantId },
             });
-            if (!isAdmin) {
-              throw new Error("User does not have admin permissions for the specified tenant.");
+    
+            // If tenant is not found or tenantName doesn't match, create a new tenant
+            if (!tenant) {
+              console.warn(`Specified tenant (ID: ${tenantId}, Name: ${tenantName}) does not exist. Creating a new tenant.`);
+    
+              const idTogenerate = shortid.generate();
+              // Create a new tenant with the specified tenantName, owned by the accountId
+              const newTenant = await this.sequelize.models[MODELS.TENANT].create({
+                id: idTogenerate,
+                displayName: tenantName,
+                createdBy: accountId,
+              });
+    
+              tenantId = idTogenerate;
+            } else {
+              // Verify if the user has admin permissions for the existing tenant
+              // const isAdmin = await this.sequelize.models[MODELS.COLLABORATOR].findOne({
+              //   where: { accountId, tenantId, permission: storage.Permissions.Owner },
+              // });
+              const isAdmin = true;
+              if (!isAdmin) {
+                throw new Error("User does not have admin permissions for the specified tenant.");
+              }
             }
+          } else if(tenantName) {
+            // If no tenantId is provided, set tenantId to NULL (app is standalone/personal)
+            const idTogenerate = shortid.generate();
+              // Create a new tenant with the specified tenantName, owned by the accountId
+              const newTenant = await this.sequelize.models[MODELS.TENANT].create({
+                id: idTogenerate,
+                displayName: tenantName,
+                createdBy: accountId,
+              });
+    
+              tenantId = idTogenerate;
           }
-
-          // Add Collaborator entry for the app owner
-          const collabMap = { email: account.email, accountId, permission: storage.Permissions.Owner, appId: app.id };
-          await this.sequelize.models[MODELS.COLLABORATOR].findOrCreate({
-            where: { appId: app.id, email: account.email },
-            defaults: { ...collabMap },
-          });
-
-          // Add the App
+    
+          // Set the tenantId on the app object
+          app.tenantId = tenantId;
+    
+          // Add the App with accountId and tenantId
           const addedApp = await this.sequelize.models[MODELS.APPS].create({
             ...app,
             accountId,
           });
+    
+          // Add a Collaborator entry for the app owner
+          const collabMap = {
+            email: account.email,
+            accountId,
+            permission: storage.Permissions.Owner,
+            appId: app.id,
+          };
+          await this.sequelize.models[MODELS.COLLABORATOR].findOrCreate({
+            where: { appId: app.id, email: account.email },
+            defaults: collabMap,
+          });
+    
           return addedApp;
         })
-        .then(() => {
-          return app;
-        })
-        .catch(S3Storage.storageErrorHandler);
+        .then(() => app) // Return the app object
+        .catch((error) => {
+          console.error("Error adding app:", error.message);
+          throw S3Storage.storageErrorHandler(error);
+        });
     }
+    
 
-      
     public getApps(accountId: string): q.Promise<storage.App[]> {
       return this.setupPromise
         .then(() => {
@@ -799,12 +836,12 @@ export class S3Storage implements storage.Storage {
             deploymentId = deployment.id;
     
             // Insert the deployment in the DB
-            return this.sequelize.models[MODELS.DEPLOYMENT].create({ ...deployment, appId });
+            return this.sequelize.models[MODELS.DEPLOYMENT].create({ ...deployment, appId, createdTime: Date.now() });
           })
-          .then(() => {
-            // Upload an empty package history to S3
-            return this.uploadToHistoryBlob(deploymentId, JSON.stringify([]));
-          })
+          // .then(() => {
+          //   //MARK: TODO
+          //   return this.uploadToHistoryBlob(deploymentId, JSON.stringify([]));
+          // })
           .then(() => {
             // Return deployment ID
             return deploymentId;

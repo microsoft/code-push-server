@@ -62,6 +62,7 @@ export interface App {
   /*generated*/ id?: string;
   name: string;
   tenantId?: string;
+  tenantName?: string;
 }
 
 export interface Organization {

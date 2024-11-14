@@ -33,7 +33,7 @@ const seedData = {
       key: "O25dwjupnmTCC-q70qC1CzWfO73NkSR75brivk",
       appId: "id_2",
       packageId: "pkg_1", // Link deployment to package
-      createdTime: new Date(),
+      createdTime: 1731269070,
     },
     {
       id: "id_6",
@@ -41,7 +41,7 @@ const seedData = {
       key: "deployment_key_2",
       appId: "id_3",
       packageId: "pkg_current_2", // Link to the current package
-      createdTime: new Date(),
+      createdTime: 1731269070,
     },
   ],
   packages: [

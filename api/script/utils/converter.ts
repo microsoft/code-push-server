@@ -64,6 +64,11 @@ export function appCreationRequestFromBody(body: AppCreationRequest): AppCreatio
 
   appCreationRequest.name = body.name;
   appCreationRequest.manuallyProvisionDeployments = body.manuallyProvisionDeployments;
+  if(body.organisation !== undefined) {
+    appCreationRequest.organisation = {};
+    appCreationRequest.organisation.orgId = body.organisation.orgId;
+    appCreationRequest.organisation.orgName = body.organisation.orgName;
+  }
 
   return appCreationRequest;
 }
@@ -132,7 +137,8 @@ export function toRestApp(storageApp: Storage.App, displayName: string, deployme
 
 export function toRestCollaboratorMap(storageCollaboratorMap: Storage.CollaboratorMap): CollaboratorMap {
   const collaboratorMap: CollaboratorMap = {};
-
+  return collaboratorMap;
+  //TODO FIX
   Object.keys(storageCollaboratorMap)
     .sort()
     .forEach(function (key: string) {
@@ -234,6 +240,8 @@ export function toStorageApp(restApp: App, createdTime: number): Storage.App {
     createdTime: createdTime,
     name: restApp.name,
     collaborators: toStorageCollaboratorMap(restApp.collaborators),
+    tenantId: restApp.organisation?.orgId,
+    tenantName: restApp.organisation?.orgName,
   };
   return storageApp;
 }

@@ -114,7 +114,9 @@ export function sortAndUpdateDisplayNameOfRestAppsList(apps: App[]): App[] {
       let name: string = app.name;
       if (nameToCountMap[app.name] > 1 && !Storage.isOwnedByCurrentUser(storageApp)) {
         const ownerEmail: string = Storage.getOwnerEmail(storageApp);
-        name = `${ownerEmail}:${app.name}`;
+        if(!ownerEmail) {
+          name = `${ownerEmail}:${app.name}`;
+        }
       }
 
       return toRestApp(storageApp, name, app.deployments);
@@ -137,8 +139,7 @@ export function toRestApp(storageApp: Storage.App, displayName: string, deployme
 
 export function toRestCollaboratorMap(storageCollaboratorMap: Storage.CollaboratorMap): CollaboratorMap {
   const collaboratorMap: CollaboratorMap = {};
-  return collaboratorMap;
-  //TODO FIX
+  
   Object.keys(storageCollaboratorMap)
     .sort()
     .forEach(function (key: string) {

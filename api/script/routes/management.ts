@@ -309,7 +309,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       storage
         .getApps(accountId)
         .then((apps: storageTypes.App[]): void | Promise<void> => {
-          if (NameResolver.isDuplicate(apps, appRequest.name)) {
+          if (NameResolver.isDuplicateApp(apps, appRequest)) {
             errorUtils.sendConflictError(res, "An app named '" + appRequest.name + "' already exists.");
             return;
           }

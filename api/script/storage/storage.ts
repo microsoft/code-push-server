@@ -6,6 +6,8 @@ import * as stream from "stream";
 import * as error from "../error";
 
 import Promise = q.Promise;
+import { AppCreationRequest } from "../types/rest-definitions";
+import { bool } from "aws-sdk/clients/signer";
 
 export enum ErrorCode {
   ConnectionFailed = 0,
@@ -234,6 +236,7 @@ export class NameResolver {
   // Interface
   public static isDuplicate(items: App[], name: string): boolean;
   public static isDuplicate<T extends { name: string }>(items: T[], name: string): boolean;
+
   // Definition
   public static isDuplicate<T extends { name: string }>(items: T[], name: string): boolean {
     if (!items.length) return false;
@@ -250,6 +253,38 @@ export class NameResolver {
       // Use general overload
       return !!NameResolver.findByName(items, name);
     }
+  }
+
+
+  // Interface
+  public static isDuplicateApp<T extends { name: string }>(items: T[], appRequest: AppCreationRequest): boolean;
+  // Definition
+  public static isDuplicateApp<T extends { name: string }>(items: T[], appRequest: AppCreationRequest): boolean {
+    if (!items.length) return false;
+
+    if ((<App>(<any>items[0])).collaborators) {
+      // Use 'app' overload
+      for (let i = 0; i < items.length; i++) {
+        const app = <App>(<any>items[i]);
+        if (app.name === appRequest.name && NameResolver.findByTentantId(app, appRequest) && isOwnedByCurrentUser(app)) return true;
+      }
+
+      return false;
+    } else {
+      // Use general overload
+      return !!NameResolver.findByName(items, appRequest.name);
+    }
+  }
+
+  public static findByTentantId(item: App, appRequest: AppCreationRequest): boolean {
+      if (!appRequest.organisation) {
+          return true; // No tenantId in request, so it's a personal app
+      }
+      if (!item.tenantId) {
+          return false; // No tenantId in app, so it's a personal app
+      }
+      // Check if the app's tenantId matches the requested organisation's tenantId
+      return item.tenantId === appRequest.organisation.orgId;
   }
 
   // Interface

@@ -973,7 +973,13 @@ export class S3Storage implements storage.Storage {
             throw error;
           });
     }
-    
+ /*
+             // Remove the rollout value for the last package.
+            const lastPackage: storage.Package = packageHistory.length ? packageHistory[packageHistory.length - 1] : null;
+            if (lastPackage) {
+              lastPackage.rollout = null;
+            }
+ */
     
     public commitPackage(accountId: string, appId: string, deploymentId: string, appPackage: storage.Package): q.Promise<storage.Package> {
         if (!deploymentId) throw new Error("No deployment id");
@@ -983,14 +989,14 @@ export class S3Storage implements storage.Storage {
         return this.setupPromise
           .then(() => {
             // Fetch the package history from S3
-            return this.getPackageHistoryFromBlob(deploymentId);
+            return this.getPackageHistory(accountId, appId, deploymentId);
           })
           .then((history: storage.Package[]) => {
             packageHistory = history;
             appPackage.label = this.getNextLabel(packageHistory);
             return this.getAccount(accountId);
           })
-          .then((account: storage.Account) => {
+          .then(async (account: storage.Account) => {
             appPackage.releasedBy = account.email;
     
             // Remove the rollout value for the last package.
@@ -1005,42 +1011,43 @@ export class S3Storage implements storage.Storage {
               packageHistory.splice(0, packageHistory.length - 100);
             }
     
+            const savedPackage = await this.sequelize.models[MODELS.PACKAGE].create({...appPackage, deploymentId});
             // Update deployment with the new package information
-            return this.sequelize.models[MODELS.DEPLOYMENT].update({
-              package: JSON.stringify(appPackage),
-            }, {
-              where: { id: deploymentId, appId: appId },
-            });
+            await this.sequelize.models[MODELS.DEPLOYMENT].update(
+              { packageId: savedPackage.dataValues.id },
+              { where: { id: deploymentId, appId } }
+            );
+            return savedPackage.dataValues;
           })
-          .then(() => {
-            // Upload updated package history to S3
-            return this.uploadToHistoryBlob(deploymentId, JSON.stringify(packageHistory));
-          })
-          .then(() => appPackage)
           .catch((error) => {
             console.error("Error committing package:", error);
             throw error;
           });
     }
+
+
+
     public clearPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
-        return this.setupPromise
-          .then(() => {
-            // Clear the package from the deployment
-            return this.sequelize.models[MODELS.DEPLOYMENT].update({
-              package: null,
-            }, {
-              where: { id: deploymentId, appId: appId },
-            });
-          })
-          .then(() => {
-            // Clear the package history in S3
-            return this.uploadToHistoryBlob(deploymentId, JSON.stringify([]));
-          })
-          .catch((error) => {
-            console.error("Error clearing package history:", error);
-            throw error;
+      return this.setupPromise
+        .then(() => {
+          // Remove all packages linked to the deployment
+          return this.sequelize.models[MODELS.PACKAGE].destroy({
+            where: { deploymentId },
           });
+        })
+        .then(() => {
+          // Reset the currentPackageId for the deployment to clear the history
+          return this.sequelize.models[MODELS.DEPLOYMENT].update(
+            { currentPackageId: null },
+            { where: { id: deploymentId, appId } }
+          );
+        })
+        .catch((error) => {
+          console.error("Error clearing package history:", error);
+          throw error;
+        });
     }
+    
     public getPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Package[]> {
       return this.setupPromise
         .then(() => {
@@ -1152,16 +1159,28 @@ export class S3Storage implements storage.Storage {
     }
        
 
+    //MARK: TODO Test this
     public getPackageHistoryFromDeploymentKey(deploymentKey: string): q.Promise<storage.Package[]> {
         return this.setupPromise
-          .then(() => {
-            return this.getDeploymentInfo(deploymentKey);
+          .then(async () => {
+            let deployment = await this.sequelize.models[MODELS.DEPLOYMENT].findOne({ where: { key: deploymentKey } });
+            return deployment.dataValues;
           })
-          .then((deploymentInfo: storage.DeploymentInfo) => {
-            // Fetch package history from S3
-            return this.getPackageHistoryFromBlob(deploymentInfo.deploymentId);
+          .then((deployment: storage.Deployment) => {
+            // Fetch all packages associated with the deploymentId, ordered by uploadTime
+            return this.sequelize.models[MODELS.PACKAGE].findAll({
+              where: { deploymentId: deployment.id },
+              order: [['uploadTime', 'ASC']], // Sort by upload time to maintain historical order
+            });
           })
-          .catch(S3Storage.storageErrorHandler);
+          .then((packageRecords: any[]) => {
+            // Map each package record to the storage.Package format
+            return packageRecords.map((pkgRecord) => this.formatPackage(pkgRecord.dataValues));
+          })
+          .catch((error) => {
+            console.error("Error retrieving package history:", error);
+            throw error;
+          });
     }
 
     private getPackageHistoryFromBlob(deploymentId: string): q.Promise<storage.Package[]> {
@@ -1333,7 +1352,7 @@ export class S3Storage implements storage.Storage {
     }
     public getDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Deployment> {
         return this.setupPromise
-          .then(() => {
+          .then(async () => {
             // Fetch the deployment by appId and deploymentId using Sequelize
             return this.retrieveByAppHierarchy(appId, deploymentId);
           })
@@ -1417,11 +1436,7 @@ export class S3Storage implements storage.Storage {
             where: {
               appId: appId,
               id: deploymentId, // Assuming 'id' is the deploymentId
-            },
-            include: [{
-              model: this.sequelize.models.Package, // Eager load the associated package
-              as: 'package', // Alias for the associated model if needed
-            }]
+            }
           })
         );
     }

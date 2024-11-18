@@ -123,6 +123,7 @@ const seedData = {
       createdTime: new Date().getTime(),
       friendlyName: "Default Access Key",
       expires: 1735689600000,
+      scope: "all",
     },
   ],
 };
@@ -132,10 +133,12 @@ async function seed() {
   try {
     // Initialize models
     const models = createModelss(sequelize);
-    // Sync database
-    await sequelize.sync({ force: true });
+    // // Sync database
+    // await sequelize.sync({ force: true });
+    await sequelize.sync({ alter: true }); // Alters tables without dropping them
 
-    // Insert seed data in order
+
+    // // Insert seed data in order
     await models.Account.bulkCreate(seedData.accounts);
     await models.Tenant.bulkCreate(seedData.tenants);
     await models.App.bulkCreate(seedData.apps);

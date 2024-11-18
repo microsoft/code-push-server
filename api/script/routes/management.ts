@@ -75,7 +75,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     storage
       .addAccount(account)
       .then((accountId: string) => {
-        //issueAccessKey(accountId);
+        //MARK: TODO issueAccessKey(accountId);
         // const restAccount: restTypes.Account = converterUtils.toRestAccount(storageAccount);
         console.log("accounId created");
         res.send({ account: accountId });
@@ -192,6 +192,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           throw errorUtils.restError(errorUtils.ErrorCode.NotFound, `The access key "${accessKeyName}" does not exist.`);
         }
 
+        updatedAccessKey.description = accessKeyRequest.description;
         if (accessKeyRequest.friendlyName) {
           if (NameResolver.isDuplicate(accessKeys, accessKeyRequest.friendlyName)) {
             throw errorUtils.restError(
@@ -203,6 +204,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           updatedAccessKey.friendlyName = accessKeyRequest.friendlyName;
           updatedAccessKey.description = updatedAccessKey.friendlyName;
         }
+        updatedAccessKey.scope = accessKeyRequest.scope;
 
         if (accessKeyRequest.ttl !== undefined) {
           updatedAccessKey.expires = new Date().getTime() + accessKeyRequest.ttl;
@@ -228,6 +230,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         return storage.removeAccessKey(accountId, accessKey.id);
       })
       .then((): void => {
+        //send message that it is deleted successfully.
         res.sendStatus(204);
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
@@ -350,9 +353,10 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.get("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let storageApp: storageTypes.App;
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         storageApp = app;
         return storage.getDeployments(accountId, app.id);
@@ -368,11 +372,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.delete("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
     let invalidationError: Error;
-
+    
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -449,13 +454,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const email: string = req.params.email;
-
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     if (isPrototypePollutionKey(email)) {
       return res.status(400).send("Invalid email parameter");
     }
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
         return storage.transferApp(accountId, app.id, email);
@@ -471,13 +476,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const email: string = req.params.email;
-
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     if (isPrototypePollutionKey(email)) {
       return res.status(400).send("Invalid email parameter");
     }
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
         return storage.addCollaborator(accountId, app.id, email);
@@ -492,9 +497,9 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.get("/apps/:appName/collaborators", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
-
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return storage.getCollaborators(accountId, app.id);
@@ -510,13 +515,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const email: string = req.params.email;
-
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     if (isPrototypePollutionKey(email)) {
       return res.status(400).send("Invalid email parameter");
     }
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         const isAttemptingToRemoveSelf: boolean =
           app.collaborators && email && app.collaborators[email] && app.collaborators[email].isCurrentAccount;
@@ -533,13 +538,44 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  router.patch("/apps/:appName/collaborators/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
+    const accountId: string = req.user.id;
+    const appName: string = req.params.appName;
+    const email: string = req.params.email;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
+    let role: string = "Collaborator";
+    if(req.body.role !== undefined) {
+      role = req.body.role;
+    }
+
+    if (isPrototypePollutionKey(email)) {
+      return res.status(400).send("Invalid email parameter");
+    }
+
+    nameResolver
+      .resolveApp(accountId, appName, tenantId)
+      .then((app: storageTypes.App) => {
+        const isAdmin: boolean =
+          app.collaborators && email && app.collaborators[email] && app.collaborators[email].isCurrentAccount;
+        let permission = role === "Owner" ? storageTypes.Permissions.Owner : storageTypes.Permissions.Collaborator;
+          throwIfInvalidPermissions(app, permission);
+        return storage.updateCollaborators(accountId, app.id, email, role);
+      })
+      .then(() => {
+        res.sendStatus(204);
+      })
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
+      .done();
+  });
+
   router.get("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     let appId: string;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -559,6 +595,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.post("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
     let restDeployment: restTypes.Deployment = converterUtils.deploymentFromBody(req.body);
 
@@ -570,7 +607,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
     const storageDeployment: storageTypes.Deployment = converterUtils.toStorageDeployment(restDeployment, new Date().getTime());
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -599,10 +636,11 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -620,11 +658,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
     let deploymentId: string;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -648,6 +687,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
     let restDeployment: restTypes.Deployment = converterUtils.deploymentFromBody(req.body);
 
@@ -658,7 +698,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -694,6 +734,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
     const info: restTypes.PackageInfo = req.body.packageInfo || {};
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(info, /*allOptional*/ true);
     if (validationErrors.length) {
       errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
@@ -705,7 +746,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     let appId: string;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -799,6 +840,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const appName: string = req.params.appName;
       const deploymentName: string = req.params.deploymentName;
       const file: any = getFileWithField(req, "package");
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
 
       if (!file || !file.buffer) {
         errorUtils.sendMalformedRequestError(res, "A deployment package must include a file.");
@@ -830,7 +872,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         let newManifest: PackageManifest;
 
         nameResolver
-          .resolveApp(accountId, appName)
+          .resolveApp(accountId, appName, tenantId)
           .then((app: storageTypes.App) => {
             appId = app.id;
             throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -937,11 +979,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const accountId: string = req.user.id;
       const appName: string = req.params.appName;
       const deploymentName: string = req.params.deploymentName;
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
       let appId: string;
       let deploymentToGetHistoryOf: storageTypes.Deployment;
 
       nameResolver
-        .resolveApp(accountId, appName)
+        .resolveApp(accountId, appName, tenantId)
         .then((app: storageTypes.App): Promise<storageTypes.Deployment> => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -971,10 +1014,11 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -997,10 +1041,11 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const accountId: string = req.user.id;
       const appName: string = req.params.appName;
       const deploymentName: string = req.params.deploymentName;
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
       let appId: string;
 
       nameResolver
-        .resolveApp(accountId, appName)
+        .resolveApp(accountId, appName, tenantId)
         .then((app: storageTypes.App) => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -1026,6 +1071,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const sourceDeploymentName: string = req.params.sourceDeploymentName;
       const destDeploymentName: string = req.params.destDeploymentName;
       const info: restTypes.PackageInfo = req.body.packageInfo || {};
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
       const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(info, /*allOptional*/ true);
       if (validationErrors.length) {
         errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
@@ -1037,7 +1083,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       let sourcePackage: storageTypes.Package;
 
       nameResolver
-        .resolveApp(accountId, appName)
+        .resolveApp(accountId, appName, tenantId)
         .then((app: storageTypes.App) => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -1124,13 +1170,14 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const accountId: string = req.user.id;
       const appName: string = req.params.appName;
       const deploymentName: string = req.params.deploymentName;
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
       let appId: string;
       let deploymentToRollback: storageTypes.Deployment;
       const targetRelease: string = req.params.targetRelease;
       let destinationPackage: storageTypes.Package;
 
       nameResolver
-        .resolveApp(accountId, appName)
+        .resolveApp(accountId, appName, tenantId)
         .then((app: storageTypes.App) => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);

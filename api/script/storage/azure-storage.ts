@@ -474,6 +474,24 @@ export class AzureStorage implements storage.Storage {
       .catch(AzureStorage.azureErrorHandler);
   }
 
+  public updateCollaborators(accountId: string, appId: string, email: string, role: string): q.Promise<void> {
+    //MARK: TODO TEST
+    return this._setupPromise
+      .then(() => {
+        return this.getApp(accountId, appId, /*keepCollaboratorIds*/ true);
+      })
+      .then((app: storage.App) => {
+        const collaboratorEmails: string[] = Object.keys(app.collaborators);
+        collaboratorEmails.forEach((email: string) => {
+          const collaboratorProperties: storage.CollaboratorProperties = app.collaborators[email];
+          collaboratorProperties.permission = role;
+        });
+
+        return this.updateAppWithPermission(accountId, app, /*updateCollaborator*/ true);
+      })
+      .catch(AzureStorage.azureErrorHandler);
+  }
+
   public removeCollaborator(accountId: string, appId: string, email: string): q.Promise<void> {
     return this._setupPromise
       .then(() => {

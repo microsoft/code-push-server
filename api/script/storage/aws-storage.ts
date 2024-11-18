@@ -19,6 +19,12 @@ export function createAccessKey(sequelize: Sequelize) {
         name: { type: DataTypes.STRING, allowNull: false},
         id: { type: DataTypes.STRING, allowNull: false, primaryKey: true},
         isSession: { type: DataTypes.BOOLEAN, allowNull: true},
+        scope: {
+          type: DataTypes.ENUM({
+              values: ["All", "Write", "Read"]
+          }),
+          allowNull:true
+        },
         accountId: { type: DataTypes.STRING, allowNull: false, references: {
             model: sequelize.models["account"],
             key: 'id',
@@ -470,16 +476,24 @@ export class S3Storage implements storage.Storage {
               }
             }
           } else if(tenantName) {
+            //MARK Fix: Check if tenantName does not exist
+            const tenant = await this.sequelize.models[MODELS.TENANT].findOne({
+              where: { displayName: tenantName },
+            });
+
+            if(!tenant) {
+              throw new Error("An organization or user of this name already exists. Please select a different name.")
+            } else {
             // If no tenantId is provided, set tenantId to NULL (app is standalone/personal)
-            const idTogenerate = shortid.generate();
+              const idTogenerate = shortid.generate();
               // Create a new tenant with the specified tenantName, owned by the accountId
               const newTenant = await this.sequelize.models[MODELS.TENANT].create({
                 id: idTogenerate,
                 displayName: tenantName,
                 createdBy: accountId,
               });
-    
               tenantId = idTogenerate;
+            }
           }
     
           // Set the tenantId on the app object
@@ -551,10 +565,12 @@ export class S3Storage implements storage.Storage {
           // Format tenants into the desired response structure
           const tenants = tenantsModel.map((tenantModel) => {
             const tenant = tenantModel.dataValues;
+            const permission = tenant.createdBy === accountId ? "Owner" : "Collaborator";
+            //permission could be modified if user account does not belong to Collabrator to any other app of that tenant.
             return {
               id: tenant.id,
               displayName: tenant.displayName, // Assuming `displayName` in Tenant model holds org name
-              role: "Owner",
+              role: permission,
             };
           });
     
@@ -594,6 +610,10 @@ export class S3Storage implements storage.Storage {
           return this.sequelize.models[MODELS.APPS].destroy({
             where: { id: appId, accountId },
           });
+        })
+        .then(() => {
+          // Remove the app entry
+          this.removeAppPointer(accountId, appId);
         })
         .catch(S3Storage.storageErrorHandler);
     }    
@@ -709,6 +729,25 @@ export class S3Storage implements storage.Storage {
         })
         .catch(S3Storage.storageErrorHandler);
     }
+
+    public updateCollaborators(accountId: string, appId: string, email: string, role: string): q.Promise<void> {
+      return this.setupPromise
+      .then(() => {
+        const getAppPromise: q.Promise<storage.App> = this.getApp(accountId, appId, /*keepCollaboratorIds*/ true);
+        const requestCollaboratorAccountPromise: q.Promise<storage.Account> = this.getAccountByEmail(email);
+        return q.all<any>([getAppPromise, requestCollaboratorAccountPromise]);
+      })
+      .spread((app: storage.App, accountToModify: storage.Account) => {
+        // Use the original email stored on the account to ensure casing is consistent
+        email = accountToModify.email;
+        let permission = role === "Owner" ? storage.Permissions.Owner : storage.Permissions.Collaborator;
+        return this.updateCollaboratorWithPermissions(accountId, app, email, {
+          accountId: accountToModify.id,
+          permission: permission,
+        });
+      })
+      .catch(S3Storage.storageErrorHandler);
+    }
   
     public getCollaborators(accountId: string, appId: string): q.Promise<storage.CollaboratorMap> {
       return this.setupPromise
@@ -815,6 +854,22 @@ export class S3Storage implements storage.Storage {
         collabProperties: storage.CollaboratorProperties
       ): q.Promise<void> {
         if (app && app.collaborators && !app.collaborators[email]) {
+          app.collaborators[email] = collabProperties;
+          return this.updateAppWithPermission(accountId, app, /*updateCollaborator*/ true).then(() => {
+            return this.addAppPointer(collabProperties.accountId, app.id);
+          });
+        } else {
+          throw storage.storageError(storage.ErrorCode.AlreadyExists, "The given account is already a collaborator for this app.");
+        }
+      }
+
+      private updateCollaboratorWithPermissions(
+        accountId: string,
+        app: storage.App,
+        email: string,
+        collabProperties: storage.CollaboratorProperties
+      ): q.Promise<void> {
+        if (app && app.collaborators && app.collaborators[email]) {
           app.collaborators[email] = collabProperties;
           return this.updateAppWithPermission(accountId, app, /*updateCollaborator*/ true).then(() => {
             return this.addAppPointer(collabProperties.accountId, app.id);
@@ -1032,24 +1087,36 @@ export class S3Storage implements storage.Storage {
 
     //blobs
     public addBlob(blobId: string, stream: stream.Readable, streamLength: number): q.Promise<string> {
-        return this.setupPromise
-          .then(() => {
-            // Convert the stream to a buffer
-            return utils.streamToBuffer(stream);
+      return this.setupPromise
+      .then(() => {
+        // Generate a unique key if blobId is not provided
+        if (!blobId) {
+          blobId = `deployments/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.zip`;
+          console.log("Generated Blob ID:", blobId);
+        }
+  
+        // Convert the stream to a buffer
+        return utils.streamToBufferS3(stream);
+      })
+      .then((buffer) => {
+        // Upload the buffer to S3
+        return this.s3
+          .putObject({
+            Bucket: this.bucketName,
+            Key: blobId,
+            Body: buffer,
+            ContentType: 'application/zip', // Assume all deployments are zipped
           })
-          .then((buffer) => {
-            // Upload the buffer to S3
-            return this.s3.putObject({
-              Bucket: this.bucketName,
-              Key: blobId,
-              Body: buffer,
-            }).promise();
-          })
-          .then(() => blobId)
-          .catch((error) => {
-            console.error("Error adding blob:", error);
-            throw error;
-          });
+          .promise();
+      })
+      .then(() => {
+        console.log('blobId here ::', blobId);
+        return blobId
+      }) // Return the Blob ID for further use
+      .catch((error) => {
+        console.error("Error adding blob:", error);
+        throw error;
+      });
     }
 
     public getBlobUrl(blobId: string): q.Promise<string> {
@@ -1176,7 +1243,7 @@ export class S3Storage implements storage.Storage {
         return this.setupPromise
           .then(() => {
             // Find the access key in the database using Sequelize
-            return this.sequelize.models.AccessKey.findOne({
+            return this.sequelize.models[MODELS.ACCESSKEY].findOne({
               where: {
                 accountId: accountId,
                 id: accessKeyId,
@@ -1207,7 +1274,7 @@ export class S3Storage implements storage.Storage {
             }
     
             // Remove the access key from the database
-            return this.sequelize.models.AccessKey.destroy({
+            return this.sequelize.models[MODELS.ACCESSKEY].destroy({
               where: {
                 accountId: accountId,
                 id: accessKeyId,
@@ -1235,7 +1302,7 @@ export class S3Storage implements storage.Storage {
         return this.setupPromise
           .then(() => {
             // Update the access key in the database
-            return this.sequelize.models.AccessKey.update(accessKey, {
+            return this.sequelize.models[exports.MODELS.ACCESSKEY].update(accessKey, {
               where: {
                 accountId: accountId,
                 id: accessKey.id,

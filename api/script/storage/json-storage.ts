@@ -357,6 +357,23 @@ export class JsonStorage implements storage.Storage {
     });
   }
 
+  public updateCollaborators(accountId: string, appId: string, email: string, role: string): Promise<void> {
+    //MARK: TODO TEST
+    return this.getApp(accountId, appId).then((app: storage.App) => {
+      if (role === "Owner") {
+        return JsonStorage.getRejectedPromise(storage.ErrorCode.Invalid, "Cannot update role to Owner");
+      }
+
+      Object.keys(app.collaborators).forEach((email: string) => {
+        if (app.collaborators[email].isCurrentAccount) {
+          app.collaborators[email].permission = role;
+        }
+      });
+
+      return this.updateApp(accountId, app);
+    });
+  }
+
   public getCollaborators(accountId: string, appId: string): Promise<storage.CollaboratorMap> {
     return this.getApp(accountId, appId).then((app: storage.App) => {
       return q<storage.CollaboratorMap>(app.collaborators);

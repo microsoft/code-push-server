@@ -39,9 +39,12 @@ export function accessKeyRequestFromBody(body: AccessKeyRequest): AccessKeyReque
   }
 
   // This caters to legacy CLIs, before "description" was renamed to "friendlyName".
-  accessKeyRequest.friendlyName = body.friendlyName === undefined ? body.description : body.friendlyName;
+  if(body.scope !== undefined)  {
+    accessKeyRequest.friendlyName = body.friendlyName;
+  }
+  
   accessKeyRequest.friendlyName = accessKeyRequest.friendlyName && accessKeyRequest.friendlyName.trim();
-  accessKeyRequest.description = accessKeyRequest.friendlyName;
+  accessKeyRequest.description = accessKeyRequest.description;
 
   return accessKeyRequest;
 }
@@ -240,6 +243,7 @@ export function toStorageAccessKey(restAccessKey: AccessKey): Storage.AccessKey 
     expires: restAccessKey.expires,
     friendlyName: restAccessKey.friendlyName,
     description: restAccessKey.friendlyName,
+    scope: restAccessKey.scope,
   };
 
   return storageAccessKey;

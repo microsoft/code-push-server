@@ -159,6 +159,7 @@ export interface Storage {
 
   addCollaborator(accountId: string, appId: string, email: string): Promise<void>;
   getCollaborators(accountId: string, appId: string): Promise<CollaboratorMap>;
+  updateCollaborators(accountId: string, appId: string, email: string, role: string): Promise<void>;
   removeCollaborator(accountId: string, appId: string, email: string): Promise<void>;
 
   addDeployment(accountId: string, appId: string, deployment: Deployment): Promise<string>;
@@ -288,6 +289,18 @@ export class NameResolver {
       return item.tenantId === appRequest.organisation.orgId;
   }
 
+  public static findAppByTenantId(apps: App[], tenantId: string): App {
+    if (!apps.length) return null;
+
+    for (let i = 0; i < apps.length; i++) {
+      if (apps[i].tenantId === tenantId) {
+        return apps[i];
+      }
+    }
+    return null;
+  }
+
+
   // Interface
   public static findByName(items: App[], displayName: string): App;
   public static findByName<T extends { name: string }>(items: T[], name: string): T;
@@ -373,13 +386,13 @@ export class NameResolver {
       .catch(NameResolver.errorMessageOverride(ErrorCode.NotFound, `Access key "${name}" does not exist.`));
   }
 
-  public resolveApp(accountId: string, name: string, permission?: string): Promise<App> {
+  public resolveApp(accountId: string, name: string, tenantId?: string, permission?: string): Promise<App> {
     return this._storage
       .getApps(accountId)
       .then((apps: App[]): App => {
-        const app: App = NameResolver.findByName(apps, name);
+        //check this logic
+        const app: App = tenantId ? NameResolver.findAppByTenantId(apps, tenantId) : NameResolver.findByName(apps, name);
         if (!app) throw storageError(ErrorCode.NotFound);
-
         return app;
       })
       .catch(NameResolver.errorMessageOverride(ErrorCode.NotFound, `App "${name}" does not exist.`));

@@ -279,6 +279,8 @@ export class RedisManager {
   }
 
   public invalidateCache(expiryKey: string): Promise<void> {
+    //MARK: TODO
+    return q(<void>null);
     if (!this.isEnabled) return q(<void>null);
 
     return this._promisifiedOpsClient.del(expiryKey).then(() => {});

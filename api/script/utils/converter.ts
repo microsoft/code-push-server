@@ -34,6 +34,10 @@ export function accessKeyRequestFromBody(body: AccessKeyRequest): AccessKeyReque
     accessKeyRequest.name = body.name;
   }
 
+  if(body.scope !== undefined)  {
+    accessKeyRequest.scope = body.scope;
+  }
+
   // This caters to legacy CLIs, before "description" was renamed to "friendlyName".
   accessKeyRequest.friendlyName = body.friendlyName === undefined ? body.description : body.friendlyName;
   accessKeyRequest.friendlyName = accessKeyRequest.friendlyName && accessKeyRequest.friendlyName.trim();
@@ -137,7 +141,12 @@ export function toRestApp(storageApp: Storage.App, displayName: string, deployme
   };
 }
 
-export function toRestCollaboratorMap(storageCollaboratorMap: Storage.CollaboratorMap): CollaboratorMap {
+export function toRestCollaboratorMap(storageCollaboratorMap: Storage.CollaboratorMap | null | undefined): CollaboratorMap {
+  // Safeguard against null or undefined input
+  if (!storageCollaboratorMap) {
+    return {};
+  }
+
   const collaboratorMap: CollaboratorMap = {};
   
   Object.keys(storageCollaboratorMap)

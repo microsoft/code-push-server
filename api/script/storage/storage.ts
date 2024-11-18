@@ -126,6 +126,7 @@ export interface AccessKey {
   /*generated*/ id?: string;
   /*generated*/ isSession?: boolean;
   name: string;
+  scope?: string;
 }
 
 /**

@@ -391,6 +391,7 @@ export class S3Storage implements storage.Storage {
         return this.setupPromise
             .then(async () => {
               const account = await this.sequelize.models[MODELS.ACCOUNT].findOne({where: {email : email}})
+              //Fix this error code
               return account !== null ? q.resolve(account.dataValues) : q.reject({code: 1})
             })
     }
@@ -463,7 +464,7 @@ export class S3Storage implements storage.Storage {
               // const isAdmin = await this.sequelize.models[MODELS.COLLABORATOR].findOne({
               //   where: { accountId, tenantId, permission: storage.Permissions.Owner },
               // });
-              const isAdmin = true;
+              const isAdmin = tenant.dataValues.createdBy === accountId;
               if (!isAdmin) {
                 throw new Error("User does not have admin permissions for the specified tenant.");
               }

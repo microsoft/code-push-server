@@ -942,10 +942,6 @@ export class S3Storage implements storage.Storage {
             // Insert the deployment in the DB
             return this.sequelize.models[MODELS.DEPLOYMENT].create({ ...deployment, appId, createdTime: Date.now() });
           })
-          // .then(() => {
-          //   //MARK: TODO
-          //   return this.uploadToHistoryBlob(deploymentId, JSON.stringify([]));
-          // })
           .then(() => {
             // Return deployment ID
             return deploymentId;
@@ -988,7 +984,7 @@ export class S3Storage implements storage.Storage {
     }
 
     public removeDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
-      //MARK:TODO FIX THIS
+      //MARK:TODO TEST THIS
         return this.setupPromise
           .then(() => {
             // Delete the deployment from the database using Sequelize
@@ -1123,23 +1119,44 @@ export class S3Storage implements storage.Storage {
         }
     
         return this.setupPromise
-          .then(() => {
-            // Update the deployment's package with the latest package from the history
-            return this.sequelize.models[MODELS.DEPLOYMENT].update({
-              package: JSON.stringify(history[history.length - 1]),
-            }, {
-              where: { id: deploymentId, appId: appId },
+        .then(async () => {
+          for (const appPackage of history) {
+            // Find the existing package in the table
+            const existingPackage = await this.sequelize.models[MODELS.PACKAGE].findOne({
+              where: { deploymentId: deploymentId, packageHash: appPackage.packageHash },
             });
-          })
-          .then(() => {
-            // Upload the updated package history to S3
-            return this.uploadToHistoryBlob(deploymentId, JSON.stringify(history));
-          })
+    
+            if (existingPackage) {
+    
+              const existingData = existingPackage.dataValues;
+
+              const isChanged = Object.keys(appPackage).some((key) => {
+                return appPackage[key] !== existingData[key];
+              });
+    
+              // Update the package if it has been changed
+              if (isChanged) {
+                await this.sequelize.models[MODELS.PACKAGE].update(appPackage, {
+                  where: { id: existingData.id },
+                });
+              }
+            } else {
+              // If the package does not exist, insert it
+              await this.sequelize.models[MODELS.PACKAGE].create({
+                ...appPackage,
+                deploymentId: deploymentId,
+              });
+            }
+          }
+        })
           .catch((error) => {
             console.error("Error updating package history:", error);
             throw error;
           });
     }
+
+    //Utility Package Methods
+    
 
     //blobs
     public addBlob(blobId: string, stream: stream.Readable, streamLength: number): q.Promise<string> {
@@ -1167,6 +1184,7 @@ export class S3Storage implements storage.Storage {
       })
       .then(() => {
         console.log('blobId here ::', blobId);
+        //generate CF Distribution URL using environment variable signed Url
         return blobId
       }) // Return the Blob ID for further use
       .catch((error) => {
@@ -1405,9 +1423,9 @@ export class S3Storage implements storage.Storage {
             // Fetch the deployment by appId and deploymentId using Sequelize
             return this.retrieveByAppHierarchy(appId, deploymentId);
           })
-          .then((flatDeployment: any) => {
+          .then(async (flatDeployment: any) => {
             // Convert the retrieved Sequelize object to the desired format
-            return this.unflattenDeployment(flatDeployment);
+            return this.attachPackageToDeployment(accountId, flatDeployment);
           })
           .catch((error) => {
             // Handle any Sequelize errors here

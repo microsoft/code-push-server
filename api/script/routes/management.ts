@@ -829,7 +829,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         }
 
         if (updateRelease) {
-          //MARK TODO: evaluate this logic tomorrow
+          //MARK TODO: TEST THIS
           return storage.updatePackageHistory(accountId, appId, storageDeployment.id, packageHistory).then(() => {
             res.send({ package: converterUtils.toRestPackage(packageToUpdate) });
             return invalidateCachedPackage(storageDeployment.key);
@@ -1374,6 +1374,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       })
       .then(() => {
         if (updateHistory) {
+          //MARK: TODO This Method needs to be TESTed
           return storage.getDeployment(accountId, appId, deploymentId).then((deployment: storageTypes.Deployment) => {
             return invalidateCachedPackage(deployment.key);
           });

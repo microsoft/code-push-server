@@ -185,6 +185,7 @@ export interface Storage {
   getAccessKeys(accountId: string): Promise<AccessKey[]>;
   removeAccessKey(accountId: string, accessKeyId: string): Promise<void>;
   updateAccessKey(accountId: string, accessKey: AccessKey): Promise<void>;
+  getUserFromAccessKey(accessKey: string): Promise<Account>;
 
   dropAll(): Promise<void>;
 }

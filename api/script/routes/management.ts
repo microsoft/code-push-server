@@ -169,6 +169,22 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  router.get("/accountByaccessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => { 
+    const accessKeyName = Array.isArray(req.headers.accesskeyname) ? req.headers.accesskeyname[0] : req.headers.accesskeyname;
+    //validate accessKeyName
+    if(!accessKeyName) {
+      res.status(400).send("Access key name is required");
+      return;
+    }
+    storage.getUserFromAccessKey(accessKeyName)
+      .then((storageAccount: storageTypes.Account): void => {
+        const restAccount: restTypes.Account = converterUtils.toRestAccount(storageAccount);
+        res.send({ account: restAccount });
+      })
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
+      .done();
+  });
+
   router.patch("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyName: string = req.params.accessKeyName;

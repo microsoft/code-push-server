@@ -1324,6 +1324,22 @@ export class S3Storage implements storage.Storage {
           });
     }
 
+    public getUserFromAccessKey(accessKey: string): q.Promise<storage.Account> {
+        return this.setupPromise
+        .then(() => {
+          return this.sequelize.models[MODELS.ACCESSKEY].findOne({ where: { friendlyName: accessKey } });
+        }).then(async (accessKey: any) => {    
+          if (!accessKey) {
+            throw new Error("Access key not found");
+          }
+          return this.getAccount(accessKey.accountId);
+        }).catch((error: any) => {
+          console.error("Error retrieving account:", error);
+          throw error;
+        });
+
+    }
+
 
     public getAccessKey(accountId: string, accessKeyId: string): q.Promise<storage.AccessKey> {
         return this.setupPromise

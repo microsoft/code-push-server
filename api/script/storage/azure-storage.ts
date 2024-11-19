@@ -249,6 +249,18 @@ export class AzureStorage implements storage.Storage {
       .catch(AzureStorage.azureErrorHandler);
   }
 
+  public getUserFromAccessKey(accessKey: string): q.Promise<storage.Account> {
+    //MARK: TODO TEST THIS
+    const partitionKey: string = Keys.getShortcutAccessKeyPartitionKey(accessKey);
+    const rowKey: string = "";
+
+    return this._setupPromise
+      .then(() => {
+        return this.retrieveByKey(partitionKey, rowKey);
+      })
+      .catch(AzureStorage.azureErrorHandler);
+  }
+
   public getAccountByEmail(email: string): q.Promise<storage.Account> {
     const address: Pointer = Keys.getEmailShortcutAddress(email);
     return this._setupPromise

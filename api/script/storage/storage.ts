@@ -149,6 +149,7 @@ export interface Storage {
   updateAccount(email: string, updates: Account): Promise<void>;
 
   getTenants(accountId: string): Promise<Organization[]>;
+  removeTenant(accountId: string, tenantId: string): Promise<void>;
 
   addApp(accountId: string, app: App): Promise<App>;
   getApps(accountId: string): Promise<App[]>;
@@ -289,11 +290,11 @@ export class NameResolver {
       return item.tenantId === appRequest.organisation.orgId;
   }
 
-  public static findAppByTenantId(apps: App[], tenantId: string): App {
+  public static findAppByTenantId(apps: App[], tenantId: string, name: string): App {
     if (!apps.length) return null;
 
     for (let i = 0; i < apps.length; i++) {
-      if (apps[i].tenantId === tenantId) {
+      if (apps[i].tenantId === tenantId && apps[i].name === name) {
         return apps[i];
       }
     }
@@ -391,7 +392,7 @@ export class NameResolver {
       .getApps(accountId)
       .then((apps: App[]): App => {
         //check this logic
-        const app: App = tenantId ? NameResolver.findAppByTenantId(apps, tenantId) : NameResolver.findByName(apps, name);
+        const app: App = tenantId ? NameResolver.findAppByTenantId(apps, tenantId, name) : NameResolver.findByName(apps, name);
         if (!app) throw storageError(ErrorCode.NotFound);
         return app;
       })

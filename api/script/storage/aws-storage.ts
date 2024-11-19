@@ -481,7 +481,7 @@ export class S3Storage implements storage.Storage {
               where: { displayName: tenantName },
             });
 
-            if(!tenant) {
+            if(tenant) {
               throw new Error("An organization or user of this name already exists. Please select a different name.")
             } else {
             // If no tenantId is provided, set tenantId to NULL (app is standalone/personal)
@@ -579,6 +579,53 @@ export class S3Storage implements storage.Storage {
         .catch(S3Storage.storageErrorHandler);
     }
     
+    public removeTenant(accountId: string, tenantId: string): q.Promise<void> {
+      return this.setupPromise
+        .then( async () => {
+          // Remove all apps under the tenant
+          //Remove all collaborators from that apps
+          //check permission whether user is owner or not
+          const tenant = await this.sequelize.models[MODELS.TENANT].findOne({
+            where: { id: tenantId },
+          });
+
+          if(!tenant) {
+            throw storage.storageError(storage.ErrorCode.NotFound, "Specified Organisation does not exist.");
+          }
+
+          if(tenant.dataValues.createdBy !== accountId) {
+            throw storage.storageError(storage.ErrorCode.Invalid, "User does not have admin permissions for the specified tenant.");
+          }
+
+          const apps = await this.sequelize.models[MODELS.APPS].findAll({
+            where: { tenantId },
+          });
+    
+          // Iterate over each app and take appropriate action
+          for (const app of apps) {
+            const appOwnerId = app.dataValues.accountId;
+    
+            if (appOwnerId === accountId) {
+              // If the app is owned by the user, remove it
+              await this.removeApp(accountId, app.dataValues.id);
+            } else {
+              // If the app is not owned by the user, set tenantId to null
+              await this.sequelize.models[MODELS.APPS].update(
+                { tenantId: null },
+                { where: { id: app.dataValues.id } }
+              );
+            }
+          }
+        
+        })
+        .then(() => {
+          // Remove the tenant entry
+          return this.sequelize.models[MODELS.TENANT].destroy({
+            where: { id: tenantId, createdBy: accountId },
+          });
+        })
+        .catch(S3Storage.storageErrorHandler);
+    }
     
     public getApp(accountId: string, appId: string, keepCollaboratorIds: boolean = false): q.Promise<storage.App> {
       return this.setupPromise
@@ -613,6 +660,7 @@ export class S3Storage implements storage.Storage {
         })
         .then(() => {
           // Remove the app entry
+          //MARK: Fix this
           this.removeAppPointer(accountId, appId);
         })
         .catch(S3Storage.storageErrorHandler);
@@ -802,7 +850,7 @@ export class S3Storage implements storage.Storage {
         })
         .then((deletedCount: number) => {
           if (deletedCount === 0) {
-            throw new Error('AppPointer not found');
+            console.log('AppPointer not found');
           }
           console.log('AppPointer successfully removed');
         })
@@ -940,6 +988,7 @@ export class S3Storage implements storage.Storage {
     }
 
     public removeDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
+      //MARK:TODO FIX THIS
         return this.setupPromise
           .then(() => {
             // Delete the deployment from the database using Sequelize

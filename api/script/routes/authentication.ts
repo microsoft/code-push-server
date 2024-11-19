@@ -133,6 +133,9 @@ export class Authentication {
         //   email: "localdev@example.com",
         //   name: "Local Developer",
         // };
+        // let accessKey = req.headers.accessKey;
+        // if (accessKey) {
+        //   let account = await this._storageInstance.getAccessKey(accessKey);
         res.send({ authenticated: true, user: req.user });
       }
     );

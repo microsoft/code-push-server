@@ -277,6 +277,20 @@ export function getManagementRouter(config: ManagementConfig): Router {
       });
   });
 
+  router.delete("/tenants/:tenantId", (req: Request, res: Response, next: (err?: any) => void): any => {
+    const accountId: string = req.user.id;
+    const tenantId: string = req.params.tenantId;
+
+    storage
+      .removeTenant(accountId, tenantId) // Calls the storage method we’ll define next
+      .then(() => {
+        res.sendStatus(204);
+      })
+      .catch((error: any) => {
+        next(error); // Forward error to error handler
+      });
+  });
+
   router.get("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const tenant: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
@@ -815,6 +829,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         }
 
         if (updateRelease) {
+          //MARK TODO: evaluate this logic tomorrow
           return storage.updatePackageHistory(accountId, appId, storageDeployment.id, packageHistory).then(() => {
             res.send({ package: converterUtils.toRestPackage(packageToUpdate) });
             return invalidateCachedPackage(storageDeployment.key);

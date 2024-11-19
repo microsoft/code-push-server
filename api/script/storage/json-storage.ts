@@ -151,6 +151,23 @@ export class JsonStorage implements storage.Storage {
     return q(clone(this.accounts[accountId]));
   }
 
+  public removeTenant(accountId: string, tenantId: string): Promise<void> {
+    if (!this.accounts[accountId] || !this.tenants[tenantId]) {
+      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    }
+
+    const tenant = this.tenants[tenantId];
+    const tenantAccounts = this.accountToTenantsMap[accountId];
+    if (tenantAccounts.indexOf(tenantId) !== -1) {
+      tenantAccounts.splice(tenantAccounts.indexOf(tenantId), 1);
+    }
+
+    delete this.tenants[tenantId];
+    this.saveStateAsync();
+
+    return q(<void>null);
+  }
+
   public getTenants(accountId: string): Promise<storage.Organization[]> {
     const tenantIds = this.accountToTenantsMap[accountId];
     if (tenantIds) {

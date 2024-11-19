@@ -311,6 +311,10 @@ export class AzureStorage implements storage.Storage {
       .catch(AzureStorage.azureErrorHandler);
   }
 
+  public removeTenant(accountId: string, tenantId: string): q.Promise<void> {
+    return q(<void>null);
+  }
+
   public addApp(accountId: string, app: storage.App): q.Promise<storage.App> {
     app = storage.clone(app); // pass by value
     app.id = shortid.generate();

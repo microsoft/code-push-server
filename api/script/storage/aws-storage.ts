@@ -7,6 +7,7 @@ import { Sequelize, DataTypes } from "sequelize";
 //import * from nanoid;
 import * as shortid from "shortid";
 import * as utils from "../utils/common";
+import * as mysql from "mysql2/promise";
 
 //Creating Access Key
 export function createAccessKey(sequelize: Sequelize) {
@@ -288,7 +289,7 @@ export class S3Storage implements storage.Storage {
     private s3: S3;
     private bucketName : string = process.env.S3_BUCKETNAME || "codepush-local-bucket";
     private sequelize:Sequelize;
-    private setupPromise: q.Promise<void>
+    private setupPromise: q.Promise<void>;
     public constructor() {
         this.s3 = new S3({
           endpoint: process.env.S3_ENDPOINT, // LocalStack S3 endpoint
@@ -298,56 +299,129 @@ export class S3Storage implements storage.Storage {
           region: process.env.S3_REGION
         });
         shortid.characters("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-");
-        this.sequelize = new Sequelize(process.env.DB_NAME || DB_NAME, process.env.DB_USER || DB_USER, process.env.DB_PASS || DB_PASS, {
-            host: process.env.DB_HOST || DB_HOST,
-            dialect: 'mysql'
-          });
-        this.setupPromise = this.setup()
-          
+        // this.sequelize = new Sequelize(process.env.DB_NAME || DB_NAME, process.env.DB_USER || DB_USER, process.env.DB_PASS || DB_PASS, {
+        //     host: process.env.DB_HOST || DB_HOST,
+        //     dialect: 'mysql'
+        //   });
+        // this.setupPromise = this.setup()
+
+        // Ensure the database exists, then initialize Sequelize
+        this.setupPromise = q(this.createDatabaseIfNotExists()).then(() => {
+          this.sequelize = new Sequelize(
+              process.env.DB_NAME || DB_NAME,
+              process.env.DB_USER || DB_USER,
+              process.env.DB_PASS || DB_PASS,
+              {
+                  host: process.env.DB_HOST || DB_HOST,
+                  dialect: 'mysql',
+              }
+          );
+          return this.setup();
+      });   
     }
 
+    private async createDatabaseIfNotExists(): Promise<void> {
+
+      try {
+          const connection = await mysql.createConnection({
+              host: process.env.DB_HOST || DB_HOST,
+              user: process.env.DB_USER || DB_USER,
+              password: process.env.DB_PASS || DB_PASS,
+          });
+
+          await connection.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\`;`);
+          console.log(`Database "${process.env.DB_NAME}" ensured.`);
+          await connection.end();
+      } catch (error) {
+          console.error("Error creating database:", error);
+          throw error;
+      }
+  }
+
+    // private setup(): q.Promise<void> {
+    //   let headBucketParams: HeadBucketRequest = {
+    //     Bucket: this.bucketName,
+    //   };
+    
+    //   let createBucketParams: CreateBucketRequest = {
+    //     Bucket: this.bucketName,
+    //   };
+    
+    //   return q(this.s3.headBucket(headBucketParams).promise())
+    //     .catch((err) => {
+    //       if (err.code === 'NotFound' || err.code === 'NoSuchBucket') {
+    //         console.log(`Bucket ${this.bucketName} does not exist, creating it...`);
+    //         return q(this.s3.createBucket(createBucketParams).promise());
+    //       } else if (err.code === 'Forbidden') {
+    //         console.error('Forbidden: Check your credentials and S3 endpoint');
+    //         throw err; // Re-throw the error after logging
+    //       } else {
+    //         throw err; // Other errors, re-throw them
+    //       }
+    //     })
+    //     .then(() => {
+    //       // Authenticate Sequelize and ensure models are registered
+    //       return q.call(this.sequelize.authenticate.bind(this.sequelize));
+    //     })
+    //     .then(() => {
+    //       // Create and associate models
+    //       const models = createModelss(this.sequelize);
+    //       console.log("Models registered");
+    
+    //       // Sync models with the database
+    //       return q.call(this.sequelize.sync.bind(this.sequelize)); // Await Sequelize sync
+    //     })
+    //     .then(() => {
+    //       console.log("Sequelize models synced");
+    //       console.log(this.sequelize.models);  // This should list all the registered models
+    //     })
+    //     .catch((error) => {
+    //       console.error('Error during setup:', error);
+    //       throw error;
+    //     });
+    // }
     private setup(): q.Promise<void> {
       let headBucketParams: HeadBucketRequest = {
-        Bucket: this.bucketName,
+          Bucket: this.bucketName,
       };
-    
+
       let createBucketParams: CreateBucketRequest = {
-        Bucket: this.bucketName,
+          Bucket: this.bucketName,
       };
-    
+
       return q(this.s3.headBucket(headBucketParams).promise())
-        .catch((err) => {
-          if (err.code === 'NotFound' || err.code === 'NoSuchBucket') {
-            console.log(`Bucket ${this.bucketName} does not exist, creating it...`);
-            return q(this.s3.createBucket(createBucketParams).promise());
-          } else if (err.code === 'Forbidden') {
-            console.error('Forbidden: Check your credentials and S3 endpoint');
-            throw err; // Re-throw the error after logging
-          } else {
-            throw err; // Other errors, re-throw them
-          }
-        })
-        .then(() => {
-          // Authenticate Sequelize and ensure models are registered
-          return q.call(this.sequelize.authenticate.bind(this.sequelize));
-        })
-        .then(() => {
-          // Create and associate models
-          const models = createModelss(this.sequelize);
-          console.log("Models registered");
-    
-          // Sync models with the database
-          return q.call(this.sequelize.sync.bind(this.sequelize)); // Await Sequelize sync
-        })
-        .then(() => {
-          console.log("Sequelize models synced");
-          console.log(this.sequelize.models);  // This should list all the registered models
-        })
-        .catch((error) => {
-          console.error('Error during setup:', error);
-          throw error;
-        });
-    }
+          .catch((err) => {
+              if (err.code === 'NotFound' || err.code === 'NoSuchBucket') {
+                  console.log(`Bucket ${this.bucketName} does not exist, creating it...`);
+                  return q(this.s3.createBucket(createBucketParams).promise());
+              } else if (err.code === 'Forbidden') {
+                  console.error('Forbidden: Check your credentials and S3 endpoint');
+                  throw err; // Re-throw the error after logging
+              } else {
+                  throw err; // Other errors, re-throw them
+              }
+          })
+          .then(() => {
+              // Authenticate Sequelize and ensure models are registered
+              return q.call(this.sequelize.authenticate.bind(this.sequelize));
+          })
+          .then(() => {
+              // Create and associate models
+              const models = createModelss(this.sequelize);
+              console.log("Models registered");
+
+              // Sync models with the database
+              return q.call(this.sequelize.sync.bind(this.sequelize)); // Await Sequelize sync
+          })
+          .then(() => {
+              console.log("Sequelize models synced");
+              console.log(this.sequelize.models); // This should list all the registered models
+          })
+          .catch((error) => {
+              console.error('Error during setup:', error);
+              throw error;
+          });
+  }
       
 
     public reinitialize(): q.Promise<void> {

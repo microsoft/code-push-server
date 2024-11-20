@@ -135,7 +135,8 @@ export class RedisManager {
 
   public checkHealth(): Promise<void> {
     if (!this.isEnabled) {
-      return q.reject<void>("Redis manager is not enabled");
+      console.warn("Redis manager is not enabled, skipping health check."); // Log a warning
+      return q.resolve();
     }
 
     return q.all([this._promisifiedOpsClient.ping(), this._promisifiedMetricsClient.ping()]).spread<void>(() => {});

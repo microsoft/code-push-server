@@ -1326,7 +1326,7 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           ? Q(command.appStoreVersion)
           : getReactNativeProjectAppVersion(command, projectName);
 
-        if (command.sourcemapOutput) {
+        if (command.sourcemapOutput && !command.sourcemapOutput.endsWith(".map")) {
           command.sourcemapOutput = path.join(command.sourcemapOutput, bundleName + ".map");
         }
 

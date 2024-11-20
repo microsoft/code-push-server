@@ -178,8 +178,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
     storage.getUserFromAccessKey(accessKeyName)
       .then((storageAccount: storageTypes.Account): void => {
-        const restAccount: restTypes.Account = converterUtils.toRestAccount(storageAccount);
-        res.send({ account: restAccount });
+        res.send({ user: storageAccount });
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();

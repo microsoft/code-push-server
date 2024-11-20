@@ -286,15 +286,16 @@ const DB_HOST = "localhost"
 
 export class S3Storage implements storage.Storage {
     private s3: S3;
-    private bucketName : string = "codepush-poc-bucket"
+    private bucketName : string = process.env.S3_BUCKETNAME || "codepush-local-bucket";
     private sequelize:Sequelize;
     private setupPromise: q.Promise<void>
     public constructor() {
         this.s3 = new S3({
           endpoint: process.env.S3_ENDPOINT, // LocalStack S3 endpoint
           s3ForcePathStyle: true,
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+          region: process.env.S3_REGION
         });
         shortid.characters("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-");
         this.sequelize = new Sequelize(process.env.DB_NAME || DB_NAME, process.env.DB_USER || DB_USER, process.env.DB_PASS || DB_PASS, {

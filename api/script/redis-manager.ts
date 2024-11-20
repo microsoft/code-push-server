@@ -129,7 +129,8 @@ export class RedisManager {
   }
 
   public get isEnabled(): boolean {
-    return !!this._opsClient && !!this._metricsClient;
+   // return !!this._opsClient && !!this._metricsClient;
+   return false;
   }
 
   public checkHealth(): Promise<void> {

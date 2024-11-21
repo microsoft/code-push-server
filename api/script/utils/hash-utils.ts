@@ -89,7 +89,7 @@ export function generatePackageManifestFromZip(filePath: string): Promise<Packag
             hashStream(readStream).then((hash: string) => {
               fileHashesMap.set(fileName, hash);
               zipFile.readEntry();
-            }, reject)
+            }, reject),
           );
         });
       })
@@ -117,16 +117,19 @@ export function generatePackageManifestFromDirectory(directoryPath: string, base
     }
 
     // Hash the files sequentially, because streaming them in parallel is not necessarily faster
-    const generateManifestPromise: Promise<void> = files.reduce((soFar: Promise<void>, filePath: string) => {
-      return soFar.then(() => {
-        const relativePath: string = PackageManifest.normalizePath(path.relative(basePath, filePath));
-        if (!PackageManifest.isIgnored(relativePath)) {
-          return hashFile(filePath).then((hash: string) => {
-            fileHashesMap.set(relativePath, hash);
-          });
-        }
-      });
-    }, q(<void>null));
+    const generateManifestPromise: Promise<void> = files.reduce(
+      (soFar: Promise<void>, filePath: string) => {
+        return soFar.then(() => {
+          const relativePath: string = PackageManifest.normalizePath(path.relative(basePath, filePath));
+          if (!PackageManifest.isIgnored(relativePath)) {
+            return hashFile(filePath).then((hash: string) => {
+              fileHashesMap.set(relativePath, hash);
+            });
+          }
+        });
+      },
+      q(<void>null),
+    );
 
     generateManifestPromise
       .then(() => {

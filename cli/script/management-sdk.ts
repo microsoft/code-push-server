@@ -127,7 +127,7 @@ class AccountManager {
           key: response.body.accessKey.name,
           name: response.body.accessKey.friendlyName,
         };
-      }
+      },
     );
   }
 
@@ -231,7 +231,7 @@ class AccountManager {
 
   public transferApp(appName: string, email: string): Promise<void> {
     return this.post(urlEncode([`/apps/${appName}/transfer/${email}`]), /*requestBody=*/ null, /*expectResponseBody=*/ false).then(
-      () => null
+      () => null,
     );
   }
 
@@ -244,7 +244,7 @@ class AccountManager {
     return this.post(
       urlEncode([`/apps/${appName}/collaborators/${email}`]),
       /*requestBody=*/ null,
-      /*expectResponseBody=*/ false
+      /*expectResponseBody=*/ false,
     ).then(() => null);
   }
 
@@ -256,7 +256,7 @@ class AccountManager {
   public addDeployment(appName: string, deploymentName: string): Promise<Deployment> {
     const deployment = <Deployment>{ name: deploymentName };
     return this.post(urlEncode([`/apps/${appName}/deployments/`]), JSON.stringify(deployment), /*expectResponseBody=*/ true).then(
-      (res: JsonResponse) => res.body.deployment
+      (res: JsonResponse) => res.body.deployment,
     );
   }
 
@@ -275,7 +275,7 @@ class AccountManager {
   public renameDeployment(appName: string, oldDeploymentName: string, newDeploymentName: string): Promise<void> {
     return this.patch(
       urlEncode([`/apps/${appName}/deployments/${oldDeploymentName}`]),
-      JSON.stringify({ name: newDeploymentName })
+      JSON.stringify({ name: newDeploymentName }),
     ).then(() => null);
   }
 
@@ -285,13 +285,13 @@ class AccountManager {
 
   public getDeploymentMetrics(appName: string, deploymentName: string): Promise<DeploymentMetrics> {
     return this.get(urlEncode([`/apps/${appName}/deployments/${deploymentName}/metrics`])).then(
-      (res: JsonResponse) => res.body.metrics
+      (res: JsonResponse) => res.body.metrics,
     );
   }
 
   public getDeploymentHistory(appName: string, deploymentName: string): Promise<Package[]> {
     return this.get(urlEncode([`/apps/${appName}/deployments/${deploymentName}/history`])).then(
-      (res: JsonResponse) => res.body.history
+      (res: JsonResponse) => res.body.history,
     );
   }
 
@@ -301,12 +301,12 @@ class AccountManager {
     filePath: string,
     targetBinaryVersion: string,
     updateMetadata: PackageInfo,
-    uploadProgressCallback?: (progress: number) => void
+    uploadProgressCallback?: (progress: number) => void,
   ): Promise<void> {
     return Promise<void>((resolve, reject, notify) => {
       updateMetadata.appVersion = targetBinaryVersion;
       const request: superagent.Request<any> = superagent.post(
-        this._serverUrl + urlEncode([`/apps/${appName}/deployments/${deploymentName}/release`])
+        this._serverUrl + urlEncode([`/apps/${appName}/deployments/${deploymentName}/release`]),
       );
 
       this.attachCredentials(request);
@@ -373,7 +373,7 @@ class AccountManager {
     return this.patch(
       urlEncode([`/apps/${appName}/deployments/${deploymentName}/release`]),
       requestBody,
-      /*expectResponseBody=*/ false
+      /*expectResponseBody=*/ false,
     ).then(() => null);
   }
 
@@ -381,13 +381,13 @@ class AccountManager {
     appName: string,
     sourceDeploymentName: string,
     destinationDeploymentName: string,
-    updateMetadata: PackageInfo
+    updateMetadata: PackageInfo,
   ): Promise<void> {
     const requestBody: string = JSON.stringify({ packageInfo: updateMetadata });
     return this.post(
       urlEncode([`/apps/${appName}/deployments/${sourceDeploymentName}/promote/${destinationDeploymentName}`]),
       requestBody,
-      /*expectResponseBody=*/ false
+      /*expectResponseBody=*/ false,
     ).then(() => null);
   }
 
@@ -395,7 +395,7 @@ class AccountManager {
     return this.post(
       urlEncode([`/apps/${appName}/deployments/${deploymentName}/rollback/${targetRelease || ``}`]),
       /*requestBody=*/ null,
-      /*expectResponseBody=*/ false
+      /*expectResponseBody=*/ false,
     ).then(() => null);
   }
 
@@ -463,7 +463,7 @@ class AccountManager {
     endpoint: string,
     requestBody: string,
     expectResponseBody: boolean,
-    contentType: string = "application/json;charset=UTF-8"
+    contentType: string = "application/json;charset=UTF-8",
   ): Promise<JsonResponse> {
     return this.makeApiRequest("post", endpoint, requestBody, expectResponseBody, contentType);
   }
@@ -472,7 +472,7 @@ class AccountManager {
     endpoint: string,
     requestBody: string,
     expectResponseBody: boolean = false,
-    contentType: string = "application/json;charset=UTF-8"
+    contentType: string = "application/json;charset=UTF-8",
   ): Promise<JsonResponse> {
     return this.makeApiRequest("patch", endpoint, requestBody, expectResponseBody, contentType);
   }
@@ -486,7 +486,7 @@ class AccountManager {
     endpoint: string,
     requestBody: string,
     expectResponseBody: boolean,
-    contentType: string
+    contentType: string,
   ): Promise<JsonResponse> {
     return Promise<JsonResponse>((resolve, reject, notify) => {
       let request: superagent.Request<any> = (<any>superagent)[method](this._serverUrl + endpoint);

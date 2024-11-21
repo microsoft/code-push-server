@@ -45,8 +45,8 @@ export default async function sign(privateKeyPath: string, updateContentsPath: s
       return Promise.reject<void>(
         new Error(
           `Could not delete previous release signature at ${signatureFilePath}.
-                Please, check your access rights.`
-        )
+                Please, check your access rights.`,
+        ),
       );
     }
   }

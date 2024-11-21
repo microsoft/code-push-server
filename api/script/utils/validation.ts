@@ -179,7 +179,7 @@ module Validation {
   function validate(
     obj: any,
     fieldValidators: { [key: string]: (val: any) => boolean },
-    requiredFields: string[] = []
+    requiredFields: string[] = [],
   ): ValidationError[] {
     const errors: ValidationError[] = [];
 

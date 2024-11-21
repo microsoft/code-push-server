@@ -223,7 +223,7 @@ export interface ISessionRemoveCommand extends ICommand {
 export type ReleaseHook = (
   currentCommand: IReleaseCommand,
   originalCommand: IReleaseCommand,
-  sdk: AccountManager
+  sdk: AccountManager,
 ) => Q.Promise<IReleaseCommand | void>;
 
 export interface ReleaseFile {

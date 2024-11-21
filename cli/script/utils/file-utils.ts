@@ -17,7 +17,7 @@ export function fileExists(file: string): boolean {
   } catch (e) {
     return false;
   }
-};
+}
 
 export function copyFileToTmpDir(filePath: string): string {
   if (!isDirectory(filePath)) {

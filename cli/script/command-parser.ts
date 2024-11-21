@@ -41,11 +41,11 @@ function accessKeyAdd(commandName: string, yargs: yargs.Argv): void {
     .demand(/*count*/ 1, /*max*/ 1) // Require exactly one non-option arguments
     .example(
       "access-key " + commandName + ' "VSTS Integration"',
-      'Creates a new access key with the name "VSTS Integration", which expires in 60 days'
+      'Creates a new access key with the name "VSTS Integration", which expires in 60 days',
     )
     .example(
       "access-key " + commandName + ' "One time key" --ttl 5m',
-      'Creates a new access key with the name "One time key", which expires in 5 minutes'
+      'Creates a new access key with the name "One time key", which expires in 5 minutes',
     )
     .option("ttl", {
       default: "60d",
@@ -64,11 +64,11 @@ function accessKeyPatch(commandName: string, yargs: yargs.Argv): void {
     .demand(/*count*/ 1, /*max*/ 1) // Require exactly one non-option arguments
     .example(
       "access-key " + commandName + ' "Key for build server" --name "Key for CI machine"',
-      'Renames the access key named "Key for build server" to "Key for CI machine"'
+      'Renames the access key named "Key for build server" to "Key for CI machine"',
     )
     .example(
       "access-key " + commandName + ' "Key for build server" --ttl 7d',
-      'Updates the access key named "Key for build server" to expire in 7 days'
+      'Updates the access key named "Key for build server" to expire in 7 days',
     )
     .option("name", {
       default: null,
@@ -207,7 +207,7 @@ function deploymentHistoryClear(commandName: string, yargs: yargs.Argv): void {
     .demand(/*count*/ 2, /*max*/ 2) // Require exactly two non-option arguments
     .example(
       "deployment " + commandName + " MyApp MyDeployment",
-      'Clears the release history associated with deployment "MyDeployment" from app "MyApp"'
+      'Clears the release history associated with deployment "MyDeployment" from app "MyApp"',
     );
 
   addCommonConfiguration(yargs);
@@ -253,11 +253,11 @@ function deploymentHistory(commandName: string, yargs: yargs.Argv): void {
     .demand(/*count*/ 2, /*max*/ 2) // Require exactly two non-option arguments
     .example(
       "deployment " + commandName + " MyApp MyDeployment",
-      'Displays the release history for deployment "MyDeployment" from app "MyApp" in tabular format'
+      'Displays the release history for deployment "MyDeployment" from app "MyApp" in tabular format',
     )
     .example(
       "deployment " + commandName + " MyApp MyDeployment --format json",
-      'Displays the release history for deployment "MyDeployment" from app "MyApp" in JSON format'
+      'Displays the release history for deployment "MyDeployment" from app "MyApp" in JSON format',
     )
     .option("format", {
       default: "table",
@@ -381,7 +381,7 @@ yargs
         addCommonConfiguration(yargs);
       })
       .command("clear", "Clear the release history associated with a deployment", (yargs: yargs.Argv) =>
-        deploymentHistoryClear("clear", yargs)
+        deploymentHistoryClear("clear", yargs),
       )
       .command("remove", "Remove a deployment from an app", (yargs: yargs.Argv) => deploymentRemove("remove", yargs))
       .command("rm", "Remove a deployment from an app", (yargs: yargs.Argv) => deploymentRemove("rm", yargs))
@@ -392,7 +392,7 @@ yargs
           .demand(/*count*/ 3, /*max*/ 3) // Require exactly three non-option arguments
           .example(
             "deployment rename MyApp CurrentDeploymentName NewDeploymentName",
-            'Renames deployment "CurrentDeploymentName" to "NewDeploymentName"'
+            'Renames deployment "CurrentDeploymentName" to "NewDeploymentName"',
           );
 
         addCommonConfiguration(yargs);
@@ -451,11 +451,11 @@ yargs
       .demand(/*count*/ 2, /*max*/ 2) // Require exactly two non-option arguments
       .example(
         'patch MyApp Production --des "Updated description" -r 50%',
-        'Updates the description of the latest release for "MyApp" app\'s "Production" deployment and updates the rollout value to 50%'
+        'Updates the description of the latest release for "MyApp" app\'s "Production" deployment and updates the rollout value to 50%',
       )
       .example(
         'patch MyApp Production -l v3 --des "Updated description for v3"',
-        'Updates the description of the release with label v3 for "MyApp" app\'s "Production" deployment'
+        'Updates the description of the release with label v3 for "MyApp" app\'s "Production" deployment',
       )
       .option("label", {
         alias: "l",
@@ -512,11 +512,11 @@ yargs
       .demand(/*count*/ 3, /*max*/ 3) // Require exactly three non-option arguments
       .example(
         "promote MyApp Staging Production",
-        'Promotes the latest release within the "Staging" deployment of "MyApp" to "Production"'
+        'Promotes the latest release within the "Staging" deployment of "MyApp" to "Production"',
       )
       .example(
         'promote MyApp Staging Production --des "Production rollout" -r 25',
-        'Promotes the latest release within the "Staging" deployment of "MyApp" to "Production", with an updated description, and targeting only 25% of the users'
+        'Promotes the latest release within the "Staging" deployment of "MyApp" to "Production", with an updated description, and targeting only 25% of the users',
       )
       .option("description", {
         alias: "des",
@@ -594,15 +594,15 @@ yargs
       .demand(/*count*/ 3, /*max*/ 3) // Require exactly three non-option arguments.
       .example(
         'release MyApp app.js "*"',
-        'Releases the "app.js" file to the "MyApp" app\'s "Staging" deployment, targeting any binary version using the "*" wildcard range syntax.'
+        'Releases the "app.js" file to the "MyApp" app\'s "Staging" deployment, targeting any binary version using the "*" wildcard range syntax.',
       )
       .example(
         "release MyApp ./platforms/ios/www 1.0.3 -d Production",
-        'Releases the "./platforms/ios/www" folder and all its contents to the "MyApp" app\'s "Production" deployment, targeting only the 1.0.3 binary version'
+        'Releases the "./platforms/ios/www" folder and all its contents to the "MyApp" app\'s "Production" deployment, targeting only the 1.0.3 binary version',
       )
       .example(
         "release MyApp ./platforms/ios/www 1.0.3 -d Production -r 20",
-        'Releases the "./platforms/ios/www" folder and all its contents to the "MyApp" app\'s "Production" deployment, targeting the 1.0.3 binary version and rolling out to about 20% of the users'
+        'Releases the "./platforms/ios/www" folder and all its contents to the "MyApp" app\'s "Production" deployment, targeting the 1.0.3 binary version and rolling out to about 20% of the users',
       )
       .option("deploymentName", {
         alias: "d",
@@ -658,15 +658,15 @@ yargs
       .demand(/*count*/ 2, /*max*/ 2) // Require exactly two non-option arguments
       .example(
         "release-react MyApp ios",
-        'Releases the React Native iOS project in the current working directory to the "MyApp" app\'s "Staging" deployment'
+        'Releases the React Native iOS project in the current working directory to the "MyApp" app\'s "Staging" deployment',
       )
       .example(
         "release-react MyApp android -d Production",
-        'Releases the React Native Android project in the current working directory to the "MyApp" app\'s "Production" deployment'
+        'Releases the React Native Android project in the current working directory to the "MyApp" app\'s "Production" deployment',
       )
       .example(
         "release-react MyApp windows --dev",
-        'Releases the development bundle of the React Native Windows project in the current working directory to the "MyApp" app\'s "Staging" deployment'
+        'Releases the development bundle of the React Native Windows project in the current working directory to the "MyApp" app\'s "Staging" deployment',
       )
       .option("bundleName", {
         alias: "b",
@@ -786,15 +786,14 @@ yargs
         alias: "pod",
         default: null,
         demand: false,
-        description:  "Path to the cocopods config file (iOS only).",
+        description: "Path to the cocopods config file (iOS only).",
         type: "string",
       })
       .option("extraHermesFlags", {
         alias: "hf",
         default: [],
         demand: false,
-        description:
-          "Flags that get passed to Hermes, JavaScript to bytecode compiler. Can be specified multiple times.",
+        description: "Flags that get passed to Hermes, JavaScript to bytecode compiler. Can be specified multiple times.",
         type: "array",
       })
       .option("privateKeyPath", {
@@ -815,14 +814,16 @@ yargs
         alias: "xt",
         default: undefined,
         demand: false,
-        description: "Name of target (PBXNativeTarget) which specifies the binary version you want to target this release at (iOS only)",
+        description:
+          "Name of target (PBXNativeTarget) which specifies the binary version you want to target this release at (iOS only)",
         type: "string",
       })
       .option("buildConfigurationName", {
         alias: "c",
         default: undefined,
         demand: false,
-        description: "Name of build configuration which specifies the binary version you want to target this release at. For example, 'Debug' or 'Release' (iOS only)",
+        description:
+          "Name of build configuration which specifies the binary version you want to target this release at. For example, 'Debug' or 'Release' (iOS only)",
         type: "string",
       })
       .check((argv: any, aliases: { [aliases: string]: string }): any => {
@@ -838,7 +839,7 @@ yargs
       .example("rollback MyApp Production", 'Performs a rollback on the "Production" deployment of "MyApp"')
       .example(
         "rollback MyApp Production --targetRelease v4",
-        'Performs a rollback on the "Production" deployment of "MyApp" to the v4 release'
+        'Performs a rollback on the "Production" deployment of "MyApp" to the v4 release',
       )
       .option("targetRelease", {
         alias: "r",
@@ -859,7 +860,7 @@ yargs
       .command("remove", "Remove an existing login session", (yargs: yargs.Argv) => sessionRemove("remove", yargs))
       .command("rm", "Remove an existing login session", (yargs: yargs.Argv) => sessionRemove("rm", yargs))
       .command("list", "List the current login sessions associated with your account", (yargs: yargs.Argv) =>
-        sessionList("list", yargs)
+        sessionList("list", yargs),
       )
       .command("ls", "List the current login sessions associated with your account", (yargs: yargs.Argv) => sessionList("ls", yargs))
       .check((argv: any, aliases: { [aliases: string]: string }): any => isValidCommand); // Report unrecognized, non-hyphenated command category.

@@ -84,9 +84,7 @@ export function toRestAccount(storageAccount: Storage.Account): Account {
     linkedProviders: [],
   };
 
-  if (storageAccount.azureAdId) restAccount.linkedProviders.push("AAD");
   if (storageAccount.gitHubId) restAccount.linkedProviders.push("GitHub");
-  if (storageAccount.microsoftId) restAccount.linkedProviders.push("Microsoft");
 
   return restAccount;
 }

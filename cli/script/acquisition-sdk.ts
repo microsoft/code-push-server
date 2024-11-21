@@ -162,7 +162,7 @@ export class AcquisitionManager {
     status?: string,
     previousLabelOrAppVersion?: string,
     previousDeploymentKey?: string,
-    callback?: Callback<void>
+    callback?: Callback<void>,
   ): void {
     const url: string = this._serverUrl + "reportStatus/deploy";
     const body: DeploymentStatusReport = {

@@ -1,11 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as q from "q";
 import * as stream from "stream";
 import * as error from "../error";
-
-import Promise = q.Promise;
 
 export enum ErrorCode {
   ConnectionFailed = 0,
@@ -126,6 +123,7 @@ export interface AccessKey {
  *   elements, except when the specified id chain does not exist, in which case the promise should be rejected as usual.
  */
 export interface Storage {
+  initialize(): globalThis.Promise<void>;
   checkHealth(): Promise<void>;
 
   addAccount(account: Account): Promise<string>;
@@ -201,7 +199,7 @@ export function getOwnerEmail(app: App): string {
 }
 
 export function isPrototypePollutionKey(key: string): boolean {
-  return ['__proto__', 'constructor', 'prototype'].includes(key);
+  return ["__proto__", "constructor", "prototype"].includes(key);
 }
 
 export function storageError(errorCode: ErrorCode, message?: string): StorageError {

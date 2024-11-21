@@ -5,11 +5,15 @@ import * as express from "express";
 import * as fs from "fs";
 import * as http from "http";
 import * as stream from "stream";
+import * as libStorage from "@aws-sdk/lib-storage";
 
 import * as storage from "./storage";
 
 import clone = storage.clone;
 import { isPrototypePollutionKey } from "./storage";
+import path = require("path");
+import * as Redis from "redis";
+import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { promisify } from "util";
 
 function merge(original: any, updates: any): void {
@@ -18,7 +22,7 @@ function merge(original: any, updates: any): void {
   }
 }
 
-export class JsonStorage implements storage.Storage {
+export class RedisS3Storage implements storage.Storage {
   public static NextIdNumber: number = 0;
   public accounts: { [id: string]: storage.Account } = {};
   public apps: { [id: string]: storage.App } = {};
@@ -26,6 +30,7 @@ export class JsonStorage implements storage.Storage {
   public packages: { [id: string]: storage.Package } = {};
   public blobs: { [id: string]: string } = {};
   public accessKeys: { [id: string]: storage.AccessKey } = {};
+  public deploymentKeys: { [id: string]: string } = {};
 
   public accountToAppsMap: { [id: string]: string[] } = {};
   public appToAccountMap: { [id: string]: string } = {};
@@ -42,58 +47,40 @@ export class JsonStorage implements storage.Storage {
   public accessKeyNameToAccountIdMap: { [accessKeyName: string]: { accountId: string; expires: number } } = {};
 
   private static CollaboratorNotFound: string = "The specified e-mail address doesn't represent a registered user";
+  private redisClient: Redis.RedisClientType<Redis.RedisDefaultModules, Redis.RedisFunctions, Redis.RedisScripts>;
+  private s3Client: S3Client;
   private _blobServerPromise: Promise<http.Server>;
+  private updatesDir: string = path.join(__dirname, "updates");
 
-  constructor(public disablePersistence: boolean = true) {
-    this.loadStateAsync(); // Attempts to load real data if any exists
+  private loadStateAsync(): globalThis.Promise<void> {
+    return this.redisClient.get("state").then((state) => {
+      if (!state) {
+        return;
+      }
+      const obj = JSON.parse(state);
+
+      RedisS3Storage.NextIdNumber = obj.NextIdNumber || 0;
+      this.accounts = obj.accounts || {};
+      this.apps = obj.apps || {};
+      this.deployments = obj.deployments || {};
+      this.deploymentKeys = obj.deploymentKeys || {};
+      this.blobs = obj.blobs || {};
+      this.accountToAppsMap = obj.accountToAppsMap || {};
+      this.appToAccountMap = obj.appToAccountMap || {};
+      this.emailToAccountMap = obj.emailToAccountMap || {};
+      this.appToDeploymentsMap = obj.appToDeploymentsMap || {};
+      this.deploymentToAppMap = obj.deploymentToAppMap || {};
+      this.deploymentKeyToDeploymentMap = obj.deploymentKeyToDeploymentMap || {};
+      this.accessKeys = obj.accessKeys || {};
+      this.accessKeyToAccountMap = obj.accessKeyToAccountMap || {};
+      this.accountToAccessKeysMap = obj.accountToAccessKeysMap || {};
+      this.accessKeyNameToAccountIdMap = obj.accessKeyNameToAccountIdMap || {};
+    });
   }
 
-  async initialize(): globalThis.Promise<void> {
-    this.loadStateAsync();
-  }
-
-  private loadStateAsync(): void {
-    if (this.disablePersistence) return;
-
-    fs.exists(
-      "JsonStorage.json",
-      function (exists: boolean) {
-        if (exists) {
-          fs.readFile(
-            "JsonStorage.json",
-            function (err: any, data: string) {
-              if (err) throw err;
-
-              const obj = JSON.parse(data);
-              JsonStorage.NextIdNumber = obj.NextIdNumber || 0;
-              this.accounts = obj.accounts || {};
-              this.apps = obj.apps || {};
-              this.deployments = obj.deployments || {};
-              this.deploymentKeys = obj.deploymentKeys || {};
-              this.blobs = obj.blobs || {};
-              this.accountToAppsMap = obj.accountToAppsMap || {};
-              this.appToAccountMap = obj.appToAccountMap || {};
-              this.emailToAccountMap = obj.emailToAccountMap || {};
-              this.appToDeploymentsMap = obj.appToDeploymentsMap || {};
-              this.deploymentToAppMap = obj.appToDeploymentsMap || {};
-              this.deploymentKeyToDeploymentMap = obj.deploymentKeyToDeploymentMap || {};
-              this.accessKeys = obj.accessKeys || {};
-              this.accessKeyToAccountMap = obj.accessKeyToAccountMap || {};
-              this.accountToAccessKeysMap = obj.accountToAccessKeysMap || {};
-              this.accessKeyNameToAccountIdMap = obj.accessKeyNameToAccountIdMap || {};
-            }.bind(this),
-          );
-        }
-      }.bind(this),
-    );
-  }
-
-  // TODO: This method MUST be called to persist anything - every method must call it
-  private saveStateAsync(): void {
-    if (this.disablePersistence) return;
-
+  private async saveStateAsync(): globalThis.Promise<void> {
     const obj = {
-      NextIdNumber: JsonStorage.NextIdNumber,
+      NextIdNumber: RedisS3Storage.NextIdNumber,
       accounts: this.accounts,
       apps: this.apps,
       deployments: this.deployments,
@@ -108,15 +95,36 @@ export class JsonStorage implements storage.Storage {
       accountToAccessKeysMap: this.accountToAccessKeysMap,
       accessKeyNameToAccountIdMap: this.accessKeyNameToAccountIdMap,
     };
-
     const str = JSON.stringify(obj);
-    fs.writeFile("JsonStorage.json", str, function (err) {
-      if (err) throw err;
+
+    this.redisClient.set("state", str);
+  }
+
+  public async initialize(): globalThis.Promise<void> {
+    const client = await Redis.createClient({
+      url: process.env.REDIS_URL,
+    }).connect();
+
+    this.redisClient = client;
+
+    this.s3Client = new S3Client({
+      region: process.env.AWS_REGION,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS,
+      },
+      logger: console,
     });
+
+    if (!fs.existsSync(this.updatesDir)) {
+      fs.mkdirSync(this.updatesDir);
+    }
+
+    this.loadStateAsync();
   }
 
   public checkHealth(): Promise<void> {
-    return Promise.reject<void>("Should not be running JSON storage in production");
+    return null;
   }
 
   public addAccount(account: storage.Account): Promise<string> {
@@ -127,7 +135,7 @@ export class JsonStorage implements storage.Storage {
     const email: string = account.email.toLowerCase();
 
     if (this.accounts[account.id] || this.accountToAppsMap[account.id] || this.emailToAccountMap[email]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
     }
 
     this.accountToAppsMap[account.id] = [];
@@ -140,7 +148,7 @@ export class JsonStorage implements storage.Storage {
 
   public getAccount(accountId: string): Promise<storage.Account> {
     if (!this.accounts[accountId]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     return Promise.resolve(clone(this.accounts[accountId]));
@@ -153,7 +161,7 @@ export class JsonStorage implements storage.Storage {
       }
     }
 
-    return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
   public updateAccount(email: string, updates: storage.Account): Promise<void> {
@@ -167,11 +175,11 @@ export class JsonStorage implements storage.Storage {
 
   public getAccountIdFromAccessKey(accessKey: string): Promise<string> {
     if (!this.accessKeyNameToAccountIdMap[accessKey]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     if (new Date().getTime() >= this.accessKeyNameToAccountIdMap[accessKey].expires) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.Expired, "The access key has expired.");
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.Expired, "The access key has expired.");
     }
 
     return Promise.resolve(this.accessKeyNameToAccountIdMap[accessKey].accountId);
@@ -182,7 +190,7 @@ export class JsonStorage implements storage.Storage {
 
     const account = this.accounts[accountId];
     if (!account) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     app.id = this.newId();
@@ -223,12 +231,12 @@ export class JsonStorage implements storage.Storage {
       return Promise.resolve(apps);
     }
 
-    return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
   public getApp(accountId: string, appId: string): Promise<storage.App> {
     if (!this.accounts[accountId] || !this.apps[appId]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     const app: storage.App = clone(this.apps[appId]);
@@ -239,7 +247,7 @@ export class JsonStorage implements storage.Storage {
 
   public removeApp(accountId: string, appId: string): Promise<void> {
     if (!this.accounts[accountId] || !this.apps[appId]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     if (accountId !== this.appToAccountMap[appId]) {
@@ -268,7 +276,7 @@ export class JsonStorage implements storage.Storage {
 
       this.saveStateAsync();
 
-      return Promise.resolve(null);
+      return null;
     });
   }
 
@@ -276,33 +284,33 @@ export class JsonStorage implements storage.Storage {
     app = clone(app); // pass by value
 
     if (!this.accounts[accountId] || !this.apps[app.id]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     this.removeIsCurrentAccountProperty(app);
     merge(this.apps[app.id], app);
 
     this.saveStateAsync();
-    return Promise.resolve(null);
+    return null;
   }
 
   public transferApp(accountId: string, appId: string, email: string): Promise<void> {
     if (isPrototypePollutionKey(email)) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.Invalid, "Invalid email parameter");
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.Invalid, "Invalid email parameter");
     }
     return this.getApp(accountId, appId).then((app: storage.App) => {
       const account: storage.Account = this.accounts[accountId];
       const requesterEmail: string = account.email;
       const targetOwnerAccountId: string = this.emailToAccountMap[email.toLowerCase()];
       if (!targetOwnerAccountId) {
-        return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound, JsonStorage.CollaboratorNotFound);
+        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound, RedisS3Storage.CollaboratorNotFound);
       }
 
       // Use the original email stored on the account to ensure casing is consistent
       email = this.accounts[targetOwnerAccountId].email;
 
       if (this.isOwner(app.collaborators, email)) {
-        return JsonStorage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
+        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
       }
 
       app.collaborators[requesterEmail].permission = storage.Permissions.Collaborator;
@@ -319,16 +327,16 @@ export class JsonStorage implements storage.Storage {
 
   public addCollaborator(accountId: string, appId: string, email: string): Promise<void> {
     if (isPrototypePollutionKey(email)) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.Invalid, "Invalid email parameter");
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.Invalid, "Invalid email parameter");
     }
     return this.getApp(accountId, appId).then((app: storage.App) => {
       if (this.isCollaborator(app.collaborators, email) || this.isOwner(app.collaborators, email)) {
-        return JsonStorage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
+        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
       }
 
       const targetCollaboratorAccountId: string = this.emailToAccountMap[email.toLowerCase()];
       if (!targetCollaboratorAccountId) {
-        return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound, JsonStorage.CollaboratorNotFound);
+        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound, RedisS3Storage.CollaboratorNotFound);
       }
 
       // Use the original email stored on the account to ensure casing is consistent
@@ -349,12 +357,12 @@ export class JsonStorage implements storage.Storage {
   public removeCollaborator(accountId: string, appId: string, email: string): Promise<void> {
     return this.getApp(accountId, appId).then((app: storage.App) => {
       if (this.isOwner(app.collaborators, email)) {
-        return JsonStorage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
+        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
       }
 
       const targetCollaboratorAccountId: string = this.emailToAccountMap[email.toLowerCase()];
       if (!this.isCollaborator(app.collaborators, email) || !targetCollaboratorAccountId) {
-        return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
       }
 
       this.removeAppPointer(targetCollaboratorAccountId, appId);
@@ -368,7 +376,7 @@ export class JsonStorage implements storage.Storage {
 
     const app: storage.App = this.apps[appId];
     if (!this.accounts[accountId] || !app) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     deployment.id = this.newId();
@@ -391,22 +399,23 @@ export class JsonStorage implements storage.Storage {
     const deployment: storage.Deployment = this.deployments[deploymentId];
 
     if (!deploymentId || !deployment) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     const appId: string = this.deploymentToAppMap[deployment.id];
 
     if (!appId) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     return Promise.resolve({ appId: appId, deploymentId: deploymentId });
   }
 
   public getPackageHistoryFromDeploymentKey(deploymentKey: string): Promise<storage.Package[]> {
+    console.log(this.deploymentKeyToDeploymentMap);
     const deploymentId: string = this.deploymentKeyToDeploymentMap[deploymentKey];
     if (!deploymentId || !this.deployments[deploymentId]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     return Promise.resolve(clone((<any>this.deployments[deploymentId]).packageHistory));
@@ -414,7 +423,7 @@ export class JsonStorage implements storage.Storage {
 
   public getDeployment(accountId: string, appId: string, deploymentId: string): Promise<storage.Deployment> {
     if (!this.accounts[accountId] || !this.apps[appId] || !this.deployments[deploymentId]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     return Promise.resolve(clone(this.deployments[deploymentId]));
@@ -429,12 +438,12 @@ export class JsonStorage implements storage.Storage {
       return Promise.resolve(clone(deployments));
     }
 
-    return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
   public removeDeployment(accountId: string, appId: string, deploymentId: string): Promise<void> {
     if (!this.accounts[accountId] || !this.apps[appId] || !this.deployments[deploymentId]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     if (appId !== this.deploymentToAppMap[deploymentId]) {
@@ -450,21 +459,21 @@ export class JsonStorage implements storage.Storage {
     appDeployments.splice(appDeployments.indexOf(deploymentId), 1);
 
     this.saveStateAsync();
-    return Promise.resolve(null);
+    return null;
   }
 
   public updateDeployment(accountId: string, appId: string, deployment: storage.Deployment): Promise<void> {
     deployment = clone(deployment); // pass by value
 
     if (!this.accounts[accountId] || !this.apps[appId] || !this.deployments[deployment.id]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     delete deployment.package; // No-op if a package update is attempted through this method
     merge(this.deployments[deployment.id], deployment);
 
     this.saveStateAsync();
-    return Promise.resolve(null);
+    return null;
   }
 
   public commitPackage(accountId: string, appId: string, deploymentId: string, appPackage: storage.Package): Promise<storage.Package> {
@@ -472,7 +481,7 @@ export class JsonStorage implements storage.Storage {
 
     if (!appPackage) throw new Error("No package specified");
     if (!this.accounts[accountId] || !this.apps[appId] || !this.deployments[deploymentId]) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     const deployment: any = <any>this.deployments[deploymentId];
@@ -495,20 +504,20 @@ export class JsonStorage implements storage.Storage {
   public clearPackageHistory(accountId: string, appId: string, deploymentId: string): Promise<void> {
     const deployment: storage.Deployment = this.deployments[deploymentId];
     if (!deployment) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     delete deployment.package;
     (<any>deployment).packageHistory = [];
 
     this.saveStateAsync();
-    return Promise.resolve(null);
+    return null;
   }
 
   public getPackageHistory(accountId: string, appId: string, deploymentId: string): Promise<storage.Package[]> {
     const deployment: any = <any>this.deployments[deploymentId];
     if (!deployment) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     return Promise.resolve(clone(deployment.packageHistory));
@@ -516,46 +525,83 @@ export class JsonStorage implements storage.Storage {
 
   public updatePackageHistory(accountId: string, appId: string, deploymentId: string, history: storage.Package[]): Promise<void> {
     if (!history || !history.length) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.Invalid, "Cannot clear package history from an update operation");
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.Invalid, "Cannot clear package history from an update operation");
     }
 
     const deployment: any = <any>this.deployments[deploymentId];
     if (!deployment) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     deployment.package = history[history.length - 1];
     deployment.packageHistory = history;
     this.saveStateAsync();
 
-    return Promise.resolve(null);
+    return null;
   }
 
-  public addBlob(blobId: string, stream: stream.Readable, streamLength: number): Promise<string> {
-    this.blobs[blobId] = "";
-    return new Promise<string>((resolve: (blobId: string) => void) => {
-      stream
-        .on("data", (data: string) => {
-          this.blobs[blobId] += data;
-        })
-        .on("end", () => {
+  public addBlob(blobId: string, stream: stream.Readable): Promise<string> {
+    const upload = new libStorage.Upload({
+      client: this.s3Client,
+      params: {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: blobId,
+        Body: stream,
+        ACL: "public-read",
+      },
+    });
+
+    return new Promise<string>((resolve, reject) => {
+      upload.on("httpUploadProgress", (progress) => {
+        console.log(`Uploaded ${progress.loaded} bytes of ${progress.total || "unknown total size"}`);
+      });
+
+      upload
+        .done()
+        .then(() => {
           resolve(blobId);
-        });
+        })
+        // @ts-ignore
+        .catch((e) => console.log("ERROR: ", e) || reject(e));
+    }).then(() => {
+      this.blobs[blobId] = `https://${process.env.AWS_BUCKET_NAME}.s3.amazonaws.com/${blobId}`;
+
       this.saveStateAsync();
+
+      return blobId;
     });
   }
 
   public getBlobUrl(blobId: string): Promise<string> {
-    return this.getBlobServer().then((server: http.Server) => {
-      return server.address() + "/" + blobId;
+    return new Promise<string>((resolve, reject) => {
+      const blobPath = this.blobs[blobId];
+      if (blobPath) {
+        resolve(blobPath);
+      } else {
+        reject(new Error("Blob not found"));
+      }
     });
   }
 
   public removeBlob(blobId: string): Promise<void> {
-    delete this.blobs[blobId];
+    const params = {
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: blobId,
+    };
 
-    this.saveStateAsync();
-    return Promise.resolve(null);
+    return new Promise<void>((resolve, reject) => {
+      this.s3Client
+        .send(new DeleteObjectCommand(params))
+        .then(() => {
+          resolve();
+        })
+        .catch(reject);
+    }).then(() => {
+      delete this.blobs[blobId];
+      this.saveStateAsync();
+
+      return null;
+    });
   }
 
   public addAccessKey(accountId: string, accessKey: storage.AccessKey): Promise<string> {
@@ -564,7 +610,7 @@ export class JsonStorage implements storage.Storage {
     const account: storage.Account = this.accounts[accountId];
 
     if (!account) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     accessKey.id = this.newId();
@@ -592,7 +638,7 @@ export class JsonStorage implements storage.Storage {
     const expectedAccountId: string = this.accessKeyToAccountMap[accessKeyId];
 
     if (!expectedAccountId || expectedAccountId !== accountId) {
-      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     return Promise.resolve(clone(this.accessKeys[accessKeyId]));
@@ -609,7 +655,7 @@ export class JsonStorage implements storage.Storage {
       return Promise.resolve(clone(accessKeys));
     }
 
-    return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
   public removeAccessKey(accountId: string, accessKeyId: string): Promise<void> {
@@ -630,10 +676,10 @@ export class JsonStorage implements storage.Storage {
       }
 
       this.saveStateAsync();
-      return Promise.resolve(null);
+      return null;
     }
 
-    return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
   public updateAccessKey(accountId: string, accessKey: storage.AccessKey): Promise<void> {
@@ -647,11 +693,11 @@ export class JsonStorage implements storage.Storage {
         this.accessKeyNameToAccountIdMap[accessKey.name].expires = accessKey.expires;
 
         this.saveStateAsync();
-        return Promise.resolve(null);
+        return null;
       }
     }
 
-    return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
   public dropAll(): Promise<void> {
@@ -662,7 +708,7 @@ export class JsonStorage implements storage.Storage {
       });
     }
 
-    return Promise.resolve(null);
+    return null;
   }
 
   private addIsCurrentAccountProperty(app: storage.App, accountId: string): void {
@@ -741,8 +787,8 @@ export class JsonStorage implements storage.Storage {
   }
 
   private newId(): string {
-    const id = "id_" + JsonStorage.NextIdNumber;
-    JsonStorage.NextIdNumber += 1;
+    const id = "id_" + RedisS3Storage.NextIdNumber;
+    RedisS3Storage.NextIdNumber += 1;
     return id;
   }
 

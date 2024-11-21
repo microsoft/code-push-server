@@ -13,10 +13,10 @@ import * as storage from "../script/storage/storage";
 import * as redis from "../script/redis-manager";
 import * as utils from "./utils";
 
-import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";
 import { UpdateCheckRequest } from "../script/types/rest-definitions";
 import { SDK_VERSION_HEADER } from "../script/utils/rest-headers";
+import { RedisS3Storage } from "../script/storage/redis-s3-storage";
 
 describe("Acquisition Rest API", () => {
   var account: storage.Account;
@@ -39,7 +39,7 @@ describe("Acquisition Rest API", () => {
         if (process.env.AZURE_ACQUISITION_URL) {
           serverUrl = process.env.AZURE_ACQUISITION_URL;
           isAzureServer = true;
-          storageInstance = useJsonStorage ? new JsonStorage() : new AzureStorage();
+          storageInstance = useJsonStorage ? new JsonStorage() : new RedisS3Storage();
         } else {
           var deferred: q.Deferred<void> = q.defer<void>();
 
@@ -51,7 +51,7 @@ describe("Acquisition Rest API", () => {
             server = app;
             storageInstance = serverStorage;
             deferred.resolve(null);
-          }, useJsonStorage);
+          });
 
           return deferred.promise;
         }
@@ -133,7 +133,7 @@ describe("Acquisition Rest API", () => {
 
   describe("Get /health", () => {
     it("should be healthy if and only if correctly configured", (done) => {
-      var isProductionReady: boolean = storageInstance instanceof AzureStorage && redisManager && redisManager.isEnabled;
+      var isProductionReady: boolean = storageInstance instanceof RedisS3Storage && redisManager && redisManager.isEnabled;
       var expectedStatusCode: number = isProductionReady || isAzureServer ? 200 : 500;
       request(server || serverUrl)
         .get("/health")
@@ -176,7 +176,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(400)
         .end(function (err: any, result: any) {
@@ -192,7 +192,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               deploymentKey: requestParameters.deploymentKey,
               packageHash: requestParameters.packageHash,
-            })
+            }),
         )
         .expect(400)
         .end(function (err: any, result: any) {
@@ -210,7 +210,7 @@ describe("Acquisition Rest API", () => {
               deploymentKey: requestParameters.deploymentKey,
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(400)
         .end(function (err: any, result: any) {
@@ -227,7 +227,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               deploymentKey: requestParameters.deploymentKey,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(404)
         .end(function (err: any, result: any) {
@@ -244,7 +244,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               deploymentKey: requestParameters.deploymentKey,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(400)
         .end(function (err: any, result: any) {
@@ -261,7 +261,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               deploymentKey: requestParameters.deploymentKey,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -282,7 +282,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               deploymentKey: requestParameters.deploymentKey,
               appVersion: "1.0",
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -304,7 +304,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               deploymentKey: requestParameters.deploymentKey,
               appVersion: "1.0+metadata",
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -327,7 +327,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               deploymentKey: requestParameters.deploymentKey,
               appVersion: "1.0-prerelease",
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -348,7 +348,7 @@ describe("Acquisition Rest API", () => {
             queryString.stringify({
               deploymentKey: requestParameters.deploymentKey,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -373,7 +373,7 @@ describe("Acquisition Rest API", () => {
               isCompanion: "",
               label: "",
               clientUniqueId: "",
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -398,7 +398,7 @@ describe("Acquisition Rest API", () => {
               deploymentKey: requestParameters.deploymentKey,
               appVersion: requestParameters.appVersion,
               packageHash: requestParameters.packageHash,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -420,7 +420,7 @@ describe("Acquisition Rest API", () => {
               deploymentKey: requestParameters.deploymentKey,
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -446,7 +446,7 @@ describe("Acquisition Rest API", () => {
               appVersion: requestParameters.appVersion,
               packageHash: requestParameters.packageHash,
               label: "v2",
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -472,7 +472,7 @@ describe("Acquisition Rest API", () => {
               appVersion: requestParameters.appVersion,
               packageHash: requestParameters.packageHash,
               label: "v1",
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -496,7 +496,7 @@ describe("Acquisition Rest API", () => {
               deploymentKey: requestParameters.deploymentKey,
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -518,7 +518,7 @@ describe("Acquisition Rest API", () => {
               deploymentKey: requestParameters.deploymentKey,
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -540,7 +540,7 @@ describe("Acquisition Rest API", () => {
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
               isCompanion: requestParameters.isCompanion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -563,7 +563,7 @@ describe("Acquisition Rest API", () => {
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
               isCompanion: requestParameters.isCompanion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -586,7 +586,7 @@ describe("Acquisition Rest API", () => {
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
               isCompanion: requestParameters.isCompanion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -611,7 +611,7 @@ describe("Acquisition Rest API", () => {
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
               isCompanion: requestParameters.isCompanion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -635,7 +635,7 @@ describe("Acquisition Rest API", () => {
               packageHash: requestParameters.packageHash,
               appVersion: requestParameters.appVersion,
               isCompanion: requestParameters.isCompanion,
-            })
+            }),
         )
         .expect(200)
         .end(function (err: any, result: any) {
@@ -725,7 +725,7 @@ describe("Acquisition Rest API", () => {
                 deploymentKey: requestParameters.deploymentKey,
                 appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -748,7 +748,7 @@ describe("Acquisition Rest API", () => {
                 packageHash: requestParameters.packageHash,
                 appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -772,7 +772,7 @@ describe("Acquisition Rest API", () => {
                 packageHash: requestParameters.packageHash,
                 appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -796,7 +796,7 @@ describe("Acquisition Rest API", () => {
                 packageHash: requestParameters.packageHash,
                 appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -820,7 +820,7 @@ describe("Acquisition Rest API", () => {
                 packageHash: requestParameters.packageHash,
                 appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -845,7 +845,7 @@ describe("Acquisition Rest API", () => {
                 packageHash: requestParameters.packageHash,
                 appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -915,7 +915,7 @@ describe("Acquisition Rest API", () => {
                 deploymentKey: requestParameters.deploymentKey,
                 appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -937,7 +937,7 @@ describe("Acquisition Rest API", () => {
                 deploymentKey: requestParameters.deploymentKey,
                 appVersion: "1.0.1",
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -961,7 +961,7 @@ describe("Acquisition Rest API", () => {
                 packageHash: requestParameters.packageHash,
                 appVersion: "0.0.1",
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -984,7 +984,7 @@ describe("Acquisition Rest API", () => {
                 packageHash: requestParameters.packageHash,
                 appVersion: "3.0.0",
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -1007,7 +1007,7 @@ describe("Acquisition Rest API", () => {
                 packageHash: requestParameters.packageHash,
                 appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -1089,7 +1089,7 @@ describe("Acquisition Rest API", () => {
                 deploymentKey: requestParameters.deploymentKey,
                 appVersion: "1.0.0",
                 isCompanion: requestParameters.isCompanion,
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -1113,7 +1113,7 @@ describe("Acquisition Rest API", () => {
                 isCompanion: requestParameters.isCompanion,
                 label: "v1",
                 packageHash: "hash100",
-              })
+              }),
           )
           .expect(200)
           .end(function (err: any, result: any) {
@@ -1163,7 +1163,7 @@ describe("Acquisition Rest API", () => {
               label: "v2",
               clientUniqueId: "My iPhone",
               appVersion: "1.0.0",
-            })
+            }),
           )
           .expect(400)
           .end((err: any, result: any): void => {
@@ -1185,7 +1185,7 @@ describe("Acquisition Rest API", () => {
               status: redis.DEPLOYMENT_SUCCEEDED,
               label: "v2",
               appVersion: "1.0.0",
-            })
+            }),
           )
           .expect(400)
           .end((err: any, result: any): void => {
@@ -1208,7 +1208,7 @@ describe("Acquisition Rest API", () => {
               status: redis.DEPLOYMENT_SUCCEEDED,
               label: "v2",
               appVersion: "1.0.0",
-            })
+            }),
           )
           .expect(400)
           .end((err: any, result: any): void => {
@@ -1230,7 +1230,7 @@ describe("Acquisition Rest API", () => {
               status: redis.DEPLOYMENT_SUCCEEDED,
               label: "v2",
               clientUniqueId: "My iPhone",
-            })
+            }),
           )
           .expect(400)
           .end((err: any, result: any): void => {
@@ -1252,7 +1252,7 @@ describe("Acquisition Rest API", () => {
               label: "v2",
               clientUniqueId: "My iPhone",
               appVersion: "1.0.0",
-            })
+            }),
           )
           .expect(400)
           .end((err: any, result: any): void => {
@@ -1287,7 +1287,7 @@ describe("Acquisition Rest API", () => {
             deploymentKey: deployment.key,
             clientUniqueId: "My iPhone",
             appVersion: "1.0.0",
-          })
+          }),
         )
           .then(() =>
             sendReport(
@@ -1297,8 +1297,8 @@ describe("Acquisition Rest API", () => {
                 label: "v2",
                 clientUniqueId: "My iPhone",
                 appVersion: "1.0.0",
-              })
-            )
+              }),
+            ),
           )
           .then(() =>
             sendReport(
@@ -1306,8 +1306,8 @@ describe("Acquisition Rest API", () => {
                 deploymentKey: deployment.key,
                 clientUniqueId: "My Android",
                 appVersion: "1.0.0",
-              })
-            )
+              }),
+            ),
           )
           .then(() =>
             sendReport(
@@ -1317,8 +1317,8 @@ describe("Acquisition Rest API", () => {
                 label: "v3",
                 clientUniqueId: "My Android",
                 appVersion: "1.0.0",
-              })
-            )
+              }),
+            ),
           )
           .then(() => {
             if (redisManager.isEnabled) {
@@ -1369,8 +1369,8 @@ describe("Acquisition Rest API", () => {
                 deploymentKey: deployment.key,
                 clientUniqueId: "My iPhone",
                 appVersion: "1.0.0",
-              })
-            )
+              }),
+            ),
           )
           .then(() =>
             sendReport(
@@ -1381,8 +1381,8 @@ describe("Acquisition Rest API", () => {
                 clientUniqueId: "My iPhone",
                 appVersion: "1.0.0",
                 previousLabelOrAppVersion: "1.0.0",
-              })
-            )
+              }),
+            ),
           )
           .then(() =>
             sendReport(
@@ -1394,8 +1394,8 @@ describe("Acquisition Rest API", () => {
                 appVersion: "1.0.0",
                 previousDeploymentKey: deployment.key,
                 previousLabelOrAppVersion: "v2",
-              })
-            )
+              }),
+            ),
           )
           .then(() =>
             sendReport(
@@ -1403,8 +1403,8 @@ describe("Acquisition Rest API", () => {
                 deploymentKey: deployment.key,
                 clientUniqueId: "My Android",
                 appVersion: "1.0.0",
-              })
-            )
+              }),
+            ),
           )
           .then(() =>
             sendReport(
@@ -1415,8 +1415,8 @@ describe("Acquisition Rest API", () => {
                 clientUniqueId: "My Android",
                 appVersion: "1.0.0",
                 previousLabelOrAppVersion: "1.0.0",
-              })
-            )
+              }),
+            ),
           )
           .then(() => {
             if (redisManager.isEnabled) {
@@ -1467,7 +1467,7 @@ describe("Acquisition Rest API", () => {
           .send(
             JSON.stringify({
               label: "v2",
-            })
+            }),
           )
           .expect(400)
           .end((err: any, result: any): void => {
@@ -1486,7 +1486,7 @@ describe("Acquisition Rest API", () => {
           .send(
             JSON.stringify({
               deploymentKey: deployment.key,
-            })
+            }),
           )
           .expect(400)
           .end((err: any, result: any): void => {
@@ -1506,7 +1506,7 @@ describe("Acquisition Rest API", () => {
             JSON.stringify({
               deploymentKey: deployment.key,
               label: "v2",
-            })
+            }),
           )
           .expect(200)
           .end((err: any, result: any): void => {

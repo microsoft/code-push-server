@@ -5,27 +5,14 @@ import * as assert from "assert";
 import * as shortid from "shortid";
 import * as q from "q";
 
-import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";
 import * as storageTypes from "../script/storage/storage";
 import * as utils from "./utils";
 
-import Promise = q.Promise;
-
 describe("JSON Storage", () => storageTests(JsonStorage));
-
-if (process.env.TEST_AZURE_STORAGE) {
-  describe("Azure Storage", () => storageTests(AzureStorage));
-}
 
 function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage, disablePersistence?: boolean) {
   var storage: storageTypes.Storage;
-
-  before(() => {
-    if (StorageType === AzureStorage) {
-      storage = new StorageType(disablePersistence);
-    }
-  });
 
   beforeEach(() => {
     if (StorageType === JsonStorage) {
@@ -35,41 +22,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
 
   afterEach((): void => {
     if (storage instanceof JsonStorage) {
-      storage.dropAll().done();
-    }
-  });
-
-  describe("Storage management", () => {
-    it("should be healthy if and only if running Azure storage", () => {
-      return storage.checkHealth().then(
-        /*returnedHealthy*/ () => {
-          assert.equal(StorageType, AzureStorage, "Should only return healthy if running Azure storage");
-        },
-        /*returnedUnhealthy*/ () => {
-          assert.equal(StorageType, JsonStorage, "Should only return unhealthy if running JSON storage");
-        }
-      );
-    });
-
-    if (StorageType === AzureStorage) {
-      it("should allow reconfiguring of Azure storage credentials", () => {
-        var azureStorage: AzureStorage = <AzureStorage>storage;
-        return azureStorage
-          .reinitialize("wrongaccount", "wrongkey")
-          .then(
-            failOnCallSucceeded,
-            /*returnedUnhealthy*/ () => {
-              if (!process.env.EMULATED && process.env.AZURE_STORAGE_ACCOUNT && process.env.AZURE_STORAGE_ACCESS_KEY) {
-                return azureStorage.reinitialize(process.env.AZURE_STORAGE_ACCOUNT, process.env.AZURE_STORAGE_ACCESS_KEY);
-              } else {
-                return azureStorage.reinitialize();
-              }
-            }
-          )
-          .then(() => {
-            return storage.checkHealth(); // Fails test if unhealthy
-          });
-      });
+      storage.dropAll();
     }
   });
 
@@ -274,8 +227,6 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
           assert.equal(updatedAccount.name, account.name);
           assert.equal(updatedAccount.email, account.email);
           assert.equal(updatedAccount.gitHubId, "2");
-          assert(typeof updatedAccount.azureAdId === "undefined");
-          assert(typeof updatedAccount.microsoftId === "undefined");
         });
     });
 
@@ -1100,14 +1051,6 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
         });
     });
 
-    if (storage instanceof AzureStorage) {
-      it("raises error on uncaught injection attempt", () => {
-        assert.throws(() => {
-          storage.getPackageHistoryFromDeploymentKey("possible injection attempt");
-        });
-      });
-    }
-
     it("commitPackage(...) will not modify the appPackage argument", () => {
       var storagePackage: storageTypes.Package = utils.makePackage();
 
@@ -1128,7 +1071,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
 
       beforeEach(() => {
         expectedPackageHistory = [];
-        var promiseChain: Promise<void> = q<void>(null);
+        var promiseChain: Promise<void> = Promise.resolve(null);
         var packageNumber = 1;
         for (var i = 1; i <= 3; i++) {
           promiseChain = promiseChain
@@ -1238,7 +1181,9 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
 
           return utils.retrieveStringContentsFromUrl(blobUrl);
         })
-        .timeout(1000, "timeout")
+        .then(async () => {
+          return await new Promise((resolve) => setTimeout(resolve, 1000));
+        })
         .then(
           (retrievedContents: string) => {
             assert.equal(null, retrievedContents);
@@ -1249,7 +1194,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
             } else {
               throw error;
             }
-          }
+          },
         );
     });
   });

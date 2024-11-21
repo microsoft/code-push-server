@@ -27,7 +27,7 @@ After installing CodePush CLI globally, it will be available under `code-push-st
 
 Before you can begin releasing app updates, you need to create a CodePush account. You can do this by simply running the following command once you've installed the CLI:
 
-```
+```bash
 code-push-standalone register <optional: server-url>
 ```
 
@@ -37,7 +37,7 @@ _Note: After registering, you are automatically logged-in with the CLI, so until
 
 If you have an existing account, you may also link your account to another identity provider (e.g. Microsoft, GitHub) by running:
 
-```
+```bash
 code-push-standalone link
 ```
 
@@ -200,20 +200,20 @@ Whenever an app is registered with the CodePush service, it includes two deploym
 
 If having a staging and production version of your app is enough to meet your needs, then you don't need to do anything else. However, if you want an alpha, dev, etc. deployment, you can easily create them using the following command:
 
-```
+```bash
 code-push-standalone deployment add <appName> <deploymentName>
 ```
 
 Just like with apps, you can remove and rename deployments as well, using the following commands respectively:
 
-```
+```bash
 code-push-standalone deployment rm <appName> <deploymentName>
 code-push-standalone deployment rename <appName> <deploymentName> <newDeploymentName>
 ```
 
 If at any time you'd like to view the list of deployments that a specific app includes, you can simply run the following command:
 
-```
+```bash
 code-push-standalone deployment ls <appName> [--displayKeys|-k]
 ```
 
@@ -251,7 +251,7 @@ Which of these commands you should use is mostly a matter of requirements and/or
 
 ### Releasing Updates (General)
 
-```
+```bash
 code-push-standalone release <appName> <updateContents> <targetBinaryVersion>
 [--deploymentName <deploymentName>]
 [--description <description>]
@@ -301,7 +301,7 @@ If you ever want an update to target multiple versions of the app store binary, 
 _NOTE: If your semver expression starts with a special shell character or operator such as `>`, `^`, or \*\*
 _, the command may not execute correctly if you do not wrap the value in quotes as the shell will not supply the right values to our CLI process. Therefore, it is best to wrap your `targetBinaryVersion` parameter in double quotes when calling the `release` command, e.g. `code-push-standalone release MyApp-iOS updateContents ">1.2.3"`.\*
 
-_NOTE: As defined in the semver spec, ranges only work for non pre-release versions: https://github.com/npm/node-semver#prerelease-tags. If you want to update a version with pre-release tags, then you need to write the exact version you want to update (`1.2.3-beta` for example)._
+_NOTE: As defined in the semver spec, ranges only work for non pre-release versions: <https://github.com/npm/node-semver#prerelease-tags>. If you want to update a version with pre-release tags, then you need to write the exact version you want to update (`1.2.3-beta` for example)._
 
 The following table outlines the version value that CodePush expects your update's semver range to satisfy for each respective app type:
 

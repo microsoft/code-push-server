@@ -6,7 +6,6 @@ import * as env from "../environment";
 import * as fs from "fs";
 import * as hashUtils from "../utils/hash-utils";
 import * as path from "path";
-import * as q from "q";
 import * as security from "../utils/security";
 import * as semver from "semver";
 import * as storageTypes from "../storage/storage";
@@ -16,7 +15,6 @@ import * as superagent from "superagent";
 import * as yazl from "yazl";
 import * as yauzl from "yauzl";
 import PackageManifest = hashUtils.PackageManifest;
-import Promise = q.Promise;
 import request = require("superagent");
 
 interface IArchiveDiff {
@@ -46,11 +44,11 @@ export class PackageDiffer {
     accountId: string,
     appId: string,
     deploymentId: string,
-    newPackage: storageTypes.Package
+    newPackage: storageTypes.Package,
   ): Promise<storageTypes.PackageHashToBlobInfoMap> {
     if (!newPackage || !newPackage.blobUrl || !newPackage.manifestBlobUrl) {
-      return q.reject<storageTypes.PackageHashToBlobInfoMap>(
-        diffErrorUtils.diffError(diffErrorUtils.ErrorCode.InvalidArguments, "Package information missing")
+      return Promise.reject<storageTypes.PackageHashToBlobInfoMap>(
+        diffErrorUtils.diffError(diffErrorUtils.ErrorCode.InvalidArguments, "Package information missing"),
       );
     }
 
@@ -59,26 +57,25 @@ export class PackageDiffer {
     const newReleaseFilePromise: Promise<string> = this.downloadArchiveFromUrl(newPackage.blobUrl);
     let newFilePath: string;
 
-    return q
-      .all<any>([manifestPromise, historyPromise, newReleaseFilePromise])
-      .spread((newManifest: PackageManifest, history: storageTypes.Package[], downloadedArchiveFile: string) => {
+    return Promise.all<any>([manifestPromise, historyPromise, newReleaseFilePromise])
+      .then(([newManifest, history, downloadedArchiveFile]: [PackageManifest, storageTypes.Package[], string]) => {
         newFilePath = downloadedArchiveFile;
         const packagesToDiff: storageTypes.Package[] = this.getPackagesToDiff(
           history,
           newPackage.appVersion,
           newPackage.packageHash,
-          newPackage.label
+          newPackage.label,
         );
         const diffBlobInfoPromises: Promise<DiffBlobInfo>[] = [];
         if (packagesToDiff) {
           packagesToDiff.forEach((appPackage: storageTypes.Package) => {
             diffBlobInfoPromises.push(
-              this.uploadAndGetDiffBlobInfo(accountId, appPackage, newPackage.packageHash, newManifest, newFilePath)
+              this.uploadAndGetDiffBlobInfo(accountId, appPackage, newPackage.packageHash, newManifest, newFilePath),
             );
           });
         }
 
-        return q.all(diffBlobInfoPromises);
+        return Promise.all(diffBlobInfoPromises);
       })
       .then((diffBlobInfoList: DiffBlobInfo[]) => {
         // all done, delete the downloaded archive file.
@@ -95,117 +92,111 @@ export class PackageDiffer {
 
           return diffPackageMap;
         } else {
-          return q<storageTypes.PackageHashToBlobInfoMap>(null);
+          return null;
         }
       })
       .catch(diffErrorUtils.diffErrorHandler);
   }
 
   public generateDiffArchive(oldManifest: PackageManifest, newManifest: PackageManifest, newArchiveFilePath: string): Promise<string> {
-    return Promise<string>(
-      (resolve: (value?: string | Promise<string>) => void, reject: (reason: any) => void, notify: (progress: any) => void): void => {
-        if (!oldManifest || !newManifest) {
-          resolve(null);
-          return;
-        }
+    return new Promise<string>((resolve: (value?: string | Promise<string>) => void, reject: (reason: any) => void): void => {
+      if (!oldManifest || !newManifest) {
+        resolve(null);
+        return;
+      }
 
-        const diff: IArchiveDiff = PackageDiffer.generateDiff(oldManifest.toMap(), newManifest.toMap());
+      const diff: IArchiveDiff = PackageDiffer.generateDiff(oldManifest.toMap(), newManifest.toMap());
 
-        if (diff.deletedFiles.length === 0 && diff.newOrUpdatedEntries.size === 0) {
-          resolve(null);
-          return;
-        }
+      if (diff.deletedFiles.length === 0 && diff.newOrUpdatedEntries.size === 0) {
+        resolve(null);
+        return;
+      }
 
-        PackageDiffer.ensureWorkDirectoryExists();
+      PackageDiffer.ensureWorkDirectoryExists();
 
-        const diffFilePath = path.join(PackageDiffer.WORK_DIRECTORY_PATH, "diff_" + PackageDiffer.randomString(20) + ".zip");
-        const writeStream: stream.Writable = fs.createWriteStream(diffFilePath);
-        const diffFile = new yazl.ZipFile();
+      const diffFilePath = path.join(PackageDiffer.WORK_DIRECTORY_PATH, "diff_" + PackageDiffer.randomString(20) + ".zip");
+      const writeStream: stream.Writable = fs.createWriteStream(diffFilePath);
+      const diffFile = new yazl.ZipFile();
 
-        diffFile.outputStream.pipe(writeStream).on("close", (): void => {
-          resolve(diffFilePath);
-        });
+      diffFile.outputStream.pipe(writeStream).on("close", (): void => {
+        resolve(diffFilePath);
+      });
 
-        const json: string = JSON.stringify({ deletedFiles: diff.deletedFiles });
-        const readStream: stream.Readable = streamifier.createReadStream(json);
-        diffFile.addReadStream(readStream, PackageDiffer.MANIFEST_FILE_NAME);
+      const json: string = JSON.stringify({ deletedFiles: diff.deletedFiles });
+      const readStream: stream.Readable = streamifier.createReadStream(json);
+      diffFile.addReadStream(readStream, PackageDiffer.MANIFEST_FILE_NAME);
 
-        if (diff.newOrUpdatedEntries.size > 0) {
-          yauzl.open(newArchiveFilePath, (error?: any, zipFile?: yauzl.ZipFile): void => {
-            if (error) {
+      if (diff.newOrUpdatedEntries.size > 0) {
+        yauzl.open(newArchiveFilePath, (error?: any, zipFile?: yauzl.ZipFile): void => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          zipFile
+            .on("error", (error: any): void => {
               reject(error);
-              return;
-            }
+            })
+            .on("entry", (entry: yauzl.IEntry): void => {
+              if (
+                !PackageDiffer.isEntryInMap(entry.fileName, /*hash*/ null, diff.newOrUpdatedEntries, /*requireContentMatch*/ false)
+              ) {
+                return;
+              } else if (/\/$/.test(entry.fileName)) {
+                // this is a directory
+                diffFile.addEmptyDirectory(entry.fileName);
+                return;
+              }
 
-            zipFile
-              .on("error", (error: any): void => {
-                reject(error);
-              })
-              .on("entry", (entry: yauzl.IEntry): void => {
-                if (
-                  !PackageDiffer.isEntryInMap(entry.fileName, /*hash*/ null, diff.newOrUpdatedEntries, /*requireContentMatch*/ false)
-                ) {
-                  return;
-                } else if (/\/$/.test(entry.fileName)) {
-                  // this is a directory
-                  diffFile.addEmptyDirectory(entry.fileName);
+              let readStreamCounter = 0; // Counter to track the number of read streams
+              let readStreamError = null; // Error flag for read streams
+
+              zipFile.openReadStream(entry, (error?: any, readStream?: stream.Readable): void => {
+                if (error) {
+                  reject(error);
                   return;
                 }
 
-                let readStreamCounter = 0; // Counter to track the number of read streams
-                let readStreamError = null; // Error flag for read streams
+                readStreamCounter++;
 
-                zipFile.openReadStream(entry, (error?: any, readStream?: stream.Readable): void => {
-                  if (error) {
+                readStream
+                  .on("error", (error: any): void => {
+                    readStreamError = error;
                     reject(error);
-                    return;
-                  }
-
-                  readStreamCounter++;
-
-                  readStream
-                    .on("error", (error: any): void => {
-                      readStreamError = error;
-                      reject(error);
-                    })
-                    .on("end", (): void => {
-                      readStreamCounter--;
-                      if (readStreamCounter === 0 && !readStreamError) {
-                        // All read streams have completed successfully
-                        resolve();
-                      }
-                    });
-
-                  diffFile.addReadStream(readStream, entry.fileName);
-                });
-
-                zipFile.on("close", (): void => {
-                  if (readStreamCounter === 0) {
-                    // All read streams have completed, no need to wait
-                    if (readStreamError) {
-                      reject(readStreamError);
-                    } else {
-                      diffFile.end();
+                  })
+                  .on("end", (): void => {
+                    readStreamCounter--;
+                    if (readStreamCounter === 0 && !readStreamError) {
+                      // All read streams have completed successfully
                       resolve();
                     }
-                  }
-                });
+                  });
+
+                diffFile.addReadStream(readStream, entry.fileName);
               });
-          });
-        } else {
-          diffFile.end();
-        }
+
+              zipFile.on("close", (): void => {
+                if (readStreamCounter === 0) {
+                  // All read streams have completed, no need to wait
+                  if (readStreamError) {
+                    reject(readStreamError);
+                  } else {
+                    diffFile.end();
+                    resolve();
+                  }
+                }
+              });
+            });
+        });
+      } else {
+        diffFile.end();
       }
-    );
+    });
   }
 
   private uploadDiffArchiveBlob(blobId: string, diffArchiveFilePath: string): Promise<storageTypes.BlobInfo> {
-    return Promise<storageTypes.BlobInfo>(
-      (
-        resolve: (value?: storageTypes.BlobInfo | Promise<storageTypes.BlobInfo>) => void,
-        reject: (reason: any) => void,
-        notify: (progress: any) => void
-      ): void => {
+    return new Promise<storageTypes.BlobInfo>(
+      (resolve: (value?: storageTypes.BlobInfo | Promise<storageTypes.BlobInfo>) => void, reject: (reason: any) => void): void => {
         fs.stat(diffArchiveFilePath, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
           if (err) {
             reject(err);
@@ -232,10 +223,9 @@ export class PackageDiffer {
             })
             .catch((): void => {
               resolve(null);
-            })
-            .done();
+            });
         });
-      }
+      },
     );
   }
 
@@ -244,11 +234,11 @@ export class PackageDiffer {
     appPackage: storageTypes.Package,
     newPackageHash: string,
     newManifest: PackageManifest,
-    newFilePath: string
+    newFilePath: string,
   ): Promise<DiffBlobInfo> {
     if (!appPackage || appPackage.packageHash === newPackageHash) {
       // If the packageHash matches, no need to calculate diff, its the same package.
-      return q<DiffBlobInfo>(null);
+      return null;
     }
 
     return this.getManifest(appPackage)
@@ -260,67 +250,63 @@ export class PackageDiffer {
           return this.uploadDiffArchiveBlob(security.generateSecureKey(accountId), diffArchiveFilePath);
         }
 
-        return q(<storageTypes.BlobInfo>null);
+        return null;
       })
       .then((blobInfo: storageTypes.BlobInfo) => {
         if (blobInfo) {
           return { packageHash: appPackage.packageHash, blobInfo: blobInfo };
         } else {
-          return q<DiffBlobInfo>(null);
+          return null;
         }
       });
   }
 
   private getManifest(appPackage: storageTypes.Package): Promise<PackageManifest> {
-    return Promise<PackageManifest>(
-      (resolve: (manifest: PackageManifest) => void, reject: (error: any) => void, notify: (progress: any) => void): void => {
-        if (!appPackage || !appPackage.manifestBlobUrl) {
-          resolve(null);
-          return;
-        }
-
-        const req: superagent.Request<any> = superagent.get(appPackage.manifestBlobUrl);
-        const writeStream = new stream.Writable();
-        let json = "";
-
-        writeStream._write = (data: string | Buffer, encoding: string, callback: Function): void => {
-          json += (<Buffer>data).toString("utf8");
-          callback();
-        };
-
-        req.pipe(writeStream).on("finish", () => {
-          const manifest: PackageManifest = PackageManifest.deserialize(json);
-
-          resolve(manifest);
-        });
+    return new Promise<PackageManifest>((resolve: (manifest: PackageManifest) => void, reject: (error: any) => void): void => {
+      if (!appPackage || !appPackage.manifestBlobUrl) {
+        resolve(null);
+        return;
       }
-    );
+
+      const req: superagent.Request<any> = superagent.get(appPackage.manifestBlobUrl);
+      const writeStream = new stream.Writable();
+      let json = "";
+
+      writeStream._write = (data: string | Buffer, encoding: string, callback: Function): void => {
+        json += (<Buffer>data).toString("utf8");
+        callback();
+      };
+
+      req.pipe(writeStream).on("finish", () => {
+        const manifest: PackageManifest = PackageManifest.deserialize(json);
+
+        resolve(manifest);
+      });
+    });
   }
 
   private downloadArchiveFromUrl(url: string): Promise<string> {
-    return Promise<string>(
-      (resolve: (value?: string | Promise<string>) => void, reject: (reason: any) => void, notify: (progress: any) => void): void => {
-        PackageDiffer.ensureWorkDirectoryExists();
+    return new Promise<string>((resolve: (value?: string | Promise<string>) => void, reject: (reason: any) => void): void => {
+      PackageDiffer.ensureWorkDirectoryExists();
 
-        const downloadedArchiveFilePath = path.join(
-          PackageDiffer.WORK_DIRECTORY_PATH,
-          "temp_" + PackageDiffer.randomString(20) + ".zip"
-        );
-        const writeStream: stream.Writable = fs.createWriteStream(downloadedArchiveFilePath);
-        const req: request.Request<any> = request.get(url);
+      const downloadedArchiveFilePath = path.join(
+        PackageDiffer.WORK_DIRECTORY_PATH,
+        "temp_" + PackageDiffer.randomString(20) + ".zip",
+      );
+      const writeStream: stream.Writable = fs.createWriteStream(downloadedArchiveFilePath);
+      const req: request.Request<any> = request.get(url);
 
-        req.pipe(writeStream).on("finish", () => {
-          resolve(downloadedArchiveFilePath);
-        });
-      }
-    );
+      req.pipe(writeStream).on("finish", () => {
+        resolve(downloadedArchiveFilePath);
+      });
+    });
   }
 
   private getPackagesToDiff(
     history: storageTypes.Package[],
     appVersion: string,
     newPackageHash: string,
-    newPackageLabel: string
+    newPackageLabel: string,
   ): storageTypes.Package[] {
     if (!history || !history.length) {
       return null;

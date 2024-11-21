@@ -105,7 +105,7 @@ export class AppInsights {
     if (INSTRUMENTATION_KEY) {
       ApplicationInsights.setup(INSTRUMENTATION_KEY)
         .setAutoCollectRequests(false)
-        .setAutoCollectPerformance(false)
+        .setAutoCollectPerformance(false, false)
         .setAutoCollectExceptions(true)
         .start();
     }
@@ -231,7 +231,7 @@ export class AppInsights {
         name: req.path,
         url: req.originalUrl,
         duration: new Date().getTime() - reqStart,
-        resultCode: res.statusCode,
+        resultCode: res.statusCode.toString(),
         success: res.statusCode >= 200 && res.statusCode <= 299,
       });
 

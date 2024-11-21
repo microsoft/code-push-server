@@ -194,7 +194,6 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
           }
         })
         .catch((error: storageTypes.StorageError) => errorUtils.restErrorHandler(res, error, next));
-      // .done();
     };
   };
 

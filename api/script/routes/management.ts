@@ -178,8 +178,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
     storage.getUserFromAccessKey(accessKeyName)
       .then((storageAccount: storageTypes.Account): void => {
-        const restAccount: restTypes.Account = converterUtils.toRestAccount(storageAccount);
-        res.send({ account: restAccount });
+        res.send({ user: storageAccount });
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
@@ -247,7 +246,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       })
       .then((): void => {
         //send message that it is deleted successfully.
-        res.sendStatus(204);
+        res.sendStatus(201).send("Access key deleted successfully");
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
@@ -300,7 +299,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     storage
       .removeTenant(accountId, tenantId) // Calls the storage method we’ll define next
       .then(() => {
-        res.sendStatus(204);
+        res.sendStatus(201).send("Org deleted successfully");
       })
       .catch((error: any) => {
         next(error); // Forward error to error handler
@@ -426,7 +425,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         return storage.removeApp(accountId, appId);
       })
       .then(() => {
-        res.sendStatus(204);
+        res.sendStatus(201).send("App deleted successfully");
         if (invalidationError) throw invalidationError;
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
@@ -562,7 +561,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         return storage.removeCollaborator(accountId, app.id, email);
       })
       .then(() => {
-        res.sendStatus(204);
+        res.sendStatus(201).send("Collaborator removed successfully");
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
@@ -707,7 +706,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         return storage.removeDeployment(accountId, appId, deploymentId);
       })
       .then(() => {
-        res.sendStatus(204);
+        res.sendStatus(201).send("Deployment deleted successfully");
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
@@ -1033,7 +1032,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           }
         })
         .then(() => {
-          res.sendStatus(204);
+          res.sendStatus(201).send("Deployment History deleted successfully");
           return invalidateCachedPackage(deploymentToGetHistoryOf.key);
         })
         .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))

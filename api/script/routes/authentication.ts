@@ -68,8 +68,8 @@ export class Authentication {
       if (req.body.user === undefined) {
         req.user = {
           id: "id_0",
-          email: "localdev@example.com",
-          name: "Local Developer",
+          email: "user1@example.com",
+          name: "User One",
         };
       } else {
         req.user = req.headers.userId;

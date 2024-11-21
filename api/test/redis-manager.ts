@@ -2,128 +2,101 @@
 // Licensed under the MIT License.
 
 import * as assert from "assert";
-import * as express from "express";
-import * as q from "q";
 import * as shortid from "shortid";
-import Promise = q.Promise;
-
 import { RedisManager, CacheableResponse } from "../script/redis-manager";
 
 class DummyExpressResponse {
-  public statusCode: number;
-  public body: string;
-  public locals: Object;
+  public statusCode?: number;
+  public body?: string;
+  public locals: Record<string, unknown> = {};
 
   public status(statusCode: number): DummyExpressResponse {
-    assert(!this.statusCode);
+    assert(!this.statusCode, "Status code already set");
     this.statusCode = statusCode;
     return this;
   }
 
   public send(body: string): DummyExpressResponse {
-    assert(!this.body);
+    assert(!this.body, "Body already set");
     this.body = body;
     return this;
   }
 
   public reset(): void {
-    delete this.statusCode;
-    delete this.body;
+    this.statusCode = undefined;
+    this.body = undefined;
     this.locals = {};
   }
 }
 
-var redisManager: RedisManager = new RedisManager();
+const redisManager = new RedisManager();
+const dummyExpressResponse = new DummyExpressResponse();
+const expectedResponse: CacheableResponse = {
+  statusCode: 200,
+  body: "",
+};
 
-if (!redisManager.isEnabled) {
-  console.log("Redis is not configured... Skipping redis tests");
-} else {
-  describe("Redis Cache", redisTests);
-}
-
-function redisTests() {
-  var dummyExpressResponse: DummyExpressResponse = new DummyExpressResponse();
-  var expectedResponse: CacheableResponse = {
-    statusCode: 200,
-    body: "",
-  };
-  var responseGenerator = (): Promise<CacheableResponse | void> => {
-    return q(expectedResponse);
-  };
-
-  after(() => {
-    return redisManager.close();
+describe("Redis Cache Middleware", () => {
+  beforeAll(async () => {
+    if (!redisManager.isEnabled) {
+      console.log("Redis is not configured... Skipping Redis tests");
+    }
   });
 
-  it("should be healthy by default", () => {
-    return redisManager.checkHealth();
+  afterAll(async () => {
+    await redisManager.close();
   });
 
-  it("first cache request should return null", () => {
-    var expiryKey: string = "test:" + shortid.generate();
-    var url: string = shortid.generate();
-    return redisManager.getCachedResponse(expiryKey, url).then((cacheResponse: CacheableResponse) => {
-      assert.strictEqual(cacheResponse, null);
-    });
+  it("should be healthy by default", async () => {
+    await redisManager.checkHealth();
   });
 
-  it("Should get cache request after setting it once", () => {
-    var expiryKey: string = "test:" + shortid.generate();
-    var url: string = shortid.generate();
+  it("first cache request should return null", async () => {
+    const expiryKey = `test:${shortid.generate()}`;
+    const url = shortid.generate();
+    const cacheResponse = await redisManager.getCachedResponse(expiryKey, url);
+    expect(cacheResponse).toBeNull();
+  });
+
+  it("should get cache request after setting it once", async () => {
+    const expiryKey = `test:${shortid.generate()}`;
+    const url = shortid.generate();
     expectedResponse.statusCode = 200;
     expectedResponse.body = "I am cached";
 
-    return redisManager
-      .getCachedResponse(expiryKey, url)
-      .then((cacheResponse: CacheableResponse) => {
-        assert.strictEqual(cacheResponse, null);
-        return redisManager.setCachedResponse(expiryKey, url, expectedResponse);
-      })
-      .then(() => {
-        return redisManager.getCachedResponse(expiryKey, url);
-      })
-      .then((cacheResponse: CacheableResponse) => {
-        assert.equal(cacheResponse.statusCode, expectedResponse.statusCode);
-        assert.equal(cacheResponse.body, expectedResponse.body);
-        return redisManager.getCachedResponse(expiryKey, url);
-      })
-      .then((cacheResponse: CacheableResponse) => {
-        assert.equal(cacheResponse.statusCode, expectedResponse.statusCode);
-        assert.equal(cacheResponse.body, expectedResponse.body);
-        var newUrl: string = shortid.generate();
-        return redisManager.getCachedResponse(expiryKey, newUrl);
-      })
-      .then((cacheResponse: CacheableResponse) => {
-        assert.strictEqual(cacheResponse, null);
-      });
+    let cacheResponse = await redisManager.getCachedResponse(expiryKey, url);
+    expect(cacheResponse).toBeNull();
+
+    await redisManager.setCachedResponse(expiryKey, url, expectedResponse);
+
+    cacheResponse = await redisManager.getCachedResponse(expiryKey, url);
+    expect(cacheResponse?.statusCode).toBe(expectedResponse.statusCode);
+    expect(cacheResponse?.body).toBe(expectedResponse.body);
+
+    const newUrl = shortid.generate();
+    cacheResponse = await redisManager.getCachedResponse(expiryKey, newUrl);
+    expect(cacheResponse).toBeNull();
   });
 
-  it("should be able to invalidate cached request", () => {
-    var expiryKey: string = "test:" + shortid.generate();
-    var url: string = shortid.generate();
+  it("should be able to invalidate cached request", async () => {
+    const expiryKey = `test:${shortid.generate()}`;
+    const url = shortid.generate();
     expectedResponse.statusCode = 200;
     expectedResponse.body = "I am cached";
 
-    return redisManager
-      .getCachedResponse(expiryKey, url)
-      .then((cacheResponse: CacheableResponse) => {
-        assert.strictEqual(cacheResponse, null);
-        return redisManager.setCachedResponse(expiryKey, url, expectedResponse);
-      })
-      .then(() => {
-        return redisManager.getCachedResponse(expiryKey, url);
-      })
-      .then((cacheResponse: CacheableResponse) => {
-        assert.equal(cacheResponse.statusCode, expectedResponse.statusCode);
-        assert.equal(cacheResponse.body, expectedResponse.body);
-        expectedResponse.body = "I am a new body";
-        return redisManager.invalidateCache(expiryKey);
-      })
-      .then(() => {
-        return redisManager.getCachedResponse(expiryKey, url);
-      })
-      .then((cacheResponse: CacheableResponse) => {
-        assert.strictEqual(cacheResponse, null);
-      });
+    let cacheResponse = await redisManager.getCachedResponse(expiryKey, url);
+    expect(cacheResponse).toBeNull();
+
+    await redisManager.setCachedResponse(expiryKey, url, expectedResponse);
+
+    cacheResponse = await redisManager.getCachedResponse(expiryKey, url);
+    expect(cacheResponse?.statusCode).toBe(expectedResponse.statusCode);
+    expect(cacheResponse?.body).toBe(expectedResponse.body);
+
+    expectedResponse.body = "I am a new body";
+    await redisManager.invalidateCache(expiryKey);
+
+    cacheResponse = await redisManager.getCachedResponse(expiryKey, url);
+    expect(cacheResponse).toBeNull();
   });
-}
+});

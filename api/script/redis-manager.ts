@@ -57,35 +57,62 @@ export module Utilities {
 }
 
 class PromisifiedRedisClient {
-  // An incomplete set of promisified versions of the original redis methods
-  public del: (...key: string[]) => Promise<number> = null;
-  public execBatch: (redisBatchClient: any) => Promise<any[]> = null;
-  public exists: (...key: string[]) => Promise<number> = null;
-  public expire: (key: string, seconds: number) => Promise<number> = null;
-  public hdel: (key: string, field: string) => Promise<number> = null;
-  public hget: (key: string, field: string) => Promise<string> = null;
-  public hgetall: (key: string) => Promise<any> = null;
-  public hincrby: (key: string, field: string, value: number) => Promise<number> = null;
-  public hset: (key: string, field: string, value: string) => Promise<number> = null;
-  public ping: (payload?: any) => Promise<any> = null;
-  public quit: () => Promise<void> = null;
-  public select: (databaseNumber: number) => Promise<void> = null;
-  public set: (key: string, value: string) => Promise<void> = null;
+  public del: (...keys: string[]) => Promise<number>;
+  public execBatch: (redisBatchClient: any) => Promise<any[]>;
+  public exists: (...keys: string[]) => Promise<number>;
+  public expire: (key: string, seconds: number) => Promise<number>;
+  public hdel: (key: string, field: string) => Promise<number>;
+  public hget: (key: string, field: string) => Promise<string>;
+  public hgetall: (key: string) => Promise<any>;
+  public hincrby: (key: string, field: string, value: number) => Promise<number>;
+  public hset: (key: string, field: string, value: string) => Promise<number>;
+  public ping: (payload?: any) => Promise<any>;
+  public quit: () => Promise<void>;
+  public select: (databaseNumber: number) => Promise<void>;
+  public set: (key: string, value: string) => Promise<void>;
 
   constructor(redisClient: redis.RedisClient) {
+    // List of Redis methods to promisify
+    const methodsToPromisify = [
+      "del",
+      "exists",
+      "expire",
+      "hdel",
+      "hget",
+      "hgetall",
+      "hincrby",
+      "hset",
+      "ping",
+      "quit",
+      "select",
+      "set",
+    ];
+
+    // Wrap each method using q.nbind
+    methodsToPromisify.forEach((methodName) => {
+      const originalFunction = redisClient[methodName];
+      if (typeof originalFunction === "function") {
+        this[methodName] = q.nbind(originalFunction, redisClient);
+      } else {
+        throw new Error(`Redis method ${methodName} does not exist or is not a function.`);
+      }
+    });
+
+    this.ping = (payload?: any) => {
+      if (payload) {
+        return q.ninvoke(redisClient, "ping", payload);
+      } else {
+        return q.ninvoke(redisClient, "ping");
+      }
+    };
+
+    // Custom handling for batch operations (e.g., execBatch)
     this.execBatch = (redisBatchClient: any) => {
       return q.ninvoke<any[]>(redisBatchClient, "exec");
     };
-
-    for (const functionName in this) {
-      if (this.hasOwnProperty(functionName) && (<any>this)[functionName] === null) {
-        const originalFunction = (<any>redisClient)[functionName];
-        assert(!!originalFunction, "Binding a function that does not exist: " + functionName);
-        (<any>this)[functionName] = q.nbind(originalFunction, redisClient);
-      }
-    }
   }
 }
+
 
 export class RedisManager {
   private static DEFAULT_EXPIRY: number = 3600; // one hour, specified in seconds
@@ -102,27 +129,27 @@ export class RedisManager {
       const redisConfig = {
         host: process.env.REDIS_HOST,
         port: process.env.REDIS_PORT,
-        auth_pass: process.env.REDIS_KEY,
-        tls: {
-          // Note: Node defaults CA's to those trusted by Mozilla
-          rejectUnauthorized: true,
-        },
+        // auth_pass: process.env.REDIS_KEY,
+        // tls: {
+        //   // Note: Node defaults CA's to those trusted by Mozilla
+        //   rejectUnauthorized: true,
+        // },
       };
       this._opsClient = redis.createClient(redisConfig);
       this._metricsClient = redis.createClient(redisConfig);
       this._opsClient.on("error", (err: Error) => {
-        console.error(err);
+        console.error("Redis ops client error:", err);
       });
 
       this._metricsClient.on("error", (err: Error) => {
-        console.error(err);
+        console.error("Redis Metrics client error:", err);
       });
 
       this._promisifiedOpsClient = new PromisifiedRedisClient(this._opsClient);
       this._promisifiedMetricsClient = new PromisifiedRedisClient(this._metricsClient);
       this._setupMetricsClientPromise = this._promisifiedMetricsClient
         .select(RedisManager.METRICS_DB)
-        .then(() => this._promisifiedMetricsClient.set("health", "health"));
+        .then(() => this._promisifiedMetricsClient.set("health", "healthy"));
     } else {
       console.warn("No REDIS_HOST or REDIS_PORT environment variable configured.");
     }
@@ -139,7 +166,19 @@ export class RedisManager {
       return q.resolve();
     }
 
-    return q.all([this._promisifiedOpsClient.ping(), this._promisifiedMetricsClient.ping()]).spread<void>(() => {});
+    console.log("Starting Redis health check...");
+    return q
+      .all([
+        this._promisifiedOpsClient.ping().then(() => console.log("Ops Client Ping successful")),
+        this._promisifiedMetricsClient.ping().then(() => console.log("Metrics Client Ping successful")),
+      ])
+      .spread(() => {
+        console.log("Redis health check passed.");
+      })
+      .catch((err) => {
+        console.error("Redis health check failed:", err);
+        throw err;
+      });
   }
 
   /**
@@ -189,6 +228,13 @@ export class RedisManager {
         }
       })
       .then(() => {});
+  }
+
+  public invalidateCache(expiryKey: string): Promise<void> {
+    
+    if (!this.isEnabled) return q(<void>null);
+
+    return this._promisifiedOpsClient.del(expiryKey).then(() => {});
   }
 
   // Atomically increments the status field for the deployment by 1,
@@ -278,14 +324,6 @@ export class RedisManager {
         return this._promisifiedMetricsClient.hdel(deploymentKeyClientsHash, clientUniqueId);
       })
       .then(() => {});
-  }
-
-  public invalidateCache(expiryKey: string): Promise<void> {
-    //MARK: TODO
-    return q(<void>null);
-    if (!this.isEnabled) return q(<void>null);
-
-    return this._promisifiedOpsClient.del(expiryKey).then(() => {});
   }
 
   // For unit tests only

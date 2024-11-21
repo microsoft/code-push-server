@@ -156,14 +156,12 @@ export class RedisManager {
   }
 
   public get isEnabled(): boolean {
-   // return !!this._opsClient && !!this._metricsClient;
-   return false;
+    return !!this._opsClient && !!this._metricsClient;
   }
 
   public checkHealth(): Promise<void> {
     if (!this.isEnabled) {
-      console.warn("Redis manager is not enabled, skipping health check."); // Log a warning
-      return q.resolve();
+      return q.reject<void>("Redis manager is not enabled");
     }
 
     console.log("Starting Redis health check...");

@@ -299,11 +299,6 @@ export class S3Storage implements storage.Storage {
           region: process.env.S3_REGION
         });
         shortid.characters("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-");
-        // this.sequelize = new Sequelize(process.env.DB_NAME || DB_NAME, process.env.DB_USER || DB_USER, process.env.DB_PASS || DB_PASS, {
-        //     host: process.env.DB_HOST || DB_HOST,
-        //     dialect: 'mysql'
-        //   });
-        // this.setupPromise = this.setup()
 
         // Ensure the database exists, then initialize Sequelize
         this.setupPromise = q(this.createDatabaseIfNotExists()).then(() => {
@@ -338,48 +333,6 @@ export class S3Storage implements storage.Storage {
       }
   }
 
-    // private setup(): q.Promise<void> {
-    //   let headBucketParams: HeadBucketRequest = {
-    //     Bucket: this.bucketName,
-    //   };
-    
-    //   let createBucketParams: CreateBucketRequest = {
-    //     Bucket: this.bucketName,
-    //   };
-    
-    //   return q(this.s3.headBucket(headBucketParams).promise())
-    //     .catch((err) => {
-    //       if (err.code === 'NotFound' || err.code === 'NoSuchBucket') {
-    //         console.log(`Bucket ${this.bucketName} does not exist, creating it...`);
-    //         return q(this.s3.createBucket(createBucketParams).promise());
-    //       } else if (err.code === 'Forbidden') {
-    //         console.error('Forbidden: Check your credentials and S3 endpoint');
-    //         throw err; // Re-throw the error after logging
-    //       } else {
-    //         throw err; // Other errors, re-throw them
-    //       }
-    //     })
-    //     .then(() => {
-    //       // Authenticate Sequelize and ensure models are registered
-    //       return q.call(this.sequelize.authenticate.bind(this.sequelize));
-    //     })
-    //     .then(() => {
-    //       // Create and associate models
-    //       const models = createModelss(this.sequelize);
-    //       console.log("Models registered");
-    
-    //       // Sync models with the database
-    //       return q.call(this.sequelize.sync.bind(this.sequelize)); // Await Sequelize sync
-    //     })
-    //     .then(() => {
-    //       console.log("Sequelize models synced");
-    //       console.log(this.sequelize.models);  // This should list all the registered models
-    //     })
-    //     .catch((error) => {
-    //       console.error('Error during setup:', error);
-    //       throw error;
-    //     });
-    // }
     private setup(): q.Promise<void> {
       let headBucketParams: HeadBucketRequest = {
           Bucket: this.bucketName,

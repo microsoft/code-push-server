@@ -299,7 +299,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     storage
       .removeTenant(accountId, tenantId) // Calls the storage method we’ll define next
       .then(() => {
-        res.sendStatus(204);
+        res.sendStatus(201).send("Org deleted successfully");
       })
       .catch((error: any) => {
         next(error); // Forward error to error handler
@@ -425,7 +425,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         return storage.removeApp(accountId, appId);
       })
       .then(() => {
-        res.sendStatus(204);
+        res.sendStatus(201).send("App deleted successfully");
         if (invalidationError) throw invalidationError;
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))

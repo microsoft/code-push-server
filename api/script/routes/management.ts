@@ -833,7 +833,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             throw errorUtils.restError(errorUtils.ErrorCode.Conflict, errorMessage);
           }
 
-          packageToUpdate.rollout = newRolloutValue === 100 ? null : newRolloutValue;
+          packageToUpdate.rollout = newRolloutValue === 100 ? 100 : newRolloutValue;
           updateRelease = true;
         }
 

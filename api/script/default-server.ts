@@ -44,26 +44,26 @@ function bodyParserErrorHandler(err: any, req: express.Request, res: express.Res
   }
 }
 
-export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void, useJsonStorage?: boolean): void {
+export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void, useJsonStorage: boolean=false): void {
   let storage: Storage;
   let isSecretsManagerConfigured: boolean;
   let secretValue: any;
 
   q<void>(null)
     .then(async () => {
-      if (true) {
+      if (!useJsonStorage) {
         //storage = new JsonStorage();
         storage = new S3Storage();
       } else {
         // Fetch secrets from AWS Secrets Manager
-        try {
-          const secretData = await secretsManager.getSecretValue({ SecretId: SECRETS_MANAGER_SECRET_ID }).promise();
-          secretValue = JSON.parse(secretData.SecretString || "{}");
-          isSecretsManagerConfigured = true;
-        } catch (error) {
-          console.error("Failed to fetch secrets from AWS Secrets Manager", error);
-          throw error;
-        }
+        // try {
+        //   const secretData = await secretsManager.getSecretValue({ SecretId: SECRETS_MANAGER_SECRET_ID }).promise();
+        //   secretValue = JSON.parse(secretData.SecretString || "{}");
+        //   isSecretsManagerConfigured = true;
+        // } catch (error) {
+        //   console.error("Failed to fetch secrets from AWS Secrets Manager", error);
+        //   //throw error;
+        // }
 
         // Set up S3 storage using the secret (or fallback to default S3 config)
         //storage = s3; // Simple S3 instance for storage
@@ -82,9 +82,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use((req: express.Request, res: express.Response, next: (err?: any) => void): any => {
         const originalSend = res.send;
         const originalSetHeader = res.setHeader;
-        req.user = {
-          id: "default",
-        }
+        // req.user = {
+        //   id: "default",
+        // }
         res.setHeader = (name: string, value: string | number | readonly string[]): Response => {
           if (!res.headersSent) {
             originalSetHeader.apply(res, [name, value]);

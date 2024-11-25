@@ -64,7 +64,7 @@ export class Authentication {
   // Middleware to authenticate requests using Google ID token
   public async authenticate(req: Request, res: Response, next: (err?: Error) => void) {
     // Bypass authentication in development mode
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
       if (req.body.user === undefined) {
         req.user = {
           id: "id_0",

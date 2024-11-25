@@ -1046,9 +1046,10 @@ export class S3Storage implements storage.Storage {
     
             // Remove the rollout value for the last package.
             const lastPackage: storage.Package = packageHistory.length ? packageHistory[packageHistory.length - 1] : null;
-            if (lastPackage) {
-              lastPackage.rollout = null;
-            }
+            //MARK: TODO TEST THIS
+            // if (lastPackage) {
+            //   lastPackage.rollout = null;
+            // }
     
             packageHistory.push(appPackage);
     

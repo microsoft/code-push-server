@@ -33,7 +33,7 @@ export function auth(config: AuthenticationConfig): any {
   const authentication = new Authentication(config);
   return {
     router: authentication.getRouter.bind(authentication),
-    authenticate: authentication.authenticate,
+    authenticate: authentication.authenticate.bind(authentication),
   };
 }
 

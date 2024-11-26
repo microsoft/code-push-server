@@ -61,6 +61,14 @@ export class Authentication {
     }
   }
 
+  public async getUserById(userId: string): Promise<storage.Account> {
+    try {
+      return await this._storageInstance.getAccount(userId);
+    } catch (e) {
+      throw new Error("No User found");
+    }
+  }
+
   // Middleware to authenticate requests using Google ID token
   public async authenticate(req: Request, res: Response, next: (err?: Error) => void) {
     // Bypass authentication in development mode
@@ -81,8 +89,22 @@ export class Authentication {
     try {
       const idToken = req.headers.authorization?.split("Bearer ")[1];
       if (!idToken) {
-        return res.status(401).send("Missing Google ID token");
-      }
+        const userId = Array.isArray(req.headers.userid) ? req.headers.userid[0] : req.headers.userid;
+        if (userId) {
+            const user = await this.getUserById(userId);
+            if (user) {
+                req.user = {
+                  id: userId
+                };
+                return next();
+            } else {
+                return res.status(401).send("User not found");    
+            }
+        } else {
+            return res.status(401).send("Missing Google ID token");
+        }
+        
+    }
 
       // Verify Google ID token
       const payload = await this.verifyGoogleToken(idToken);

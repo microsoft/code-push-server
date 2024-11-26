@@ -55,18 +55,6 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
         //storage = new JsonStorage();
         storage = new S3Storage();
       } else {
-        // Fetch secrets from AWS Secrets Manager
-        // try {
-        //   const secretData = await secretsManager.getSecretValue({ SecretId: SECRETS_MANAGER_SECRET_ID }).promise();
-        //   secretValue = JSON.parse(secretData.SecretString || "{}");
-        //   isSecretsManagerConfigured = true;
-        // } catch (error) {
-        //   console.error("Failed to fetch secrets from AWS Secrets Manager", error);
-        //   //throw error;
-        // }
-
-        // Set up S3 storage using the secret (or fallback to default S3 config)
-        //storage = s3; // Simple S3 instance for storage
         storage = new JsonStorage();
       }
     })
@@ -174,25 +162,6 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
         app.use(auth.authenticate, fileUploadMiddleware, api.management({ storage: storage, redisManager: redisManager }));
       } else {
         app.use(auth.router());
-      }
-
-      // Error handler needs to be the last middleware so that it can catch all unhandled exceptions
-      // app.use(appInsights.errorHandler);
-
-      // AWS Secrets Manager - Refresh credentials if necessary
-      if (false) {
-        setInterval(async () => {
-          try {
-            const secretData = await secretsManager.getSecretValue({ SecretId: SECRETS_MANAGER_SECRET_ID }).promise();
-            const updatedSecret = JSON.parse(secretData.SecretString || "{}");
-
-            // Update any configuration that relies on the secret
-            //storage.reinitialize(updatedSecret); // This is a hypothetical method depending on your storage interface
-          } catch (error) {
-            console.error("Failed to refresh credentials from AWS Secrets Manager", error);
-            //appInsights.errorHandler(error); // Assuming appInsights is used for error tracking
-          }
-        }, Number(process.env.REFRESH_CREDENTIALS_INTERVAL) || 24 * 60 * 60 * 1000); // Daily refresh
       }
 
       done(null, app, storage);

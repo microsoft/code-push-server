@@ -209,23 +209,28 @@ class AccountManager {
 
   // Apps
   public getApps(): Promise<App[]> {
+    //add tenant here
     return this.get(urlEncode(["/apps"])).then((res: JsonResponse) => res.body.apps);
   }
 
   public getApp(appName: string): Promise<App> {
+    //add tenant here
     return this.get(urlEncode([`/apps/${appName}`])).then((res: JsonResponse) => res.body.app);
   }
 
   public addApp(appName: string): Promise<App> {
+    //add tenant here
     const app: App = { name: appName };
     return this.post(urlEncode(["/apps/"]), JSON.stringify(app), /*expectResponseBody=*/ false).then(() => app);
   }
 
   public removeApp(appName: string): Promise<void> {
+    //add tenant here
     return this.del(urlEncode([`/apps/${appName}`])).then(() => null);
   }
 
   public renameApp(oldAppName: string, newAppName: string): Promise<void> {
+    //add tenant here
     return this.patch(urlEncode([`/apps/${oldAppName}`]), JSON.stringify({ name: newAppName })).then(() => null);
   }
 

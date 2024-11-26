@@ -411,14 +411,19 @@ export class S3Storage implements storage.Storage {
       }
   
     public getAccount(accountId: string): q.Promise<storage.Account> {
+      console.log("Fetching account for accountId:", accountId); // Debug log
       return this.setupPromise
         .then(() => {
           return this.sequelize.models[MODELS.ACCOUNT].findByPk(accountId)
         })
-        .then((acoount) => {
-          return acoount.dataValues
+        .then((account) => {
+          console.log("Fetched account:", account.dataValues); // Debug log
+          return account.dataValues
         })
-        .catch(S3Storage.storageErrorHandler);
+        .catch((error) => {
+          console.error("Error fetching account:", error.message);
+          throw S3Storage.storageErrorHandler(error);
+        });
     }
   
     public getAccountByEmail(email: string): q.Promise<storage.Account> {
@@ -783,6 +788,7 @@ export class S3Storage implements storage.Storage {
           })
           .then(() => {
             console.log('App pointer added successfully');
+            return q.resolve();
           })
           .catch(S3Storage.storageErrorHandler);
       }

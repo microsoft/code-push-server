@@ -71,7 +71,7 @@ describe("Management SDK", () => {
             assert.equal(error.message, "Text");
             assert(error.statusCode);
             resolve();
-          }
+          },
         );
       });
     }
@@ -105,7 +105,7 @@ describe("Management SDK", () => {
       (err) => {
         assert.equal(err.message, "Unauthorized", "Error message should be 'Unauthorized'");
         done();
-      }
+      },
     );
   });
 
@@ -119,7 +119,7 @@ describe("Management SDK", () => {
       (err) => {
         assert.equal(err.message, "Not Found", "Error message should be 'Not Found'");
         done();
-      }
+      },
     );
   });
 
@@ -139,7 +139,7 @@ describe("Management SDK", () => {
       (obj) => {
         throw new Error("Call should not complete successfully");
       },
-      (error: Error) => done()
+      (error: Error) => done(),
     );
   });
 
@@ -252,7 +252,7 @@ describe("Management SDK", () => {
       (obj: any) => {
         throw new Error("Call should not complete successfully");
       },
-      (error: Error) => done()
+      (error: Error) => done(),
     );
   });
 
@@ -272,7 +272,7 @@ describe("Management SDK", () => {
       (obj: any) => {
         throw new Error("Call should not complete successfully");
       },
-      (error: Error) => done()
+      (error: Error) => done(),
     );
   });
 
@@ -290,7 +290,7 @@ describe("Management SDK", () => {
       (obj) => {
         throw new Error("Call should not complete successfully");
       },
-      (error: Error) => done()
+      (error: Error) => done(),
     );
   });
 
@@ -312,7 +312,7 @@ describe("Management SDK", () => {
           email2: { permission: "Collaborator", isCurrentAccount: false },
         },
       }),
-      200
+      200,
     );
 
     manager.getCollaborators("appName").done((obj: any) => {
@@ -352,7 +352,7 @@ describe("Management SDK", () => {
       (obj: any) => {
         throw new Error("Call should not complete successfully");
       },
-      (error: Error) => done()
+      (error: Error) => done(),
     );
   });
 
@@ -380,7 +380,7 @@ describe("Management SDK", () => {
         (obj: any) => {
           throw new Error("Call should not complete successfully");
         },
-        (error: Error) => done()
+        (error: Error) => done(),
       );
   });
 
@@ -400,7 +400,7 @@ describe("Management SDK", () => {
       (obj: any) => {
         throw new Error("Call should not complete successfully");
       },
-      (error: Error) => done()
+      (error: Error) => done(),
     );
   });
 });

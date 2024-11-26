@@ -18,7 +18,6 @@ import * as Q from "q";
 const rimraf = require("rimraf");
 import * as semver from "semver";
 const Table = require("cli-table");
-const which = require("which");
 import wordwrap = require("wordwrap");
 import * as cli from "../script/types/cli";
 import sign from "./sign";
@@ -38,17 +37,8 @@ import {
   Session,
   UpdateMetrics,
 } from "../script/types";
-import {
-  getAndroidHermesEnabled,
-  getiOSHermesEnabled,
-  runHermesEmitBinaryCommand,
-  isValidVersion
-} from "./react-native-utils";
-import {
-  fileDoesNotExistOrIsDirectory,
-  isBinaryOrZip,
-  fileExists
-} from "./utils/file-utils";
+import { getAndroidHermesEnabled, getiOSHermesEnabled, runHermesEmitBinaryCommand, isValidVersion } from "./react-native-utils";
+import { fileDoesNotExistOrIsDirectory, isBinaryOrZip, fileExists } from "./utils/file-utils";
 
 const configFilePath: string = path.join(process.env.LOCALAPPDATA || process.env.HOME, ".code-push.config");
 const emailValidator = require("email-validator");
@@ -115,7 +105,7 @@ export const confirm = (message: string = "Are you sure?"): Promise<boolean> => 
           }
           resolve(false);
         }
-      }
+      },
     );
   });
 };
@@ -205,7 +195,7 @@ function appRemove(command: cli.IAppRemoveCommand): Promise<void> {
       }
 
       log("App removal cancelled.");
-    }
+    },
   );
 }
 
@@ -228,7 +218,7 @@ function appTransfer(command: cli.IAppTransferCommand): Promise<void> {
     if (wasConfirmed) {
       return sdk.transferApp(command.appName, command.email).then((): void => {
         log(
-          'Successfully transferred the ownership of app "' + command.appName + '" to the account with email "' + command.email + '".'
+          'Successfully transferred the ownership of app "' + command.appName + '" to the account with email "' + command.email + '".',
         );
       });
     }
@@ -298,7 +288,7 @@ function deploymentAdd(command: cli.IDeploymentAddCommand): Promise<void> {
         deployment.key +
         '" to the "' +
         command.appName +
-        '" app.'
+        '" app.',
     );
   });
 }
@@ -312,7 +302,7 @@ function deploymentHistoryClear(command: cli.IDeploymentHistoryClearCommand): Pr
             command.deploymentName +
             '" deployment from the "' +
             command.appName +
-            '" app.'
+            '" app.',
         );
       });
     }
@@ -359,7 +349,7 @@ export const deploymentList = (command: cli.IDeploymentListCommand, showPackage:
 
 function deploymentRemove(command: cli.IDeploymentRemoveCommand): Promise<void> {
   return confirm(
-    "Are you sure you want to remove this deployment? Note that its deployment key will be PERMANENTLY unrecoverable."
+    "Are you sure you want to remove this deployment? Note that its deployment key will be PERMANENTLY unrecoverable.",
   ).then((wasConfirmed: boolean): Promise<void> => {
     if (wasConfirmed) {
       return sdk.removeDeployment(command.appName, command.deploymentName).then((): void => {
@@ -380,7 +370,7 @@ function deploymentRename(command: cli.IDeploymentRenameCommand): Promise<void> 
         command.newDeploymentName +
         '" for the "' +
         command.appName +
-        '" app.'
+        '" app.',
     );
   });
 }
@@ -454,7 +444,7 @@ export function execute(command: cli.ICommand) {
 
         if (!connectionInfo) {
           throw new Error(
-            "You are not currently logged in. Run the 'code-push-standalone login' command to authenticate with the CodePush server."
+            "You are not currently logged in. Run the 'code-push-standalone login' command to authenticate with the CodePush server.",
           );
         }
 
@@ -886,8 +876,8 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
       if (!resolvedPlistFile) {
         throw new Error(
           `Unable to find either of the following plist files in order to infer your app's binary version: "${knownLocations.join(
-            '", "'
-          )}". If your plist has a different name, or is located in a different directory, consider using either the "--plistFile" or "--plistFilePrefix" parameters to help inform the CLI how to find it.`
+            '", "',
+          )}". If your plist has a different name, or is located in a different directory, consider using either the "--plistFile" or "--plistFilePrefix" parameters to help inform the CLI how to find it.`,
         );
       }
     }
@@ -909,7 +899,7 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
       } else {
         if (parsedPlist.CFBundleShortVersionString !== "$(MARKETING_VERSION)") {
           throw new Error(
-            `The "CFBundleShortVersionString" key in the "${resolvedPlistFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
+            `The "CFBundleShortVersionString" key in the "${resolvedPlistFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`,
           );
         }
 
@@ -955,13 +945,13 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
           versionName = buildGradle.android.defaultConfig.versionName;
         } else {
           throw new Error(
-            `The "${buildGradlePath}" file doesn't specify a value for the "android.defaultConfig.versionName" property.`
+            `The "${buildGradlePath}" file doesn't specify a value for the "android.defaultConfig.versionName" property.`,
           );
         }
 
         if (typeof versionName !== "string") {
           throw new Error(
-            `The "android.defaultConfig.versionName" property value in "${buildGradlePath}" is not a valid string. If this is expected, consider using the --targetBinaryVersion option to specify the value manually.`
+            `The "android.defaultConfig.versionName" property value in "${buildGradlePath}" is not a valid string. If this is expected, consider using the --targetBinaryVersion option to specify the value manually.`,
           );
         }
 
@@ -977,7 +967,7 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
           // but it starts with a number, and therefore, it can't
           // be a valid Gradle property reference.
           throw new Error(
-            `The "android.defaultConfig.versionName" property in the "${buildGradlePath}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
+            `The "android.defaultConfig.versionName" property in the "${buildGradlePath}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`,
           );
         }
 
@@ -1012,7 +1002,7 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
 
         if (!isValidVersion(appVersion)) {
           throw new Error(
-            `The "${propertyName}" property in the "${propertiesFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
+            `The "${propertyName}" property in the "${propertiesFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`,
           );
         }
 
@@ -1034,7 +1024,7 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
     return parseXml(appxManifestContents)
       .catch((err: any) => {
         throw new Error(
-          `Unable to parse the "${path.join(appxManifestContainingFolder, appxManifestFileName)}" file, it could be malformed.`
+          `Unable to parse the "${path.join(appxManifestContainingFolder, appxManifestFileName)}" file, it could be malformed.`,
         );
       })
       .then((parsedAppxManifest: any) => {
@@ -1042,7 +1032,7 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
           return parsedAppxManifest.Package.Identity[0]["$"].Version.match(/^\d+\.\d+\.\d+/)[0];
         } catch (e) {
           throw new Error(
-            `Unable to parse the package version from the "${path.join(appxManifestContainingFolder, appxManifestFileName)}" file.`
+            `Unable to parse the package version from the "${path.join(appxManifestContainingFolder, appxManifestFileName)}" file.`,
           );
         }
       });
@@ -1074,21 +1064,17 @@ function getAppVersionFromXcodeProject(command: cli.IReleaseReactCommand, projec
     if (!resolvedPbxprojFile) {
       throw new Error(
         `Unable to find either of the following pbxproj files in order to infer your app's binary version: "${pbxprojKnownLocations.join(
-          '", "'
-        )}".`
+          '", "',
+        )}".`,
       );
     }
   }
 
   const xcodeProj = xcode.project(resolvedPbxprojFile).parseSync();
-  const marketingVersion = xcodeProj.getBuildProperty(
-    "MARKETING_VERSION",
-    command.buildConfigurationName,
-    command.xcodeTargetName
-  );
+  const marketingVersion = xcodeProj.getBuildProperty("MARKETING_VERSION", command.buildConfigurationName, command.xcodeTargetName);
   if (!isValidVersion(marketingVersion)) {
     throw new Error(
-      `The "MARKETING_VERSION" key in the "${resolvedPbxprojFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
+      `The "MARKETING_VERSION" key in the "${resolvedPbxprojFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`,
     );
   }
   console.log(`Using the target binary version value "${marketingVersion}" from "${resolvedPbxprojFile}".\n`);
@@ -1176,7 +1162,7 @@ function promote(command: cli.IPromoteCommand): Promise<void> {
           command.appName +
           '" app to the "' +
           command.destDeploymentName +
-          '" deployment.'
+          '" deployment.',
       );
     })
     .catch((err: CodePushError) => releaseErrorHandler(err, command));
@@ -1197,7 +1183,7 @@ function patch(command: cli.IPatchCommand): Promise<void> {
         log(
           `Successfully updated the "${command.label ? command.label : `latest`}" release of "${command.appName}" app's "${
             command.deploymentName
-          }" deployment.`
+          }" deployment.`,
         );
       });
     }
@@ -1209,7 +1195,7 @@ function patch(command: cli.IPatchCommand): Promise<void> {
 export const release = (command: cli.IReleaseCommand): Promise<void> => {
   if (isBinaryOrZip(command.package)) {
     throw new Error(
-      "It is unnecessary to package releases in a .zip or binary file. Please specify the direct path to the update content's directory (e.g. /platforms/ios/www) or file (e.g. main.jsbundle)."
+      "It is unnecessary to package releases in a .zip or binary file. Please specify the direct path to the update content's directory (e.g. /platforms/ios/www) or file (e.g. main.jsbundle).",
     );
   }
 
@@ -1256,7 +1242,7 @@ export const release = (command: cli.IReleaseCommand): Promise<void> => {
           command.deploymentName +
           '" deployment of the "' +
           command.appName +
-          '" app.'
+          '" app.',
       );
     })
     .catch((err: CodePushError) => releaseErrorHandler(err, command));
@@ -1303,7 +1289,7 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           }
         } catch (error) {
           throw new Error(
-            'Unable to find or read "package.json" in the CWD. The "release-react" command must be executed in a React Native project folder.'
+            'Unable to find or read "package.json" in the CWD. The "release-react" command must be executed in a React Native project folder.',
           );
         }
 
@@ -1348,14 +1334,14 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           entryFile,
           outputFolder,
           platform,
-          command.sourcemapOutput
-        )
+          command.sourcemapOutput,
+        ),
       )
       .then(async () => {
         const isHermesEnabled =
-        command.useHermes ||
-        (platform === "android" && (await getAndroidHermesEnabled(command.gradleFile))) || // Check if we have to run hermes to compile JS to Byte Code if Hermes is enabled in build.gradle and we're releasing an Android build
-        (platform === "ios" && (await getiOSHermesEnabled(command.podFile))); // Check if we have to run hermes to compile JS to Byte Code if Hermes is enabled in Podfile and we're releasing an iOS build
+          command.useHermes ||
+          (platform === "android" && (await getAndroidHermesEnabled(command.gradleFile))) || // Check if we have to run hermes to compile JS to Byte Code if Hermes is enabled in build.gradle and we're releasing an Android build
+          (platform === "ios" && (await getiOSHermesEnabled(command.podFile))); // Check if we have to run hermes to compile JS to Byte Code if Hermes is enabled in Podfile and we're releasing an iOS build
 
         if (isHermesEnabled) {
           log(chalk.cyan("\nRunning hermes compiler...\n"));
@@ -1364,7 +1350,7 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
             outputFolder,
             command.sourcemapOutput,
             command.extraHermesFlags,
-            command.gradleFile
+            command.gradleFile,
           );
         }
       })
@@ -1401,7 +1387,7 @@ function rollback(command: cli.IRollbackCommand): Promise<void> {
 
     return sdk.rollback(command.appName, command.deploymentName, command.targetRelease || undefined).then((): void => {
       log(
-        'Successfully performed a rollback on the "' + command.deploymentName + '" deployment of the "' + command.appName + '" app.'
+        'Successfully performed a rollback on the "' + command.deploymentName + '" deployment of the "' + command.appName + '" app.',
       );
     });
   });
@@ -1428,7 +1414,7 @@ function requestAccessKey(): Promise<string> {
         } else {
           resolve(result.response.trim());
         }
-      }
+      },
     );
   });
 }
@@ -1439,7 +1425,7 @@ export const runReactNativeBundleCommand = (
   entryFile: string,
   outputFolder: string,
   platform: string,
-  sourcemapOutput: string
+  sourcemapOutput: string,
 ): Promise<void> => {
   const reactNativeBundleArgs: string[] = [];
   const envNodeArgs: string = process.env.CODE_PUSH_NODE_ARGS;
@@ -1506,8 +1492,8 @@ function serializeConnectionInfo(accessKey: string, preserveAccessKeyOnLogout: b
 
   log(
     `\r\nSuccessfully logged-in. Your session file was written to ${chalk.cyan(configFilePath)}. You can run the ${chalk.cyan(
-      "code-push logout"
-    )} command at any time to delete this file and terminate your session.\r\n`
+      "code-push logout",
+    )} command at any time to delete this file and terminate your session.\r\n`,
   );
 }
 

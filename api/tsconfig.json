@@ -6,8 +6,5 @@
     "outDir": "./bin",
     "skipLibCheck": true
   },
-  "exclude": [
-    "./bin",
-    "./node_modules"
-  ]
+  "exclude": ["./bin", "./node_modules"]
 }

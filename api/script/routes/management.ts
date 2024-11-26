@@ -12,7 +12,6 @@ import * as errorUtils from "../utils/rest-error-handling";
 import { Request, Response, Router } from "express";
 import * as fs from "fs";
 import * as hashUtils from "../utils/hash-utils";
-import * as q from "q";
 import * as redis from "../redis-manager";
 import * as restTypes from "../types/rest-definitions";
 import * as security from "../utils/security";
@@ -24,7 +23,6 @@ import * as validationUtils from "../utils/validation";
 import PackageDiffer = packageDiffing.PackageDiffer;
 import NameResolver = storageTypes.NameResolver;
 import PackageManifest = hashUtils.PackageManifest;
-import Promise = q.Promise;
 import tryJSON = require("try-json");
 import rateLimit from "express-rate-limit";
 import { isPrototypePollutionKey } from "../storage/storage";
@@ -65,8 +63,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         const restAccount: restTypes.Account = converterUtils.toRestAccount(storageAccount);
         res.send({ account: restAccount });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.get("/accessKeys", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -88,8 +85,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
         res.send({ accessKeys: accessKeys });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.post("/accessKeys", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -105,7 +101,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
     const validationErrors: validationUtils.ValidationError[] = validationUtils.validateAccessKeyRequest(
       accessKeyRequest,
-      /*isUpdate=*/ false
+      /*isUpdate=*/ false,
     );
 
     if (validationErrors.length) {
@@ -136,8 +132,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           res.status(201).send({ accessKey: accessKey });
         });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.get("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -150,8 +145,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         delete accessKey.name;
         res.send({ accessKey: accessKey });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.patch("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -161,7 +155,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
     const validationErrors: validationUtils.ValidationError[] = validationUtils.validateAccessKeyRequest(
       accessKeyRequest,
-      /*isUpdate=*/ true
+      /*isUpdate=*/ true,
     );
     if (validationErrors.length) {
       res.status(400).send(validationErrors);
@@ -181,7 +175,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           if (NameResolver.isDuplicate(accessKeys, accessKeyRequest.friendlyName)) {
             throw errorUtils.restError(
               errorUtils.ErrorCode.Conflict,
-              `The access key "${accessKeyRequest.friendlyName}" already exists.`
+              `The access key "${accessKeyRequest.friendlyName}" already exists.`,
             );
           }
 
@@ -199,8 +193,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         delete updatedAccessKey.name;
         res.send({ accessKey: updatedAccessKey });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.delete("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -215,8 +208,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .then((): void => {
         res.sendStatus(204);
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.delete("/sessions/:createdBy", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -234,7 +226,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         });
 
         if (accessKeyDeletionPromises.length) {
-          return q.all(accessKeyDeletionPromises);
+          return Promise.all(accessKeyDeletionPromises);
         } else {
           throw errorUtils.restError(errorUtils.ErrorCode.NotFound, `There are no sessions associated with "${createdBy}."`);
         }
@@ -242,8 +234,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .then((): void => {
         res.sendStatus(204);
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.get("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -258,13 +249,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
           });
         });
 
-        return q.all(restAppPromises);
+        return Promise.all(restAppPromises);
       })
       .then((restApps: restTypes.App[]) => {
         res.send({ apps: converterUtils.sortAndUpdateDisplayNameOfRestAppsList(restApps) });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.post("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -287,23 +277,24 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
           return storage
             .addApp(accountId, storageApp)
-            .then((app: storageTypes.App): Promise<string[]> => {
+            .then(async (app: storageTypes.App): Promise<string[]> => {
               storageApp = app;
               if (!appRequest.manuallyProvisionDeployments) {
                 const defaultDeployments: string[] = ["Production", "Staging"];
-                const deploymentPromises: Promise<string>[] = defaultDeployments.map((deploymentName: string) => {
+
+                const deployments = defaultDeployments.map((deploymentName) => {
                   const deployment: storageTypes.Deployment = {
                     createdTime: new Date().getTime(),
                     name: deploymentName,
                     key: security.generateSecureKey(accountId),
                   };
 
-                  return storage.addDeployment(accountId, storageApp.id, deployment).then(() => {
-                    return deployment.name;
-                  });
+                  return deployment;
                 });
 
-                return q.all(deploymentPromises);
+                await storage.addDeployments(accountId, storageApp.id, deployments);
+
+                return defaultDeployments;
               }
             })
             .then((deploymentNames: string[]): void => {
@@ -311,8 +302,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
               res.status(201).send({ app: converterUtils.toRestApp(storageApp, /*displayName=*/ storageApp.name, deploymentNames) });
             });
         })
-        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
+        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
     }
   });
 
@@ -330,8 +320,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         const deploymentNames: string[] = deployments.map((deployment) => deployment.name);
         res.send({ app: converterUtils.toRestApp(storageApp, /*displayName=*/ appName, deploymentNames) });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.delete("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -352,7 +341,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           return invalidateCachedPackage(deployment.key);
         });
 
-        return q.all(invalidationPromises).catch((error: Error) => {
+        return Promise.all(invalidationPromises).catch((error: Error) => {
           invalidationError = error; // Do not block app deletion on cache invalidation
         });
       })
@@ -363,8 +352,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         res.sendStatus(204);
         if (invalidationError) throw invalidationError;
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.patch("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -410,8 +398,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             });
         }
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.post("/apps/:appName/transfer/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -432,8 +419,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .then(() => {
         res.sendStatus(201);
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.post("/apps/:appName/collaborators/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -454,8 +440,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .then(() => {
         res.sendStatus(201);
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.get("/apps/:appName/collaborators", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -471,8 +456,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .then((retrievedMap: storageTypes.CollaboratorMap) => {
         res.send({ collaborators: converterUtils.toRestCollaboratorMap(retrievedMap) });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.delete("/apps/:appName/collaborators/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -491,15 +475,14 @@ export function getManagementRouter(config: ManagementConfig): Router {
           app.collaborators && email && app.collaborators[email] && app.collaborators[email].isCurrentAccount;
         throwIfInvalidPermissions(
           app,
-          isAttemptingToRemoveSelf ? storageTypes.Permissions.Collaborator : storageTypes.Permissions.Owner
+          isAttemptingToRemoveSelf ? storageTypes.Permissions.Collaborator : storageTypes.Permissions.Owner,
         );
         return storage.removeCollaborator(accountId, app.id, email);
       })
       .then(() => {
         res.sendStatus(204);
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.get("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -521,8 +504,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
         res.send({ deployments: deployments });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.post("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -560,8 +542,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           res.status(201).send({ deployment: restDeployment });
         });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.get("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -581,8 +562,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         const restDeployment: restTypes.Deployment = converterUtils.toRestDeployment(deployment);
         res.send({ deployment: restDeployment });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.delete("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -609,8 +589,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .then(() => {
         res.sendStatus(204);
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.patch("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -654,8 +633,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           res.send({ deployment: restDeployment });
         });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.patch("/apps/:appName/deployments/:deploymentName/release", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -751,8 +729,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           res.sendStatus(204);
         }
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   const releaseRateLimiter = rateLimit({
@@ -760,141 +737,144 @@ export function getManagementRouter(config: ManagementConfig): Router {
     max: 100, // limit each IP to 100 requests per windowMs
   });
 
-  router.post("/apps/:appName/deployments/:deploymentName/release", releaseRateLimiter, (req: Request, res: Response, next: (err?: any) => void): any => {
-    const accountId: string = req.user.id;
-    const appName: string = req.params.appName;
-    const deploymentName: string = req.params.deploymentName;
-    const file: any = getFileWithField(req, "package");
+  router.post(
+    "/apps/:appName/deployments/:deploymentName/release",
+    releaseRateLimiter,
+    (req: Request, res: Response, next: (err?: any) => void): any => {
+      const accountId: string = req.user.id;
+      const appName: string = req.params.appName;
+      const deploymentName: string = req.params.deploymentName;
+      const file: any = getFileWithField(req, "package");
 
-    if (!file || !file.buffer) {
-      errorUtils.sendMalformedRequestError(res, "A deployment package must include a file.");
-      return;
-    }
-
-    const filePath: string = createTempFileFromBuffer(file.buffer);
-    const restPackage: restTypes.Package = tryJSON(req.body.packageInfo) || {};
-    const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(
-      restPackage,
-      /*allOptional*/ false
-    );
-    if (validationErrors.length) {
-      errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
-      return;
-    }
-
-    fs.stat(filePath, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
-      if (err) {
-        errorUtils.sendUnknownError(res, err, next);
+      if (!file || !file.buffer) {
+        errorUtils.sendMalformedRequestError(res, "A deployment package must include a file.");
         return;
       }
 
-      // These variables are for hoisting promise results and flattening the following promise chain.
-      let appId: string;
-      let deploymentToReleaseTo: storageTypes.Deployment;
-      let storagePackage: storageTypes.Package;
-      let lastPackageHashWithSameAppVersion: string;
-      let newManifest: PackageManifest;
+      const filePath: string = createTempFileFromBuffer(file.buffer);
+      const restPackage: restTypes.Package = tryJSON(req.body.packageInfo) || {};
+      const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(
+        restPackage,
+        /*allOptional*/ false,
+      );
+      if (validationErrors.length) {
+        errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
+        return;
+      }
 
-      nameResolver
-        .resolveApp(accountId, appName)
-        .then((app: storageTypes.App) => {
-          appId = app.id;
-          throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
-          return nameResolver.resolveDeployment(accountId, appId, deploymentName);
-        })
-        .then((deployment: storageTypes.Deployment) => {
-          deploymentToReleaseTo = deployment;
-          const existingPackage: storageTypes.Package = deployment.package;
-          if (existingPackage && isUnfinishedRollout(existingPackage.rollout) && !existingPackage.isDisabled) {
-            throw errorUtils.restError(
-              errorUtils.ErrorCode.Conflict,
-              "Please update the previous release to 100% rollout before releasing a new package."
-            );
-          }
+      fs.stat(filePath, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
+        if (err) {
+          errorUtils.sendUnknownError(res, err, next);
+          return;
+        }
 
-          return storage.getPackageHistory(accountId, appId, deploymentToReleaseTo.id);
-        })
-        .then((history: storageTypes.Package[]) => {
-          lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(history, restPackage.appVersion);
-          return hashUtils.generatePackageManifestFromZip(filePath);
-        })
-        .then((manifest?: PackageManifest) => {
-          if (manifest) {
-            newManifest = manifest;
-            // If update is a zip, generate a packageHash using the manifest, since
-            // that more accurately represents the contents of each file in the zip.
-            return newManifest.computePackageHash();
-          } else {
-            // Update is not a zip (flat file), generate the packageHash over the
-            // entire file contents.
-            return hashUtils.hashFile(filePath);
-          }
-        })
-        .then((packageHash: string) => {
-          restPackage.packageHash = packageHash;
-          if (restPackage.packageHash === lastPackageHashWithSameAppVersion) {
-            throw errorUtils.restError(
-              errorUtils.ErrorCode.Conflict,
-              "The uploaded package was not released because it is identical to the contents of the specified deployment's current release."
-            );
-          }
+        // These variables are for hoisting promise results and flattening the following promise chain.
+        let appId: string;
+        let deploymentToReleaseTo: storageTypes.Deployment;
+        let storagePackage: storageTypes.Package;
+        let lastPackageHashWithSameAppVersion: string;
+        let newManifest: PackageManifest;
 
-          return storage.addBlob(security.generateSecureKey(accountId), fs.createReadStream(filePath), stats.size);
-        })
-        .then((blobId: string) => storage.getBlobUrl(blobId))
-        .then((blobUrl: string) => {
-          restPackage.blobUrl = blobUrl;
-          restPackage.size = stats.size;
-
-          // If newManifest is null/undefined, then the package is not a valid ZIP file.
-          if (newManifest) {
-            const json: string = newManifest.serialize();
-            const readStream: stream.Readable = streamifier.createReadStream(json);
-
-            return storage.addBlob(security.generateSecureKey(accountId), readStream, json.length);
-          }
-
-          return q(<string>null);
-        })
-        .then((blobId?: string) => {
-          if (blobId) {
-            return storage.getBlobUrl(blobId);
-          }
-
-          return q(<string>null);
-        })
-        .then((manifestBlobUrl?: string) => {
-          storagePackage = converterUtils.toStoragePackage(restPackage);
-          if (manifestBlobUrl) {
-            storagePackage.manifestBlobUrl = manifestBlobUrl;
-          }
-
-          storagePackage.releaseMethod = storageTypes.ReleaseMethod.Upload;
-          storagePackage.uploadTime = new Date().getTime();
-          return storage.commitPackage(accountId, appId, deploymentToReleaseTo.id, storagePackage);
-        })
-        .then((committedPackage: storageTypes.Package): Promise<void> => {
-          storagePackage.label = committedPackage.label;
-          const restPackage: restTypes.Package = converterUtils.toRestPackage(committedPackage);
-
-          res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${deploymentName}`]));
-          res.status(201).send({ package: restPackage }); // Send response without blocking on cleanup
-
-          return invalidateCachedPackage(deploymentToReleaseTo.key);
-        })
-        .then(() => processDiff(accountId, appId, deploymentToReleaseTo.id, storagePackage))
-        .finally((): void => {
-          // Cleanup; any errors before this point will still pass to the catch() block
-          fs.unlink(filePath, (err: NodeJS.ErrnoException): void => {
-            if (err) {
-              errorUtils.sendUnknownError(res, err, next);
+        nameResolver
+          .resolveApp(accountId, appName)
+          .then((app: storageTypes.App) => {
+            appId = app.id;
+            throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
+            return nameResolver.resolveDeployment(accountId, appId, deploymentName);
+          })
+          .then((deployment: storageTypes.Deployment) => {
+            deploymentToReleaseTo = deployment;
+            const existingPackage: storageTypes.Package = deployment.package;
+            if (existingPackage && isUnfinishedRollout(existingPackage.rollout) && !existingPackage.isDisabled) {
+              throw errorUtils.restError(
+                errorUtils.ErrorCode.Conflict,
+                "Please update the previous release to 100% rollout before releasing a new package.",
+              );
             }
-          });
-        })
-        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
-    });
-  });
+
+            return storage.getPackageHistory(accountId, appId, deploymentToReleaseTo.id);
+          })
+          .then((history: storageTypes.Package[]) => {
+            lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(history, restPackage.appVersion);
+            return hashUtils.generatePackageManifestFromZip(filePath);
+          })
+          .then((manifest?: PackageManifest) => {
+            if (manifest) {
+              newManifest = manifest;
+              // If update is a zip, generate a packageHash using the manifest, since
+              // that more accurately represents the contents of each file in the zip.
+              return newManifest.computePackageHash();
+            } else {
+              // Update is not a zip (flat file), generate the packageHash over the
+              // entire file contents.
+              return hashUtils.hashFile(filePath);
+            }
+          })
+          .then((packageHash: string) => {
+            restPackage.packageHash = packageHash;
+            if (restPackage.packageHash === lastPackageHashWithSameAppVersion) {
+              throw errorUtils.restError(
+                errorUtils.ErrorCode.Conflict,
+                "The uploaded package was not released because it is identical to the contents of the specified deployment's current release.",
+              );
+            }
+
+            return storage.addBlob(security.generateSecureKey(accountId), fs.createReadStream(filePath), stats.size);
+          })
+          .then((blobId: string) => storage.getBlobUrl(blobId))
+          .then((blobUrl: string) => {
+            restPackage.blobUrl = blobUrl;
+            restPackage.size = stats.size;
+
+            // If newManifest is null/undefined, then the package is not a valid ZIP file.
+            if (newManifest) {
+              const json: string = newManifest.serialize();
+              const readStream: stream.Readable = streamifier.createReadStream(json);
+
+              return storage.addBlob(security.generateSecureKey(accountId), readStream, json.length);
+            }
+
+            return null;
+          })
+          .then((blobId?: string) => {
+            if (blobId) {
+              return storage.getBlobUrl(blobId);
+            }
+
+            return null;
+          })
+          .then((manifestBlobUrl?: string) => {
+            storagePackage = converterUtils.toStoragePackage(restPackage);
+            if (manifestBlobUrl) {
+              storagePackage.manifestBlobUrl = manifestBlobUrl;
+            }
+
+            storagePackage.releaseMethod = storageTypes.ReleaseMethod.Upload;
+            storagePackage.uploadTime = new Date().getTime();
+            return storage.commitPackage(accountId, appId, deploymentToReleaseTo.id, storagePackage);
+          })
+          .then((committedPackage: storageTypes.Package): Promise<void> => {
+            storagePackage.label = committedPackage.label;
+            const restPackage: restTypes.Package = converterUtils.toRestPackage(committedPackage);
+
+            res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${deploymentName}`]));
+            res.status(201).send({ package: restPackage }); // Send response without blocking on cleanup
+
+            return invalidateCachedPackage(deploymentToReleaseTo.key);
+          })
+          .then(() => processDiff(accountId, appId, deploymentToReleaseTo.id, storagePackage))
+          .finally((): void => {
+            // Cleanup; any errors before this point will still pass to the catch() block
+            fs.unlink(filePath, (err: NodeJS.ErrnoException): void => {
+              if (err) {
+                errorUtils.sendUnknownError(res, err, next);
+              }
+            });
+          })
+          .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
+      });
+    },
+  );
 
   router.delete(
     "/apps/:appName/deployments/:deploymentName/history",
@@ -920,16 +900,15 @@ export function getManagementRouter(config: ManagementConfig): Router {
           if (redisManager.isEnabled) {
             return redisManager.clearMetricsForDeploymentKey(deploymentToGetHistoryOf.key);
           } else {
-            return q(<void>null);
+            return null;
           }
         })
         .then(() => {
           res.sendStatus(204);
           return invalidateCachedPackage(deploymentToGetHistoryOf.key);
         })
-        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
-    }
+        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
+    },
   );
 
   router.get("/apps/:appName/deployments/:deploymentName/history", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -951,8 +930,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .then((packageHistory: storageTypes.Package[]) => {
         res.send({ history: packageHistory });
       })
-      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-      .done();
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
   });
 
   router.get("/apps/:appName/deployments/:deploymentName/metrics", (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -978,8 +956,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           const deploymentMetrics: restTypes.DeploymentMetrics = converterUtils.toRestDeploymentMetrics(metrics);
           res.send({ metrics: deploymentMetrics });
         })
-        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
+        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
     }
   });
 
@@ -1007,12 +984,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
           // Get source and dest manifests in parallel.
-          return q.all([
+          return Promise.all([
             nameResolver.resolveDeployment(accountId, appId, sourceDeploymentName),
             nameResolver.resolveDeployment(accountId, appId, destDeploymentName),
           ]);
         })
-        .spread((sourceDeployment: storageTypes.Deployment, destinationDeployment: storageTypes.Deployment) => {
+        .then(([sourceDeployment, destinationDeployment]: [storageTypes.Deployment, storageTypes.Deployment]) => {
           destDeployment = destinationDeployment;
 
           if (info.label) {
@@ -1031,12 +1008,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
           } else if (validationUtils.isDefined(info.rollout) && !validationUtils.isValidRolloutField(info.rollout)) {
             throw errorUtils.restError(
               errorUtils.ErrorCode.MalformedRequest,
-              "Rollout value must be an integer between 1 and 100, inclusive."
+              "Rollout value must be an integer between 1 and 100, inclusive.",
             );
           } else if (destPackage && isUnfinishedRollout(destPackage.rollout) && !destPackage.isDisabled) {
             throw errorUtils.restError(
               errorUtils.ErrorCode.Conflict,
-              "Cannot promote to an unfinished rollout release unless it is already disabled."
+              "Cannot promote to an unfinished rollout release unless it is already disabled.",
             );
           }
 
@@ -1046,7 +1023,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           if (sourcePackage.packageHash === getLastPackageHashWithSameAppVersion(destHistory, sourcePackage.appVersion)) {
             throw errorUtils.restError(
               errorUtils.ErrorCode.Conflict,
-              "The uploaded package was not promoted because it is identical to the contents of the targeted deployment's current release."
+              "The uploaded package was not promoted because it is identical to the contents of the targeted deployment's current release.",
             );
           }
 
@@ -1078,9 +1055,8 @@ export function getManagementRouter(config: ManagementConfig): Router {
             })
             .then(() => processDiff(accountId, appId, destDeployment.id, sourcePackage));
         })
-        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
-    }
+        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
+    },
   );
 
   router.post(
@@ -1124,7 +1100,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             if (targetRelease === sourcePackage.label) {
               errorUtils.sendConflictError(
                 res,
-                `Cannot perform rollback because the target release (${targetRelease}) is already the latest release.`
+                `Cannot perform rollback because the target release (${targetRelease}) is already the latest release.`,
               );
               return;
             }
@@ -1138,7 +1114,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             if (!destinationPackage) {
               errorUtils.sendNotFoundError(
                 res,
-                `Cannot perform rollback because the target release (${targetRelease}) could not be found in the deployment history.`
+                `Cannot perform rollback because the target release (${targetRelease}) could not be found in the deployment history.`,
               );
               return;
             }
@@ -1147,7 +1123,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           if (sourcePackage.appVersion !== destinationPackage.appVersion) {
             errorUtils.sendConflictError(
               res,
-              "Cannot perform rollback to a different app version. Please perform a new release with the desired replacement package."
+              "Cannot perform rollback to a different app version. Please perform a new release with the desired replacement package.",
             );
             return;
           }
@@ -1174,12 +1150,11 @@ export function getManagementRouter(config: ManagementConfig): Router {
             return invalidateCachedPackage(deploymentToRollback.key);
           });
         })
-        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
-    }
+        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next));
+    },
   );
 
-  function invalidateCachedPackage(deploymentKey: string): Q.Promise<void> {
+  function invalidateCachedPackage(deploymentKey: string): Promise<void> {
     return redisManager.invalidateCache(redis.Utilities.getDeploymentKeyHash(deploymentKey));
   }
 
@@ -1201,7 +1176,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     if (!isPermitted)
       throw errorUtils.restError(
         errorUtils.ErrorCode.Unauthorized,
-        "This action requires " + requiredPermission + " permissions on the app!"
+        "This action requires " + requiredPermission + " permissions on the app!",
       );
 
     return true;
@@ -1250,7 +1225,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     appId: string,
     deploymentId: string,
     appPackage: storageTypes.Package,
-    diffPackageMap: storageTypes.PackageHashToBlobInfoMap
+    diffPackageMap: storageTypes.PackageHashToBlobInfoMap,
   ) {
     let updateHistory: boolean = false;
 
@@ -1285,12 +1260,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .catch(diffErrorUtils.diffErrorHandler);
   }
 
-  function processDiff(accountId: string, appId: string, deploymentId: string, appPackage: storageTypes.Package): q.Promise<void> {
+  function processDiff(accountId: string, appId: string, deploymentId: string, appPackage: storageTypes.Package): Promise<void> {
     if (!appPackage.manifestBlobUrl || process.env.ENABLE_PACKAGE_DIFFING) {
       // No need to process diff because either:
       //   1. The release just contains a single file.
       //   2. Diffing disabled.
-      return q(<void>null);
+      return null;
     }
 
     console.log(`Processing package: ${appPackage.label}`);

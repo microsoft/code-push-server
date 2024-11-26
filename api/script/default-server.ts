@@ -2,19 +2,15 @@
 // Licensed under the MIT License.
 
 import * as api from "./api";
-import { AzureStorage } from "./storage/azure-storage";
 import { fileUploadMiddleware } from "./file-upload-manager";
-import { JsonStorage } from "./storage/json-storage";
 import { RedisManager } from "./redis-manager";
 import { Storage } from "./storage/storage";
 import { Response } from "express";
-const { DefaultAzureCredential } = require("@azure/identity");
-const { SecretClient } = require("@azure/keyvault-secrets");
 
-import * as bodyParser from "body-parser";
 const domain = require("express-domain-middleware");
 import * as express from "express";
 import * as q from "q";
+import { RedisS3Storage } from "./storage/redis-s3-storage";
 
 interface Secret {
   id: string;
@@ -23,7 +19,7 @@ interface Secret {
 
 function bodyParserErrorHandler(err: any, req: express.Request, res: express.Response, next: Function): void {
   if (err) {
-    if (err.message === "invalid json" || (err.name === "SyntaxError" && ~err.stack.indexOf("body-parser"))) {
+    if (err.message === "invalid json" || (err.name === "SyntaxError" && err.stack.includes("JSON"))) {
       req.body = null;
       next();
     } else {
@@ -34,35 +30,20 @@ function bodyParserErrorHandler(err: any, req: express.Request, res: express.Res
   }
 }
 
-export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void, useJsonStorage?: boolean): void {
+export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void): void {
   let storage: Storage;
-  let isKeyVaultConfigured: boolean;
-  let keyvaultClient: any;
 
   q<void>(null)
     .then(async () => {
-      if (useJsonStorage) {
-        storage = new JsonStorage();
-      } else if (!process.env.AZURE_KEYVAULT_ACCOUNT) {
-        storage = new AzureStorage();
-      } else {
-        isKeyVaultConfigured = true;
-
-        const credential = new DefaultAzureCredential();
-
-        const vaultName = process.env.AZURE_KEYVAULT_ACCOUNT;
-        const url = `https://${vaultName}.vault.azure.net`;
-
-        const keyvaultClient = new SecretClient(url, credential);
-        const secret = await keyvaultClient.getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`);
-        storage = new AzureStorage(process.env.AZURE_STORAGE_ACCOUNT, secret);
-      }
+      storage = new RedisS3Storage();
+      await storage.initialize();
     })
     .then(() => {
       const app = express();
       const auth = api.auth({ storage: storage });
       const appInsights = api.appInsights();
       const redisManager = new RedisManager();
+      redisManager.initialize();
 
       // First, to wrap all requests and catch all exceptions.
       app.use(domain);
@@ -104,8 +85,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       // Before other middleware which may use request data that this middleware modifies.
       app.use(api.inputSanitizer());
 
-      // body-parser must be before the Application Insights router.
-      app.use(bodyParser.urlencoded({ extended: true }));
+      app.use(express.urlencoded({ extended: true }));
       const jsonOptions: any = { limit: "10kb", strict: true };
       if (process.env.LOG_INVALID_JSON_REQUESTS === "true") {
         jsonOptions.verify = (req: express.Request, res: express.Response, buf: Buffer, encoding: string) => {
@@ -115,9 +95,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
         };
       }
 
-      app.use(bodyParser.json(jsonOptions));
+      app.use(express.json(jsonOptions));
 
-      // If body-parser throws an error, catch it and set the request body to null.
+      // If express throws an error, catch it and set the request body to null.
       app.use(bodyParserErrorHandler);
 
       // Before all other middleware to ensure all requests are tracked.
@@ -164,22 +144,6 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
 
       // Error handler needs to be the last middleware so that it can catch all unhandled exceptions
       app.use(appInsights.errorHandler);
-
-      if (isKeyVaultConfigured) {
-        // Refresh credentials from the vault regularly as the key is rotated
-        setInterval(() => {
-          keyvaultClient
-            .getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`)
-            .then((secret: any) => {
-              return (<AzureStorage>storage).reinitialize(process.env.AZURE_STORAGE_ACCOUNT, secret);
-            })
-            .catch((error: Error) => {
-              console.error("Failed to reinitialize storage from Key Vault credentials");
-              appInsights.errorHandler(error);
-            })
-            .done();
-        }, Number(process.env.REFRESH_CREDENTIALS_INTERVAL) || 24 * 60 * 60 * 1000 /*daily*/);
-      }
 
       done(null, app, storage);
     })

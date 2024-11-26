@@ -53,7 +53,7 @@ describe("Acquisition SDK", () => {
         assert.equal(null, error);
         assert.deepEqual(scriptUpdateResult, returnPackage);
         done();
-      }
+      },
     );
   });
 
@@ -68,7 +68,7 @@ describe("Acquisition SDK", () => {
         assert.equal(null, error);
         assert.equal(null, returnPackage);
         done();
-      }
+      },
     );
   });
 
@@ -83,7 +83,7 @@ describe("Acquisition SDK", () => {
         assert.equal(null, error);
         assert.deepEqual(scriptUpdateResult, returnPackage);
         done();
-      }
+      },
     );
   });
 
@@ -98,7 +98,7 @@ describe("Acquisition SDK", () => {
         assert.equal(null, error);
         assert.deepEqual(nativeUpdateResult, returnPackage);
         done();
-      }
+      },
     );
   });
 
@@ -113,7 +113,7 @@ describe("Acquisition SDK", () => {
         assert.equal(null, error);
         assert.deepEqual(null, returnPackage);
         done();
-      }
+      },
     );
   });
 
@@ -132,7 +132,7 @@ describe("Acquisition SDK", () => {
       (error: Error, returnPackage: acquisitionSdk.RemotePackage | acquisitionSdk.NativeUpdateNotification) => {
         assert.equal(null, error);
         done();
-      }
+      },
     );
   });
 
@@ -147,14 +147,14 @@ describe("Acquisition SDK", () => {
 
     var acquisition = new acquisitionSdk.AcquisitionManager(
       new mockApi.CustomResponseHttpRequester(unexpectedResponse),
-      configuration
+      configuration,
     );
     acquisition.queryUpdateWithCurrentPackage(
       lowerAppVersionPackage,
       (error: Error, returnPackage: acquisitionSdk.RemotePackage | acquisitionSdk.NativeUpdateNotification) => {
         assert.equal(null, error);
         done();
-      }
+      },
     );
   });
 
@@ -172,7 +172,7 @@ describe("Acquisition SDK", () => {
         assert.equal(null, error);
         assert.deepEqual(scriptUpdateResult, returnPackage);
         done();
-      }
+      },
     );
   });
 
@@ -198,7 +198,7 @@ describe("Acquisition SDK", () => {
         (error: Error, returnPackage: acquisitionSdk.RemotePackage | acquisitionSdk.NativeUpdateNotification) => {
           assert.fail("Should throw an error if the native implementation gave an incorrect package");
           done();
-        }
+        },
       );
     } catch (error) {
       done();
@@ -216,14 +216,14 @@ describe("Acquisition SDK", () => {
 
     var acquisition = new acquisitionSdk.AcquisitionManager(
       new mockApi.CustomResponseHttpRequester(invalidJsonReponse),
-      configuration
+      configuration,
     );
     acquisition.queryUpdateWithCurrentPackage(
       lowerAppVersionPackage,
       (error: Error, returnPackage: acquisitionSdk.RemotePackage | acquisitionSdk.NativeUpdateNotification) => {
         assert.notEqual(null, error);
         done();
-      }
+      },
     );
   });
 
@@ -248,7 +248,7 @@ describe("Acquisition SDK", () => {
         assert.equal(parameter, /*expected*/ null);
 
         done();
-      }
+      },
     );
   });
 

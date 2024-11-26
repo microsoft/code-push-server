@@ -14,10 +14,8 @@ import * as storageTypes from "../storage/storage";
 import { UpdateCheckCacheResponse, UpdateCheckRequest, UpdateCheckResponse } from "../types/rest-definitions";
 import * as validationUtils from "../utils/validation";
 
-import * as q from "q";
 import * as queryString from "querystring";
 import * as URL from "url";
-import Promise = q.Promise;
 
 const METRICS_BREAKING_VERSION = "1.5.2-beta";
 
@@ -35,7 +33,7 @@ function getUrlKey(originalUrl: string): string {
 function createResponseUsingStorage(
   req: express.Request,
   res: express.Response,
-  storage: storageTypes.Storage
+  storage: storageTypes.Storage,
 ): Promise<redis.CacheableResponse> {
   const deploymentKey: string = String(req.query.deploymentKey || req.query.deployment_key);
   const appVersion: string = String(req.query.appVersion || req.query.app_version);
@@ -87,29 +85,29 @@ function createResponseUsingStorage(
         body: updateObject,
       };
 
-      return q(cacheableResponse);
+      return cacheableResponse;
     });
   } else {
     if (!validationUtils.isValidKeyField(updateRequest.deploymentKey)) {
       errorUtils.sendMalformedRequestError(
         res,
         "An update check must include a valid deployment key - please check that your app has been " +
-          "configured correctly. To view available deployment keys, run 'code-push-standalone deployment ls <appName> -k'."
+          "configured correctly. To view available deployment keys, run 'code-push-standalone deployment ls <appName> -k'.",
       );
     } else if (!validationUtils.isValidAppVersionField(updateRequest.appVersion)) {
       errorUtils.sendMalformedRequestError(
         res,
         "An update check must include a binary version that conforms to the semver standard (e.g. '1.0.0'). " +
-          "The binary version is normally inferred from the App Store/Play Store version configured with your app."
+          "The binary version is normally inferred from the App Store/Play Store version configured with your app.",
       );
     } else {
       errorUtils.sendMalformedRequestError(
         res,
-        "An update check must include a valid deployment key and provide a semver-compliant app version."
+        "An update check must include a valid deployment key and provide a semver-compliant app version.",
       );
     }
 
-    return q<redis.CacheableResponse>(null);
+    return null;
   }
 }
 
@@ -127,8 +125,7 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
       .then(() => {
         res.status(200).send("Healthy");
       })
-      .catch((error: Error) => errorUtils.sendUnknownError(res, error, next))
-      .done();
+      .catch((error: Error) => errorUtils.sendUnknownError(res, error, next));
   });
 
   return router;
@@ -153,7 +150,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         .catch((error: Error) => {
           // Store the redis error to be thrown after we send response.
           redisError = error;
-          return q<redis.CacheableResponse>(null);
+          return null;
         })
         .then((cachedResponse: redis.CacheableResponse) => {
           fromCache = !!cachedResponse;
@@ -161,7 +158,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         })
         .then((response: redis.CacheableResponse) => {
           if (!response) {
-            return q<void>(null);
+            return null;
           }
 
           let giveRolloutPackage: boolean = false;
@@ -172,7 +169,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
             giveRolloutPackage = rolloutSelector.isSelectedForRollout(
               clientUniqueId,
               cachedResponseObject.rollout,
-              releaseSpecificString
+              releaseSpecificString,
             );
           }
 
@@ -196,8 +193,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
             throw redisError;
           }
         })
-        .catch((error: storageTypes.StorageError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
+        .catch((error: storageTypes.StorageError) => errorUtils.restErrorHandler(res, error, next));
     };
   };
 
@@ -221,7 +217,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
     const sdkVersion: string = restHeaders.getSdkVersion(req);
     if (semver.valid(sdkVersion) && semver.gte(sdkVersion, METRICS_BREAKING_VERSION)) {
       // If previousDeploymentKey not provided, assume it is the same deployment key.
-      let redisUpdatePromise: q.Promise<void>;
+      let redisUpdatePromise: Promise<void>;
 
       if (req.body.label && req.body.status === redis.DEPLOYMENT_FAILED) {
         redisUpdatePromise = redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status);
@@ -231,7 +227,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
           deploymentKey,
           labelOrAppVersion,
           previousDeploymentKey,
-          previousLabelOrAppVersion
+          previousLabelOrAppVersion,
         );
       }
 
@@ -242,13 +238,12 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
             redisManager.removeDeploymentKeyClientActiveLabel(previousDeploymentKey, clientUniqueId);
           }
         })
-        .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
-        .done();
+        .catch((error: any) => errorUtils.sendUnknownError(res, error, next));
     } else {
       if (!clientUniqueId) {
         return errorUtils.sendMalformedRequestError(
           res,
-          "A deploy status report must contain a valid appVersion, clientUniqueId and deploymentKey."
+          "A deploy status report must contain a valid appVersion, clientUniqueId and deploymentKey.",
         );
       }
 
@@ -268,8 +263,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         .then(() => {
           res.sendStatus(200);
         })
-        .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
-        .done();
+        .catch((error: any) => errorUtils.sendUnknownError(res, error, next));
     }
   };
 
@@ -278,7 +272,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
     if (!req.body || !deploymentKey || !req.body.label) {
       return errorUtils.sendMalformedRequestError(
         res,
-        "A download status report must contain a valid deploymentKey and package label."
+        "A download status report must contain a valid deploymentKey and package label.",
       );
     }
     return redisManager
@@ -286,8 +280,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
       .then(() => {
         res.sendStatus(200);
       })
-      .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
-      .done();
+      .catch((error: any) => errorUtils.sendUnknownError(res, error, next));
   };
 
   router.get("/updateCheck", updateCheck(false));

@@ -30,7 +30,7 @@ export class HttpRequester implements acquisitionSdk.Http.Requester {
     verb: acquisitionSdk.Http.Verb,
     url: string,
     requestBodyOrCallback: string | acquisitionSdk.Callback<acquisitionSdk.Http.Response>,
-    callback?: acquisitionSdk.Callback<acquisitionSdk.Http.Response>
+    callback?: acquisitionSdk.Callback<acquisitionSdk.Http.Response>,
   ): void {
     if (!callback && typeof requestBodyOrCallback === "function") {
       callback = <acquisitionSdk.Callback<acquisitionSdk.Http.Response>>requestBodyOrCallback;
@@ -60,7 +60,7 @@ export class CustomResponseHttpRequester implements acquisitionSdk.Http.Requeste
     verb: acquisitionSdk.Http.Verb,
     url: string,
     requestBodyOrCallback: string | acquisitionSdk.Callback<acquisitionSdk.Http.Response>,
-    callback?: acquisitionSdk.Callback<acquisitionSdk.Http.Response>
+    callback?: acquisitionSdk.Callback<acquisitionSdk.Http.Response>,
   ): void {
     if (typeof requestBodyOrCallback !== "function") {
       throw new Error("Unexpected request body");

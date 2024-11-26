@@ -278,7 +278,7 @@ describe("CLI", () => {
     sandbox.stub(cmdexec, "confirm").returns(
       Q.Promise((resolve) => {
         resolve(wasConfirmed);
-      })
+      }),
     );
 
     sandbox.stub(cmdexec, "createEmptyTempReleaseFolder").callsFake(() => Q.Promise<void>((resolve) => resolve()));
@@ -690,7 +690,7 @@ describe("CLI", () => {
       sinon.assert.calledOnce(log);
       sinon.assert.calledWithExactly(
         log,
-        'Successfully cleared the release history associated with the "Staging" deployment from the "a" app.'
+        'Successfully cleared the release history associated with the "Staging" deployment from the "a" app.',
       );
 
       done();
@@ -985,7 +985,7 @@ describe("CLI", () => {
       sinon.assert.calledOnce(log);
       sinon.assert.calledWithExactly(
         log,
-        `Successfully promoted the "Staging" deployment of the "a" app to the "Production" deployment.`
+        `Successfully promoted the "Staging" deployment of the "a" app to the "Production" deployment.`,
       );
 
       done();
@@ -1011,7 +1011,7 @@ describe("CLI", () => {
       sinon.assert.calledOnce(log);
       sinon.assert.calledWithExactly(
         log,
-        `Successfully promoted the "Staging" deployment of the "a" app to the "Production" deployment.`
+        `Successfully promoted the "Staging" deployment of the "a" app to the "Production" deployment.`,
       );
 
       done();
@@ -1052,7 +1052,7 @@ describe("CLI", () => {
     releaseHelperFunction(
       command,
       done,
-      'Please use a semver-compliant target binary version range, for example "1.0.0", "*" or "^1.2.3".'
+      'Please use a semver-compliant target binary version range, for example "1.0.0", "*" or "^1.2.3".',
     );
   });
 
@@ -1123,7 +1123,7 @@ describe("CLI", () => {
       .catch((err) => {
         assert.equal(
           err.message,
-          'Unable to find or read "package.json" in the CWD. The "release-react" command must be executed in a React Native project folder.'
+          'Unable to find or read "package.json" in the CWD. The "release-react" command must be executed in a React Native project folder.',
         );
         sinon.assert.notCalled(release);
         sinon.assert.notCalled(spawn);
@@ -1259,8 +1259,8 @@ describe("CLI", () => {
           spawnCommandArgs,
           `${path.join("node_modules", "react-native", "local-cli", "cli.js")} bundle --assets-dest ${path.join(
             os.tmpdir(),
-            "CodePush"
-          )} --bundle-output ${path.join(os.tmpdir(), "CodePush", bundleName)} --dev false --entry-file index.ios.js --platform ios`
+            "CodePush",
+          )} --bundle-output ${path.join(os.tmpdir(), "CodePush", bundleName)} --dev false --entry-file index.ios.js --platform ios`,
         );
         assertJsonDescribesObject(JSON.stringify(release.args[0][0], /*replacer=*/ null, /*spacing=*/ 2), releaseCommand);
         done();
@@ -1302,11 +1302,11 @@ describe("CLI", () => {
             "node_modules",
             "react-native",
             "local-cli",
-            "cli.js"
+            "cli.js",
           )} bundle --assets-dest ${packagePath} --bundle-output ${path.join(
             packagePath,
-            "main.jsbundle"
-          )} --dev false --entry-file index.ios.js --platform ios`
+            "main.jsbundle",
+          )} --dev false --entry-file index.ios.js --platform ios`,
         );
         assertJsonDescribesObject(JSON.stringify(release.args[0][0], /*replacer=*/ null, /*spacing=*/ 2), releaseCommand);
         done();
@@ -1348,11 +1348,11 @@ describe("CLI", () => {
             "node_modules",
             "react-native",
             "local-cli",
-            "cli.js"
+            "cli.js",
           )} bundle --assets-dest ${packagePath} --bundle-output ${path.join(
             packagePath,
-            "index.android.bundle"
-          )} --dev false --entry-file index.android.js --platform android`
+            "index.android.bundle",
+          )} --dev false --entry-file index.android.js --platform android`,
         );
         assertJsonDescribesObject(JSON.stringify(release.args[0][0], /*replacer=*/ null, /*spacing=*/ 2), releaseCommand);
         done();
@@ -1394,11 +1394,11 @@ describe("CLI", () => {
             "node_modules",
             "react-native",
             "local-cli",
-            "cli.js"
+            "cli.js",
           )} bundle --assets-dest ${packagePath} --bundle-output ${path.join(
             packagePath,
-            "index.windows.bundle"
-          )} --dev false --entry-file index.windows.js --platform windows`
+            "index.windows.bundle",
+          )} --dev false --entry-file index.windows.js --platform windows`,
         );
         assertJsonDescribesObject(JSON.stringify(release.args[0][0], /*replacer=*/ null, /*spacing=*/ 2), releaseCommand);
         done();
@@ -1441,12 +1441,12 @@ describe("CLI", () => {
           spawnCommandArgs,
           `${path.join("node_modules", "react-native", "local-cli", "cli.js")} bundle --assets-dest ${path.join(
             os.tmpdir(),
-            "CodePush"
+            "CodePush",
           )} --bundle-output ${path.join(
             os.tmpdir(),
             "CodePush",
-            bundleName
-          )} --dev true --entry-file index.android.js --platform android --sourcemap-output index.android.js.map`
+            bundleName,
+          )} --dev true --entry-file index.android.js --platform android --sourcemap-output index.android.js.map`,
         );
         assertJsonDescribesObject(JSON.stringify(release.args[0][0], /*replacer=*/ null, /*spacing=*/ 2), releaseCommand);
         done();
@@ -1488,12 +1488,12 @@ describe("CLI", () => {
           spawnCommandArgs,
           `${path.join("node_modules", "react-native", "local-cli", "cli.js")} bundle --assets-dest ${path.join(
             os.tmpdir(),
-            "CodePush"
+            "CodePush",
           )} --bundle-output ${path.join(
             os.tmpdir(),
             "CodePush",
-            bundleName
-          )} --dev false --entry-file index.android.js --platform android --sourcemap-output index.android.js.map`
+            bundleName,
+          )} --dev false --entry-file index.android.js --platform android --sourcemap-output index.android.js.map`,
         );
         assertJsonDescribesObject(JSON.stringify(release.args[0][0], /*replacer=*/ null, /*spacing=*/ 2), releaseCommand);
         done();
@@ -1534,12 +1534,12 @@ describe("CLI", () => {
           spawnCommandArgs,
           `${path.join("node_modules", "react-native", "local-cli", "cli.js")} bundle --assets-dest ${path.join(
             os.tmpdir(),
-            "CodePush"
+            "CodePush",
           )} --bundle-output ${path.join(
             os.tmpdir(),
             "CodePush",
-            bundleName
-          )} --dev false --entry-file index.android.js --platform android --sourcemap-output index.android.js.map`
+            bundleName,
+          )} --dev false --entry-file index.android.js --platform android --sourcemap-output index.android.js.map`,
         );
         assertJsonDescribesObject(JSON.stringify(release.args[0][0], /*replacer=*/ null, /*spacing=*/ 2), releaseCommand);
         done();
@@ -1583,8 +1583,8 @@ describe("CLI", () => {
           spawnCommandArgs,
           `--foo=bar --baz ${path.join("node_modules", "react-native", "local-cli", "cli.js")} bundle --assets-dest ${path.join(
             os.tmpdir(),
-            "CodePush"
-          )} --bundle-output ${path.join(os.tmpdir(), "CodePush", bundleName)} --dev false --entry-file index.ios.js --platform ios`
+            "CodePush",
+          )} --bundle-output ${path.join(os.tmpdir(), "CodePush", bundleName)} --dev false --entry-file index.ios.js --platform ios`,
         );
         assertJsonDescribesObject(JSON.stringify(release.args[0][0], /*replacer=*/ null, /*spacing=*/ 2), releaseCommand);
 
@@ -1686,7 +1686,7 @@ describe("CLI", () => {
         assert(!!error);
         assert.equal(error.message, expectedError);
         done();
-      }
+      },
     );
   }
 });

@@ -12,11 +12,11 @@ export function isValidVersion(version: string): boolean {
 }
 
 export async function runHermesEmitBinaryCommand(
-    bundleName: string,
-    outputFolder: string,
-    sourcemapOutput: string,
-    extraHermesFlags: string[],
-    gradleFile: string
+  bundleName: string,
+  outputFolder: string,
+  sourcemapOutput: string,
+  extraHermesFlags: string[],
+  gradleFile: string,
 ): Promise<void> {
   const hermesArgs: string[] = [];
   const envNodeArgs: string = process.env.CODE_PUSH_NODE_ARGS;
@@ -145,7 +145,7 @@ function parseBuildGradleFile(gradleFile: string) {
 async function getHermesCommandFromGradle(gradleFile: string): Promise<string> {
   const buildGradle: any = await parseBuildGradleFile(gradleFile);
   const hermesCommandProperty: any = Array.from(buildGradle["project.ext.react"] || []).find((prop: string) =>
-    prop.trim().startsWith("hermesCommand:")
+    prop.trim().startsWith("hermesCommand:"),
   );
   if (hermesCommandProperty) {
     return hermesCommandProperty.replace("hermesCommand:", "").trim().slice(1, -1);
@@ -267,7 +267,7 @@ export function getReactNativeVersion(): string {
     projectPackageJson = JSON.parse(fs.readFileSync(packageJsonFilename, "utf-8"));
   } catch (error) {
     throw new Error(
-      `Unable to find or read "package.json" in the CWD. The "release-react" command must be executed in a React Native project folder.`
+      `Unable to find or read "package.json" in the CWD. The "release-react" command must be executed in a React Native project folder.`,
     );
   }
 

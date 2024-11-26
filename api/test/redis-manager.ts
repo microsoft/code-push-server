@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 import * as assert from "assert";
-import * as express from "express";
 import * as q from "q";
 import * as shortid from "shortid";
 import Promise = q.Promise;

@@ -46,7 +46,9 @@ JsonStorage.json
 *.key
 *.cnf
 
-# Azurite local storage files
-__azurite_db_*
-__blobstorage__
-__queuestorage__
+/**/.yarn/*
+!/**/.yarn/patches
+!/**/.yarn/plugins
+!/**/.yarn/releases
+!/**/.yarn/sdks
+!/**/.yarn/versions

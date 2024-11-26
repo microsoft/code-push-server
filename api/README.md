@@ -36,11 +36,11 @@ To run the CodePush Server locally, follow these steps:
    npm run build
    ```
 
-5. Launch the server with the environment-specific start command:
+5. Launch the server:
 
    ```bash
 
-   npm run start:env
+   npm run start
    ```
 
 By default, local CodePush server runs on HTTP. To run CodePush Server on HTTPS:

@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { JsonStorage } from "../script/storage/json-storage";
 import * as assert from "assert";
 import * as express from "express";
 import * as fs from "fs";
@@ -17,8 +16,6 @@ import * as yauzl from "yauzl";
 import PackageDiffer = packageDiffing.PackageDiffer;
 import PackageManifest = hashUtils.PackageManifest;
 import Pend = require("pend");
-
-describe("Package diffing with JSON storage", () => packageDiffTests(JsonStorage));
 
 interface PackageInfo {
   packageHash: string;

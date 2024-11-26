@@ -13,7 +13,6 @@ import * as storage from "../script/storage/storage";
 import * as redis from "../script/redis-manager";
 import * as utils from "./utils";
 
-import { JsonStorage } from "../script/storage/json-storage";
 import { UpdateCheckRequest } from "../script/types/rest-definitions";
 import { SDK_VERSION_HEADER } from "../script/utils/rest-headers";
 import { RedisS3Storage } from "../script/storage/redis-s3-storage";
@@ -32,14 +31,12 @@ describe("Acquisition Rest API", () => {
   var isAzureServer: boolean;
 
   before((): q.Promise<void> => {
-    var useJsonStorage: boolean = !process.env.TEST_AZURE_STORAGE && !process.env.AZURE_ACQUISITION_URL;
-
     return q<void>(null)
       .then(() => {
         if (process.env.AZURE_ACQUISITION_URL) {
           serverUrl = process.env.AZURE_ACQUISITION_URL;
           isAzureServer = true;
-          storageInstance = useJsonStorage ? new JsonStorage() : new RedisS3Storage();
+          storageInstance = new RedisS3Storage();
         } else {
           var deferred: q.Deferred<void> = q.defer<void>();
 
@@ -118,17 +115,11 @@ describe("Acquisition Rest API", () => {
   });
 
   after((): Promise<void> => {
-    return q(<void>null)
-      .then(() => {
-        if (storageInstance instanceof JsonStorage) {
-          return storageInstance.dropAll();
-        }
-      })
-      .then(() => {
-        if (redisManager) {
-          return redisManager.close();
-        }
-      });
+    return q(<void>null).then(() => {
+      if (redisManager) {
+        return redisManager.close();
+      }
+    });
   });
 
   describe("Get /health", () => {

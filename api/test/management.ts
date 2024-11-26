@@ -14,8 +14,6 @@ import * as restTypes from "../script/types/rest-definitions";
 import * as storage from "../script/storage/storage";
 import * as testUtils from "./utils";
 
-import { JsonStorage } from "../script/storage/json-storage";
-
 import Permissions = storage.Permissions;
 
 const ACCESS_KEY_MASKING_STRING = "(hidden)";
@@ -82,11 +80,7 @@ function managementTests(): void {
   });
 
   after((): Promise<void> => {
-    return redisManager.close().then(() => {
-      if (storage instanceof JsonStorage) {
-        return storage.dropAll();
-      }
-    });
+    return redisManager.close();
   });
 
   describe("GET authenticated", () => {

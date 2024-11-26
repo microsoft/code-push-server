@@ -277,23 +277,24 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
           return storage
             .addApp(accountId, storageApp)
-            .then((app: storageTypes.App): Promise<string[]> => {
+            .then(async (app: storageTypes.App): Promise<string[]> => {
               storageApp = app;
               if (!appRequest.manuallyProvisionDeployments) {
                 const defaultDeployments: string[] = ["Production", "Staging"];
-                const deploymentPromises: Promise<string>[] = defaultDeployments.map((deploymentName: string) => {
+
+                const deployments = defaultDeployments.map((deploymentName) => {
                   const deployment: storageTypes.Deployment = {
                     createdTime: new Date().getTime(),
                     name: deploymentName,
                     key: security.generateSecureKey(accountId),
                   };
 
-                  return storage.addDeployment(accountId, storageApp.id, deployment).then(() => {
-                    return deployment.name;
-                  });
+                  return deployment;
                 });
 
-                return Promise.all(deploymentPromises);
+                await storage.addDeployments(accountId, storageApp.id, deployments);
+
+                return defaultDeployments;
               }
             })
             .then((deploymentNames: string[]): void => {

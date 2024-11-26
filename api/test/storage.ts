@@ -3,28 +3,12 @@
 
 import * as assert from "assert";
 import * as shortid from "shortid";
-import * as q from "q";
 
-import { JsonStorage } from "../script/storage/json-storage";
 import * as storageTypes from "../script/storage/storage";
 import * as utils from "./utils";
 
-describe("JSON Storage", () => storageTests(JsonStorage));
-
 function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage, disablePersistence?: boolean) {
   var storage: storageTypes.Storage;
-
-  beforeEach(() => {
-    if (StorageType === JsonStorage) {
-      storage = new StorageType(disablePersistence);
-    }
-  });
-
-  afterEach((): void => {
-    if (storage instanceof JsonStorage) {
-      storage.dropAll();
-    }
-  });
 
   describe("Access Key", () => {
     var account: storageTypes.Account;

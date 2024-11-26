@@ -1,11 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as express from "express";
 import * as fs from "fs";
 import * as http from "http";
 import * as stream from "stream";
 import * as libStorage from "@aws-sdk/lib-storage";
+import * as uuid from "uuid";
 
 import * as storage from "./storage";
 
@@ -23,84 +23,51 @@ function merge(original: any, updates: any): void {
 }
 
 export class RedisS3Storage implements storage.Storage {
-  public static NextIdNumber: number = 0;
-  public accounts: { [id: string]: storage.Account } = {};
-  public apps: { [id: string]: storage.App } = {};
-  public deployments: { [id: string]: storage.Deployment } = {};
-  public packages: { [id: string]: storage.Package } = {};
-  public blobs: { [id: string]: string } = {};
-  public accessKeys: { [id: string]: storage.AccessKey } = {};
-  public deploymentKeys: { [id: string]: string } = {};
-
-  public accountToAppsMap: { [id: string]: string[] } = {};
-  public appToAccountMap: { [id: string]: string } = {};
-  public emailToAccountMap: { [email: string]: string } = {};
-
-  public appToDeploymentsMap: { [id: string]: string[] } = {};
-  public deploymentToAppMap: { [id: string]: string } = {};
-
-  public deploymentKeyToDeploymentMap: { [id: string]: string } = {};
-
-  public accountToAccessKeysMap: { [id: string]: string[] } = {};
-  public accessKeyToAccountMap: { [id: string]: string } = {};
-
-  public accessKeyNameToAccountIdMap: { [accessKeyName: string]: { accountId: string; expires: number } } = {};
-
   private static CollaboratorNotFound: string = "The specified e-mail address doesn't represent a registered user";
   private redisClient: Redis.RedisClientType<Redis.RedisDefaultModules, Redis.RedisFunctions, Redis.RedisScripts>;
   private s3Client: S3Client;
   private _blobServerPromise: Promise<http.Server>;
   private updatesDir: string = path.join(__dirname, "updates");
 
-  private loadStateAsync(): globalThis.Promise<void> {
-    return this.redisClient.get("state").then((state) => {
-      if (!state) {
-        return;
-      }
-      const obj = JSON.parse(state);
-
-      RedisS3Storage.NextIdNumber = obj.NextIdNumber || 0;
-      this.accounts = obj.accounts || {};
-      this.apps = obj.apps || {};
-      this.deployments = obj.deployments || {};
-      this.deploymentKeys = obj.deploymentKeys || {};
-      this.blobs = obj.blobs || {};
-      this.accountToAppsMap = obj.accountToAppsMap || {};
-      this.appToAccountMap = obj.appToAccountMap || {};
-      this.emailToAccountMap = obj.emailToAccountMap || {};
-      this.appToDeploymentsMap = obj.appToDeploymentsMap || {};
-      this.deploymentToAppMap = obj.deploymentToAppMap || {};
-      this.deploymentKeyToDeploymentMap = obj.deploymentKeyToDeploymentMap || {};
-      this.accessKeys = obj.accessKeys || {};
-      this.accessKeyToAccountMap = obj.accessKeyToAccountMap || {};
-      this.accountToAccessKeysMap = obj.accountToAccessKeysMap || {};
-      this.accessKeyNameToAccountIdMap = obj.accessKeyNameToAccountIdMap || {};
-    });
-  }
-
-  private async saveStateAsync(): globalThis.Promise<void> {
-    const obj = {
-      NextIdNumber: RedisS3Storage.NextIdNumber,
-      accounts: this.accounts,
-      apps: this.apps,
-      deployments: this.deployments,
-      blobs: this.blobs,
-      accountToAppsMap: this.accountToAppsMap,
-      appToAccountMap: this.appToAccountMap,
-      appToDeploymentsMap: this.appToDeploymentsMap,
-      deploymentToAppMap: this.deploymentToAppMap,
-      deploymentKeyToDeploymentMap: this.deploymentKeyToDeploymentMap,
-      accessKeys: this.accessKeys,
-      accessKeyToAccountMap: this.accessKeyToAccountMap,
-      accountToAccessKeysMap: this.accountToAccessKeysMap,
-      accessKeyNameToAccountIdMap: this.accessKeyNameToAccountIdMap,
+  private async loadStateAsync(): Promise<storage.StorageItem> {
+    const DEFAULT_STATE: storage.StorageItem = {
+      id: this.newId(),
+      accounts: {},
+      apps: {},
+      deployments: {},
+      packages: {},
+      blobs: {},
+      accessKeys: {},
+      deploymentKeys: {},
+      accountToAppsMap: {},
+      appToAccountMap: {},
+      emailToAccountMap: {},
+      appToDeploymentsMap: {},
+      deploymentToAppMap: {},
+      deploymentKeyToDeploymentMap: {},
+      accountToAccessKeysMap: {},
+      accessKeyToAccountMap: {},
+      accessKeyNameToAccountIdMap: {},
     };
-    const str = JSON.stringify(obj);
 
-    this.redisClient.set("state", str);
+    try {
+      const state = await this.redisClient.get("state");
+
+      if (!state) {
+        return DEFAULT_STATE;
+      }
+
+      return JSON.parse(state);
+    } catch {
+      return DEFAULT_STATE;
+    }
   }
 
-  public async initialize(): globalThis.Promise<void> {
+  private async saveStateAsync(newState: storage.StorageItem): Promise<void> {
+    this.redisClient.set("state", JSON.stringify(newState));
+  }
+
+  public async initialize(): Promise<void> {
     const client = await Redis.createClient({
       url: process.env.REDIS_URL,
     }).connect();
@@ -119,76 +86,85 @@ export class RedisS3Storage implements storage.Storage {
     if (!fs.existsSync(this.updatesDir)) {
       fs.mkdirSync(this.updatesDir);
     }
-
-    this.loadStateAsync();
   }
 
   public checkHealth(): Promise<void> {
     return null;
   }
 
-  public addAccount(account: storage.Account): Promise<string> {
-    account = clone(account); // pass by value
+  public async addAccount(account: storage.Account): Promise<string> {
+    const currentState = await this.loadStateAsync();
+
+    account = clone(account);
     account.id = this.newId();
     // We lower-case the email in our storage lookup because Partition/RowKeys are case-sensitive, but in all other cases we leave
     // the email as-is (as a new account with a different casing would be rejected as a duplicate at creation time)
     const email: string = account.email.toLowerCase();
 
-    if (this.accounts[account.id] || this.accountToAppsMap[account.id] || this.emailToAccountMap[email]) {
+    if (currentState.emailToAccountMap[email]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
     }
 
-    this.accountToAppsMap[account.id] = [];
-    this.emailToAccountMap[email] = account.id;
-    this.accounts[account.id] = account;
+    currentState.accountToAppsMap[account.id] = [];
+    currentState.emailToAccountMap[email] = account.id;
+    currentState.accounts[account.id] = account;
 
-    this.saveStateAsync();
-    return Promise.resolve(account.id);
+    await this.saveStateAsync(currentState);
+    return account.id;
   }
 
-  public getAccount(accountId: string): Promise<storage.Account> {
-    if (!this.accounts[accountId]) {
+  public async getAccount(accountId: string): Promise<storage.Account> {
+    const { accounts } = await this.loadStateAsync();
+
+    if (!accounts[accountId]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    return Promise.resolve(clone(this.accounts[accountId]));
+    return clone(accounts[accountId]);
   }
 
-  public getAccountByEmail(email: string): Promise<storage.Account> {
-    for (const id in this.accounts) {
-      if (this.accounts[id].email === email) {
-        return Promise.resolve(clone(this.accounts[id]));
+  public async getAccountByEmail(email: string): Promise<storage.Account> {
+    const { accounts } = await this.loadStateAsync();
+
+    for (const id in accounts) {
+      if (accounts[id].email === email) {
+        return clone(accounts[id]);
       }
     }
 
     return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
-  public updateAccount(email: string, updates: storage.Account): Promise<void> {
+  public async updateAccount(email: string, updates: storage.Account): Promise<void> {
     if (!email) throw new Error("No account email");
 
-    return this.getAccountByEmail(email).then((account: storage.Account) => {
-      merge(this.accounts[account.id], updates);
-      this.saveStateAsync();
-    });
+    const currentState = await this.loadStateAsync();
+
+    const account = await this.getAccountByEmail(email);
+    merge(currentState.accounts[account.id], updates);
+
+    await this.saveStateAsync(currentState);
   }
 
-  public getAccountIdFromAccessKey(accessKey: string): Promise<string> {
-    if (!this.accessKeyNameToAccountIdMap[accessKey]) {
+  public async getAccountIdFromAccessKey(accessKey: string): Promise<string> {
+    const { accessKeyNameToAccountIdMap } = await this.loadStateAsync();
+
+    if (!accessKeyNameToAccountIdMap[accessKey]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    if (new Date().getTime() >= this.accessKeyNameToAccountIdMap[accessKey].expires) {
+    if (new Date().getTime() >= accessKeyNameToAccountIdMap[accessKey].expires) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.Expired, "The access key has expired.");
     }
 
-    return Promise.resolve(this.accessKeyNameToAccountIdMap[accessKey].accountId);
+    return accessKeyNameToAccountIdMap[accessKey].accountId;
   }
 
-  public addApp(accountId: string, app: storage.App): Promise<storage.App> {
-    app = clone(app); // pass by value
+  public async addApp(accountId: string, app: storage.App): Promise<storage.App> {
+    const currentState = await this.loadStateAsync();
+    app = clone(app);
 
-    const account = this.accounts[accountId];
+    const account = currentState.accounts[accountId];
     if (!account) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
@@ -199,292 +175,372 @@ export class RedisS3Storage implements storage.Storage {
     map[account.email] = <storage.CollaboratorProperties>{ accountId: accountId, permission: "Owner" };
     app.collaborators = map;
 
-    const accountApps = this.accountToAppsMap[accountId];
+    const accountApps = currentState.accountToAppsMap[accountId];
+
     if (accountApps.indexOf(app.id) === -1) {
       accountApps.push(app.id);
     }
 
-    if (!this.appToDeploymentsMap[app.id]) {
-      this.appToDeploymentsMap[app.id] = [];
+    if (!currentState.appToDeploymentsMap[app.id]) {
+      currentState.appToDeploymentsMap[app.id] = [];
     }
 
-    this.appToAccountMap[app.id] = accountId;
+    currentState.appToAccountMap[app.id] = accountId;
 
-    this.apps[app.id] = app;
+    currentState.apps[app.id] = app;
 
-    this.saveStateAsync();
+    await this.saveStateAsync(currentState);
 
-    return Promise.resolve(clone(app));
+    return clone(app);
   }
 
-  public getApps(accountId: string): Promise<storage.App[]> {
-    const appIds = this.accountToAppsMap[accountId];
+  public async getApps(accountId: string): Promise<storage.App[]> {
+    const { accountToAppsMap, apps } = await this.loadStateAsync();
+
+    const appIds = accountToAppsMap[accountId];
+
     if (appIds) {
       const storageApps = appIds.map((id: string) => {
-        return this.apps[id];
+        return apps[id];
       });
-      const apps: storage.App[] = clone(storageApps);
-      apps.forEach((app: storage.App) => {
+
+      const clonedApps: storage.App[] = clone(storageApps);
+
+      clonedApps.forEach((app: storage.App) => {
         this.addIsCurrentAccountProperty(app, accountId);
       });
 
-      return Promise.resolve(apps);
+      return clonedApps;
     }
 
     return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
-  public getApp(accountId: string, appId: string): Promise<storage.App> {
-    if (!this.accounts[accountId] || !this.apps[appId]) {
+  public async getApp(accountId: string, appId: string): Promise<storage.App> {
+    const { apps, accounts } = await this.loadStateAsync();
+
+    if (!accounts[accountId] || !apps[appId]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    const app: storage.App = clone(this.apps[appId]);
+    const app: storage.App = clone(apps[appId]);
     this.addIsCurrentAccountProperty(app, accountId);
 
-    return Promise.resolve(app);
+    return app;
   }
 
-  public removeApp(accountId: string, appId: string): Promise<void> {
-    if (!this.accounts[accountId] || !this.apps[appId]) {
+  public async removeApp(accountId: string, appId: string): Promise<void> {
+    const currentState = await this.loadStateAsync();
+
+    if (!currentState.accounts[accountId] || !currentState.apps[appId]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    if (accountId !== this.appToAccountMap[appId]) {
+    if (accountId !== currentState.appToAccountMap[appId]) {
       throw new Error("Wrong accountId");
     }
 
-    const deployments = this.appToDeploymentsMap[appId].slice();
-    const promises: any[] = [];
-    deployments.forEach((deploymentId: string) => {
-      promises.push(this.removeDeployment(accountId, appId, deploymentId));
+    const deployments = currentState.appToDeploymentsMap[appId].slice();
+
+    for (const deploymentId of deployments) {
+      await this.handleRemoveDeployment(accountId, appId, deploymentId, currentState);
+    }
+
+    delete currentState.appToDeploymentsMap[appId];
+
+    const app: storage.App = clone(currentState.apps[appId]);
+    const collaborators: storage.CollaboratorMap = app.collaborators;
+
+    Object.keys(collaborators).forEach((emailKey: string) => {
+      this.removeAppPointer(collaborators[emailKey].accountId, appId, currentState.accountToAppsMap);
     });
 
-    return Promise.all(promises).then(() => {
-      delete this.appToDeploymentsMap[appId];
+    delete currentState.apps[appId];
+    delete currentState.appToAccountMap[appId];
 
-      const app: storage.App = clone(this.apps[appId]);
-      const collaborators: storage.CollaboratorMap = app.collaborators;
-      Object.keys(collaborators).forEach((emailKey: string) => {
-        this.removeAppPointer(collaborators[emailKey].accountId, appId);
-      });
-      delete this.apps[appId];
+    await this.saveStateAsync(currentState);
 
-      delete this.appToAccountMap[appId];
-      const accountApps = this.accountToAppsMap[accountId];
-      accountApps.splice(accountApps.indexOf(appId), 1);
-
-      this.saveStateAsync();
-
-      return null;
-    });
+    return null;
   }
 
-  public updateApp(accountId: string, app: storage.App, ensureIsOwner: boolean = true): Promise<void> {
-    app = clone(app); // pass by value
+  public async updateApp(accountId: string, app: storage.App, ensureIsOwner: boolean = true): Promise<void> {
+    const currentState = await this.loadStateAsync();
+    app = clone(app);
 
-    if (!this.accounts[accountId] || !this.apps[app.id]) {
+    if (!currentState.accounts[accountId] || !currentState.apps[app.id]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     this.removeIsCurrentAccountProperty(app);
-    merge(this.apps[app.id], app);
+    merge(currentState.apps[app.id], app);
 
-    this.saveStateAsync();
+    await this.saveStateAsync(currentState);
+
     return null;
   }
 
-  public transferApp(accountId: string, appId: string, email: string): Promise<void> {
+  public async transferApp(accountId: string, appId: string, email: string): Promise<void> {
     if (isPrototypePollutionKey(email)) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.Invalid, "Invalid email parameter");
     }
-    return this.getApp(accountId, appId).then((app: storage.App) => {
-      const account: storage.Account = this.accounts[accountId];
-      const requesterEmail: string = account.email;
-      const targetOwnerAccountId: string = this.emailToAccountMap[email.toLowerCase()];
-      if (!targetOwnerAccountId) {
-        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound, RedisS3Storage.CollaboratorNotFound);
-      }
 
-      // Use the original email stored on the account to ensure casing is consistent
-      email = this.accounts[targetOwnerAccountId].email;
+    const { accounts, emailToAccountMap, accountToAppsMap } = await this.loadStateAsync();
 
-      if (this.isOwner(app.collaborators, email)) {
-        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
-      }
+    const app = await this.getApp(accountId, appId);
+    const account: storage.Account = accounts[accountId];
+    const requesterEmail: string = account.email;
+    const targetOwnerAccountId: string = emailToAccountMap[email.toLowerCase()];
 
-      app.collaborators[requesterEmail].permission = storage.Permissions.Collaborator;
-      if (this.isCollaborator(app.collaborators, email)) {
-        app.collaborators[email].permission = storage.Permissions.Owner;
-      } else {
-        app.collaborators[email] = { permission: storage.Permissions.Owner, accountId: targetOwnerAccountId };
-        this.addAppPointer(targetOwnerAccountId, app.id);
-      }
+    if (!targetOwnerAccountId) {
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound, RedisS3Storage.CollaboratorNotFound);
+    }
 
-      return this.updateApp(accountId, app);
-    });
+    // Use the original email stored on the account to ensure casing is consistent
+    email = accounts[targetOwnerAccountId].email;
+    if (this.isOwner(app.collaborators, email)) {
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
+    }
+
+    app.collaborators[requesterEmail].permission = storage.Permissions.Collaborator;
+    if (this.isCollaborator(app.collaborators, email)) {
+      app.collaborators[email].permission = storage.Permissions.Owner;
+    } else {
+      app.collaborators[email] = { permission: storage.Permissions.Owner, accountId: targetOwnerAccountId };
+      this.addAppPointer(targetOwnerAccountId, app.id, accountToAppsMap);
+    }
+
+    return this.updateApp(accountId, app);
   }
 
-  public addCollaborator(accountId: string, appId: string, email: string): Promise<void> {
+  public async addCollaborator(accountId: string, appId: string, email: string): Promise<void> {
     if (isPrototypePollutionKey(email)) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.Invalid, "Invalid email parameter");
     }
-    return this.getApp(accountId, appId).then((app: storage.App) => {
-      if (this.isCollaborator(app.collaborators, email) || this.isOwner(app.collaborators, email)) {
-        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
-      }
 
-      const targetCollaboratorAccountId: string = this.emailToAccountMap[email.toLowerCase()];
-      if (!targetCollaboratorAccountId) {
-        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound, RedisS3Storage.CollaboratorNotFound);
-      }
+    const { emailToAccountMap, accounts, accountToAppsMap } = await this.loadStateAsync();
 
-      // Use the original email stored on the account to ensure casing is consistent
-      email = this.accounts[targetCollaboratorAccountId].email;
+    const app = await this.getApp(accountId, appId);
 
-      app.collaborators[email] = { accountId: targetCollaboratorAccountId, permission: storage.Permissions.Collaborator };
-      this.addAppPointer(targetCollaboratorAccountId, app.id);
-      return this.updateApp(accountId, app);
-    });
+    if (this.isCollaborator(app.collaborators, email) || this.isOwner(app.collaborators, email)) {
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
+    }
+
+    const targetCollaboratorAccountId: string = emailToAccountMap[email.toLowerCase()];
+    if (!targetCollaboratorAccountId) {
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound, RedisS3Storage.CollaboratorNotFound);
+    }
+
+    // Use the original email stored on the account to ensure casing is consistent
+    email = accounts[targetCollaboratorAccountId].email;
+    app.collaborators[email] = { accountId: targetCollaboratorAccountId, permission: storage.Permissions.Collaborator };
+
+    this.addAppPointer(targetCollaboratorAccountId, app.id, accountToAppsMap);
+
+    return this.updateApp(accountId, app);
   }
 
-  public getCollaborators(accountId: string, appId: string): Promise<storage.CollaboratorMap> {
-    return this.getApp(accountId, appId).then((app: storage.App) => {
-      return Promise.resolve(app.collaborators);
-    });
+  public async getCollaborators(accountId: string, appId: string): Promise<storage.CollaboratorMap> {
+    const app = await this.getApp(accountId, appId);
+
+    return app.collaborators;
   }
 
-  public removeCollaborator(accountId: string, appId: string, email: string): Promise<void> {
-    return this.getApp(accountId, appId).then((app: storage.App) => {
-      if (this.isOwner(app.collaborators, email)) {
-        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
-      }
+  public async removeCollaborator(accountId: string, appId: string, email: string): Promise<void> {
+    const app = await this.getApp(accountId, appId);
+    if (this.isOwner(app.collaborators, email)) {
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.AlreadyExists);
+    }
 
-      const targetCollaboratorAccountId: string = this.emailToAccountMap[email.toLowerCase()];
-      if (!this.isCollaborator(app.collaborators, email) || !targetCollaboratorAccountId) {
-        return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
-      }
+    const { emailToAccountMap, accountToAppsMap } = await this.loadStateAsync();
 
-      this.removeAppPointer(targetCollaboratorAccountId, appId);
-      delete app.collaborators[email];
-      return this.updateApp(accountId, app, /*ensureIsOwner*/ false);
-    });
+    const targetCollaboratorAccountId: string = emailToAccountMap[email.toLowerCase()];
+
+    if (!this.isCollaborator(app.collaborators, email) || !targetCollaboratorAccountId) {
+      return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
+    }
+
+    this.removeAppPointer(targetCollaboratorAccountId, appId, accountToAppsMap);
+
+    delete app.collaborators[email];
+
+    return await this.updateApp(accountId, app, /*ensureIsOwner*/ false);
   }
 
-  public addDeployment(accountId: string, appId: string, deployment: storage.Deployment): Promise<string> {
-    deployment = clone(deployment); // pass by value
+  private async handleAddDeployment(
+    accountId: string,
+    appId: string,
+    deployment: storage.Deployment,
+    currentState: storage.StorageItem,
+  ): Promise<void> {
+    deployment = clone(deployment);
 
-    const app: storage.App = this.apps[appId];
-    if (!this.accounts[accountId] || !app) {
+    const app: storage.App = currentState.apps[appId];
+    if (!currentState.accounts[accountId] || !app) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     deployment.id = this.newId();
     (<any>deployment).packageHistory = [];
-    const appDeployments = this.appToDeploymentsMap[appId];
+
+    const appDeployments = currentState.appToDeploymentsMap[appId];
     if (appDeployments.indexOf(deployment.id) === -1) {
       appDeployments.push(deployment.id);
     }
 
-    this.deploymentToAppMap[deployment.id] = appId;
-    this.deployments[deployment.id] = deployment;
-    this.deploymentKeyToDeploymentMap[deployment.key] = deployment.id;
-
-    this.saveStateAsync();
-    return Promise.resolve(deployment.id);
+    currentState.deploymentToAppMap[deployment.id] = appId;
+    currentState.deployments[deployment.id] = deployment;
+    currentState.deploymentKeyToDeploymentMap[deployment.key] = deployment.id;
   }
 
-  public getDeploymentInfo(deploymentKey: string): Promise<storage.DeploymentInfo> {
-    const deploymentId: string = this.deploymentKeyToDeploymentMap[deploymentKey];
-    const deployment: storage.Deployment = this.deployments[deploymentId];
+  public async addDeployment(accountId: string, appId: string, deployment: storage.Deployment): Promise<string> {
+    const currentState = await this.loadStateAsync();
+
+    await this.handleAddDeployment(accountId, appId, deployment, currentState);
+
+    await this.saveStateAsync(currentState);
+
+    return deployment.id;
+  }
+
+  public async addDeployments(accountId: string, appId: string, deployments: storage.Deployment[]): Promise<string[]> {
+    const currentState = await this.loadStateAsync();
+    const clonedDeployments = deployments.map(clone);
+
+    for (const deployment of clonedDeployments) {
+      await this.handleAddDeployment(accountId, appId, deployment, currentState);
+    }
+
+    await this.saveStateAsync(currentState);
+
+    return clonedDeployments.map((deployment) => deployment.id);
+  }
+
+  public async getDeploymentInfo(deploymentKey: string): Promise<storage.DeploymentInfo> {
+    const { deploymentKeyToDeploymentMap, deployments, deploymentToAppMap } = await this.loadStateAsync();
+
+    const deploymentId: string = deploymentKeyToDeploymentMap[deploymentKey];
+    const deployment: storage.Deployment = deployments[deploymentId];
 
     if (!deploymentId || !deployment) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    const appId: string = this.deploymentToAppMap[deployment.id];
+    const appId: string = deploymentToAppMap[deployment.id];
 
     if (!appId) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    return Promise.resolve({ appId: appId, deploymentId: deploymentId });
+    return { appId: appId, deploymentId: deploymentId };
   }
 
-  public getPackageHistoryFromDeploymentKey(deploymentKey: string): Promise<storage.Package[]> {
-    console.log(this.deploymentKeyToDeploymentMap);
-    const deploymentId: string = this.deploymentKeyToDeploymentMap[deploymentKey];
-    if (!deploymentId || !this.deployments[deploymentId]) {
+  public async getPackageHistoryFromDeploymentKey(deploymentKey: string): Promise<storage.Package[]> {
+    const { deploymentKeyToDeploymentMap, deployments } = await this.loadStateAsync();
+    const deploymentId: string = deploymentKeyToDeploymentMap[deploymentKey];
+
+    if (!deploymentId || !deployments[deploymentId]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    return Promise.resolve(clone((<any>this.deployments[deploymentId]).packageHistory));
+    return clone((<any>deployments[deploymentId]).packageHistory);
   }
 
-  public getDeployment(accountId: string, appId: string, deploymentId: string): Promise<storage.Deployment> {
-    if (!this.accounts[accountId] || !this.apps[appId] || !this.deployments[deploymentId]) {
+  public async getDeployment(accountId: string, appId: string, deploymentId: string): Promise<storage.Deployment> {
+    const { accounts, apps, deployments } = await this.loadStateAsync();
+
+    if (!accounts[accountId] || !apps[appId] || !deployments[deploymentId]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    return Promise.resolve(clone(this.deployments[deploymentId]));
+    return clone(deployments[deploymentId]);
   }
 
-  public getDeployments(accountId: string, appId: string): Promise<storage.Deployment[]> {
-    const deploymentIds = this.appToDeploymentsMap[appId];
-    if (this.accounts[accountId] && deploymentIds) {
-      const deployments = deploymentIds.map((id: string) => {
-        return this.deployments[id];
+  public async getDeployments(accountId: string, appId: string): Promise<storage.Deployment[]> {
+    const { appToDeploymentsMap, accounts, deployments } = await this.loadStateAsync();
+
+    const deploymentIds = appToDeploymentsMap[appId];
+
+    if (accounts[accountId] && deploymentIds) {
+      const deploymentsCopy = deploymentIds.map((id: string) => {
+        return deployments[id];
       });
-      return Promise.resolve(clone(deployments));
+
+      return clone(deploymentsCopy);
     }
 
     return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
-  public removeDeployment(accountId: string, appId: string, deploymentId: string): Promise<void> {
-    if (!this.accounts[accountId] || !this.apps[appId] || !this.deployments[deploymentId]) {
+  private async handleRemoveDeployment(
+    accountId: string,
+    appId: string,
+    deploymentId: string,
+    currentState: storage.StorageItem,
+  ): Promise<storage.StorageItem> {
+    if (!currentState.accounts[accountId] || !currentState.apps[appId] || !currentState.deployments[deploymentId]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    if (appId !== this.deploymentToAppMap[deploymentId]) {
+    if (appId !== currentState.deploymentToAppMap[deploymentId]) {
       throw new Error("Wrong appId");
     }
 
-    const deployment: storage.Deployment = this.deployments[deploymentId];
+    const deployment: storage.Deployment = currentState.deployments[deploymentId];
 
-    delete this.deploymentKeyToDeploymentMap[deployment.key];
-    delete this.deployments[deploymentId];
-    delete this.deploymentToAppMap[deploymentId];
-    const appDeployments = this.appToDeploymentsMap[appId];
+    delete currentState.deploymentKeyToDeploymentMap[deployment.key];
+    delete currentState.deployments[deploymentId];
+    delete currentState.deploymentToAppMap[deploymentId];
+
+    const appDeployments = currentState.appToDeploymentsMap[appId];
     appDeployments.splice(appDeployments.indexOf(deploymentId), 1);
 
-    this.saveStateAsync();
+    return currentState;
+  }
+
+  public async removeDeployment(accountId: string, appId: string, deploymentId: string): Promise<void> {
+    const currentState = await this.loadStateAsync();
+
+    const newState = await this.handleRemoveDeployment(accountId, appId, deploymentId, currentState);
+
+    await this.saveStateAsync(newState);
+
     return null;
   }
 
-  public updateDeployment(accountId: string, appId: string, deployment: storage.Deployment): Promise<void> {
-    deployment = clone(deployment); // pass by value
+  public async updateDeployment(accountId: string, appId: string, deployment: storage.Deployment): Promise<void> {
+    const currentState = await this.loadStateAsync();
 
-    if (!this.accounts[accountId] || !this.apps[appId] || !this.deployments[deployment.id]) {
+    deployment = clone(deployment);
+
+    if (!currentState.accounts[accountId] || !currentState.apps[appId] || !currentState.deployments[deployment.id]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     delete deployment.package; // No-op if a package update is attempted through this method
-    merge(this.deployments[deployment.id], deployment);
+    merge(currentState.deployments[deployment.id], deployment);
 
-    this.saveStateAsync();
+    await this.saveStateAsync(currentState);
+
     return null;
   }
 
-  public commitPackage(accountId: string, appId: string, deploymentId: string, appPackage: storage.Package): Promise<storage.Package> {
-    appPackage = clone(appPackage); // pass by value
+  public async commitPackage(
+    accountId: string,
+    appId: string,
+    deploymentId: string,
+    appPackage: storage.Package,
+  ): Promise<storage.Package> {
+    appPackage = clone(appPackage);
 
     if (!appPackage) throw new Error("No package specified");
-    if (!this.accounts[accountId] || !this.apps[appId] || !this.deployments[deploymentId]) {
+
+    const currentState = await this.loadStateAsync();
+
+    if (!currentState.accounts[accountId] || !currentState.apps[appId] || !currentState.deployments[deploymentId]) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    const deployment: any = <any>this.deployments[deploymentId];
+    const deployment: any = <any>currentState.deployments[deploymentId];
     deployment.package = appPackage;
     const history: storage.Package[] = deployment.packageHistory;
 
@@ -497,12 +553,15 @@ export class RedisS3Storage implements storage.Storage {
     deployment.packageHistory.push(appPackage);
     appPackage.label = "v" + deployment.packageHistory.length;
 
-    this.saveStateAsync();
-    return Promise.resolve(clone(appPackage));
+    await this.saveStateAsync(currentState);
+
+    return clone(appPackage);
   }
 
-  public clearPackageHistory(accountId: string, appId: string, deploymentId: string): Promise<void> {
-    const deployment: storage.Deployment = this.deployments[deploymentId];
+  public async clearPackageHistory(accountId: string, appId: string, deploymentId: string): Promise<void> {
+    const currentState = await this.loadStateAsync();
+
+    const deployment: storage.Deployment = currentState.deployments[deploymentId];
     if (!deployment) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
@@ -510,37 +569,47 @@ export class RedisS3Storage implements storage.Storage {
     delete deployment.package;
     (<any>deployment).packageHistory = [];
 
-    this.saveStateAsync();
+    await this.saveStateAsync(currentState);
     return null;
   }
 
-  public getPackageHistory(accountId: string, appId: string, deploymentId: string): Promise<storage.Package[]> {
-    const deployment: any = <any>this.deployments[deploymentId];
+  public async getPackageHistory(accountId: string, appId: string, deploymentId: string): Promise<storage.Package[]> {
+    const { deployments } = await this.loadStateAsync();
+    const deployment: any = deployments[deploymentId];
+
     if (!deployment) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    return Promise.resolve(clone(deployment.packageHistory));
+    return clone(deployment.packageHistory);
   }
 
-  public updatePackageHistory(accountId: string, appId: string, deploymentId: string, history: storage.Package[]): Promise<void> {
+  public async updatePackageHistory(
+    accountId: string,
+    appId: string,
+    deploymentId: string,
+    history: storage.Package[],
+  ): Promise<void> {
     if (!history || !history.length) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.Invalid, "Cannot clear package history from an update operation");
     }
 
-    const deployment: any = <any>this.deployments[deploymentId];
+    const currentState = await this.loadStateAsync();
+
+    const deployment: any = currentState.deployments[deploymentId];
     if (!deployment) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
     deployment.package = history[history.length - 1];
     deployment.packageHistory = history;
-    this.saveStateAsync();
+
+    await this.saveStateAsync(currentState);
 
     return null;
   }
 
-  public addBlob(blobId: string, stream: stream.Readable): Promise<string> {
+  public async addBlob(blobId: string, stream: stream.Readable): Promise<string> {
     const upload = new libStorage.Upload({
       client: this.s3Client,
       params: {
@@ -551,7 +620,7 @@ export class RedisS3Storage implements storage.Storage {
       },
     });
 
-    return new Promise<string>((resolve, reject) => {
+    await new Promise<string>((resolve, reject) => {
       upload.on("httpUploadProgress", (progress) => {
         console.log(`Uploaded ${progress.loaded} bytes of ${progress.total || "unknown total size"}`);
       });
@@ -561,20 +630,23 @@ export class RedisS3Storage implements storage.Storage {
         .then(() => {
           resolve(blobId);
         })
-        // @ts-ignore
-        .catch((e) => console.log("ERROR: ", e) || reject(e));
-    }).then(() => {
-      this.blobs[blobId] = `https://${process.env.AWS_BUCKET_NAME}.s3.amazonaws.com/${blobId}`;
-
-      this.saveStateAsync();
-
-      return blobId;
+        .catch(reject);
     });
+
+    const currentState = await this.loadStateAsync();
+    currentState.blobs[blobId] = `https://${process.env.AWS_CLOUDFRONT_DOMAIN}/${blobId}`;
+
+    await this.saveStateAsync(currentState);
+
+    return blobId;
   }
 
-  public getBlobUrl(blobId: string): Promise<string> {
+  public async getBlobUrl(blobId: string): Promise<string> {
+    const { blobs } = await this.loadStateAsync();
+
     return new Promise<string>((resolve, reject) => {
-      const blobPath = this.blobs[blobId];
+      const blobPath = blobs[blobId];
+
       if (blobPath) {
         resolve(blobPath);
       } else {
@@ -583,116 +655,128 @@ export class RedisS3Storage implements storage.Storage {
     });
   }
 
-  public removeBlob(blobId: string): Promise<void> {
+  public async removeBlob(blobId: string): Promise<void> {
     const params = {
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: blobId,
     };
 
-    return new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       this.s3Client
         .send(new DeleteObjectCommand(params))
         .then(() => {
           resolve();
         })
         .catch(reject);
-    }).then(() => {
-      delete this.blobs[blobId];
-      this.saveStateAsync();
-
-      return null;
     });
+
+    const currentState = await this.loadStateAsync();
+    delete currentState.blobs[blobId];
+
+    await this.saveStateAsync(currentState);
+
+    return null;
   }
 
-  public addAccessKey(accountId: string, accessKey: storage.AccessKey): Promise<string> {
-    accessKey = clone(accessKey); // pass by value
+  public async addAccessKey(accountId: string, accessKey: storage.AccessKey): Promise<string> {
+    const currentState = await this.loadStateAsync();
 
-    const account: storage.Account = this.accounts[accountId];
+    const clonedAccessKey = clone(accessKey);
+    const account: storage.Account = currentState.accounts[accountId];
 
     if (!account) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    accessKey.id = this.newId();
+    clonedAccessKey.id = this.newId();
 
-    let accountAccessKeys: string[] = this.accountToAccessKeysMap[accountId];
+    let accountAccessKeys: string[] = currentState.accountToAccessKeysMap[accountId];
 
     if (!accountAccessKeys) {
-      accountAccessKeys = this.accountToAccessKeysMap[accountId] = [];
-    } else if (accountAccessKeys.indexOf(accessKey.id) !== -1) {
-      return Promise.resolve("");
+      accountAccessKeys = currentState.accountToAccessKeysMap[accountId] = [];
+    } else if (accountAccessKeys.indexOf(clonedAccessKey.id) !== -1) {
+      return "";
     }
 
-    accountAccessKeys.push(accessKey.id);
+    accountAccessKeys.push(clonedAccessKey.id);
 
-    this.accessKeyToAccountMap[accessKey.id] = accountId;
-    this.accessKeys[accessKey.id] = accessKey;
-    this.accessKeyNameToAccountIdMap[accessKey.name] = { accountId, expires: accessKey.expires };
+    currentState.accessKeyToAccountMap[clonedAccessKey.id] = accountId;
+    currentState.accessKeys[clonedAccessKey.id] = clonedAccessKey;
+    currentState.accessKeyNameToAccountIdMap[clonedAccessKey.name] = { accountId, expires: clonedAccessKey.expires };
 
-    this.saveStateAsync();
+    await this.saveStateAsync(currentState);
 
-    return Promise.resolve(accessKey.id);
+    return clonedAccessKey.id;
   }
 
-  public getAccessKey(accountId: string, accessKeyId: string): Promise<storage.AccessKey> {
-    const expectedAccountId: string = this.accessKeyToAccountMap[accessKeyId];
+  public async getAccessKey(accountId: string, accessKeyId: string): Promise<storage.AccessKey> {
+    const { accessKeys, accessKeyToAccountMap } = await this.loadStateAsync();
+
+    const expectedAccountId: string = accessKeyToAccountMap[accessKeyId];
 
     if (!expectedAccountId || expectedAccountId !== accountId) {
       return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
     }
 
-    return Promise.resolve(clone(this.accessKeys[accessKeyId]));
+    return clone(accessKeys[accessKeyId]);
   }
 
-  public getAccessKeys(accountId: string): Promise<storage.AccessKey[]> {
-    const accessKeyIds: string[] = this.accountToAccessKeysMap[accountId];
+  public async getAccessKeys(accountId: string): Promise<storage.AccessKey[]> {
+    const { accountToAccessKeysMap, accessKeys } = await this.loadStateAsync();
+
+    const accessKeyIds: string[] = accountToAccessKeysMap[accountId];
 
     if (accessKeyIds) {
-      const accessKeys: storage.AccessKey[] = accessKeyIds.map((id: string): storage.AccessKey => {
-        return this.accessKeys[id];
+      const storedAccessKeys: storage.AccessKey[] = accessKeyIds.map((id: string): storage.AccessKey => {
+        return accessKeys[id];
       });
 
-      return Promise.resolve(clone(accessKeys));
+      return clone(storedAccessKeys);
     }
 
     return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
-  public removeAccessKey(accountId: string, accessKeyId: string): Promise<void> {
-    const expectedAccountId: string = this.accessKeyToAccountMap[accessKeyId];
+  public async removeAccessKey(accountId: string, accessKeyId: string): Promise<void> {
+    const currentState = await this.loadStateAsync();
+    const expectedAccountId: string = currentState.accessKeyToAccountMap[accessKeyId];
 
     if (expectedAccountId && expectedAccountId === accountId) {
-      const accessKey: storage.AccessKey = this.accessKeys[accessKeyId];
+      const accessKey: storage.AccessKey = currentState.accessKeys[accessKeyId];
 
-      delete this.accessKeyNameToAccountIdMap[accessKey.name];
-      delete this.accessKeys[accessKeyId];
-      delete this.accessKeyToAccountMap[accessKeyId];
+      delete currentState.accessKeyNameToAccountIdMap[accessKey.name];
+      delete currentState.accessKeys[accessKeyId];
+      delete currentState.accessKeyToAccountMap[accessKeyId];
 
-      const accessKeyIds: string[] = this.accountToAccessKeysMap[accountId];
+      const accessKeyIds: string[] = currentState.accountToAccessKeysMap[accountId];
       const index: number = accessKeyIds.indexOf(accessKeyId);
 
       if (index >= 0) {
         accessKeyIds.splice(index, /*deleteCount*/ 1);
       }
 
-      this.saveStateAsync();
+      await this.saveStateAsync(currentState);
+
       return null;
     }
 
     return RedisS3Storage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
-  public updateAccessKey(accountId: string, accessKey: storage.AccessKey): Promise<void> {
-    accessKey = clone(accessKey); // pass by value
+  public async updateAccessKey(accountId: string, accessKey: storage.AccessKey): Promise<void> {
+    accessKey = clone(accessKey);
 
     if (accessKey && accessKey.id) {
-      const expectedAccountId: string = this.accessKeyToAccountMap[accessKey.id];
+      const currentState = await this.loadStateAsync();
+
+      const expectedAccountId: string = currentState.accessKeyToAccountMap[accessKey.id];
 
       if (expectedAccountId && expectedAccountId === accountId) {
-        merge(this.accessKeys[accessKey.id], accessKey);
-        this.accessKeyNameToAccountIdMap[accessKey.name].expires = accessKey.expires;
+        merge(currentState.accessKeys[accessKey.id], accessKey);
+        currentState.accessKeyNameToAccountIdMap[accessKey.name].expires = accessKey.expires;
 
-        this.saveStateAsync();
+        await this.saveStateAsync(currentState);
+
         return null;
       }
     }
@@ -739,57 +823,23 @@ export class RedisS3Storage implements storage.Storage {
     return list && list[email] && list[email].permission === storage.Permissions.Collaborator;
   }
 
-  private isAccountIdCollaborator(list: storage.CollaboratorMap, accountId: string): boolean {
-    const keys: string[] = Object.keys(list);
-    for (let i = 0; i < keys.length; i++) {
-      if (list[keys[i]].accountId === accountId) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  private removeAppPointer(accountId: string, appId: string): void {
-    const accountApps: string[] = this.accountToAppsMap[accountId];
+  private removeAppPointer(accountId: string, appId: string, accountToAppsMap: storage.StorageItem["accountToAppsMap"]): void {
+    const accountApps: string[] = accountToAppsMap[accountId];
     const index: number = accountApps.indexOf(appId);
     if (index > -1) {
       accountApps.splice(index, 1);
     }
   }
 
-  private addAppPointer(accountId: string, appId: string): void {
-    const accountApps = this.accountToAppsMap[accountId];
+  private addAppPointer(accountId: string, appId: string, accountToAppsMap: storage.StorageItem["accountToAppsMap"]): void {
+    const accountApps = accountToAppsMap[accountId];
     if (accountApps.indexOf(appId) === -1) {
       accountApps.push(appId);
     }
   }
 
-  private getBlobServer(): Promise<http.Server> {
-    if (!this._blobServerPromise) {
-      const app: express.Express = express();
-
-      app.get("/:blobId", (req: express.Request, res: express.Response, next: (err?: Error) => void): any => {
-        const blobId: string = req.params.blobId;
-        if (this.blobs[blobId]) {
-          res.send(this.blobs[blobId]);
-        } else {
-          res.sendStatus(404);
-        }
-      });
-
-      const appListen = promisify(app.listen.bind(app));
-
-      this._blobServerPromise = appListen(0);
-    }
-
-    return this._blobServerPromise;
-  }
-
   private newId(): string {
-    const id = "id_" + RedisS3Storage.NextIdNumber;
-    RedisS3Storage.NextIdNumber += 1;
-    return id;
+    return uuid.v4();
   }
 
   private static getRejectedPromise(errorCode: storage.ErrorCode, message?: string): Promise<any> {

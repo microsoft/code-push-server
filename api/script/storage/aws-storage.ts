@@ -364,7 +364,7 @@ export class S3Storage implements storage.Storage {
               console.log("Models registered");
 
               // Sync models with the database
-              return q.call(this.sequelize.sync.bind(this.sequelize)); // Await Sequelize sync
+              return this.sequelize.sync({ alter: true }); // Await Sequelize sync
           })
           .then(() => {
               console.log("Sequelize models synced");

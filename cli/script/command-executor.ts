@@ -42,6 +42,7 @@ const emailValidator = require("email-validator");
 const packageJson = require("../../package.json");
 const parseXml = Q.denodeify(require("xml2js").parseString);
 import Promise = Q.Promise;
+import { Organisation } from "./types/rest-definitions";
 const properties = require("properties");
 
 const CLI_HEADERS: Headers = {
@@ -175,10 +176,19 @@ function appAdd(command: cli.IAppAddCommand): Promise<void> {
 }
 
 function appList(command: cli.IAppListCommand): Promise<void> {
+  //console.log("savedOrgs: ", sdk.getOrganisations());
   throwForInvalidOutputFormat(command.format);
   let apps: App[];
   return sdk.getApps().then((retrievedApps: App[]): void => {
     printAppList(command.format, retrievedApps);
+  });
+}
+
+function orgList(command: cli.IOrgListCommand): Promise<void> {
+  throwForInvalidOutputFormat(command.format);
+  let orgs: Organisation[];
+  return sdk.getTenants().then((retrievedOrgs: Organisation[]): void => {
+    printOrgList(command.format, retrievedOrgs);
   });
 }
 
@@ -401,16 +411,19 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
     const savedConnection: string = fs.readFileSync(configFilePath, {
       encoding: "utf8",
     });
-    let connectionInfo: ILegacyLoginConnectionInfo | ILoginConnectionInfo = JSON.parse(savedConnection);
-
-    // If the connection info is in the legacy format, convert it to the modern format
-    if ((<ILegacyLoginConnectionInfo>connectionInfo).accessKeyName) {
-      connectionInfo = <ILoginConnectionInfo>{
-        accessKey: (<ILegacyLoginConnectionInfo>connectionInfo).accessKeyName,
-      };
-    }
+    //console.log("savedConnection: ", savedConnection);
+    let connectionInfo: ILoginConnectionInfo = JSON.parse(savedConnection);
+    //console.log("connectionInfo in deserialize: ", connectionInfo);
+    
+    // // If the connection info is in the legacy format, convert it to the modern format
+    // if ((<ILegacyLoginConnectionInfo>connectionInfo).accessKeyName) {
+    //   connectionInfo = <ILoginConnectionInfo>{
+    //     accessKey: (<ILegacyLoginConnectionInfo>connectionInfo).accessKeyName,
+    //   };
+    // }
 
     const connInfo = <ILoginConnectionInfo>connectionInfo;
+    //console.log("connInfo: ", connInfo);
 
     return connInfo;
   } catch (ex) {
@@ -420,6 +433,7 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
 
 export function execute(command: cli.ICommand) {
   connectionInfo = deserializeConnectionInfo();
+  console.log("connectionInfo: ", connectionInfo);
 
   return Q(<void>null).then(() => {
     switch (command.type) {
@@ -446,6 +460,9 @@ export function execute(command: cli.ICommand) {
         }
 
         sdk = getSdk(connectionInfo.accessKey, CLI_HEADERS, connectionInfo.customServerUrl);
+        sdk.getTenants().then((orgs: Organisation[]) => {
+          console.log("organisations here in command executer: ", orgs);
+        });
         break;
     }
 
@@ -461,6 +478,9 @@ export function execute(command: cli.ICommand) {
 
       case cli.CommandType.accessKeyRemove:
         return accessKeyRemove(<cli.IAccessKeyRemoveCommand>command);
+
+      case cli.CommandType.orgList:
+        return orgList(<cli.IOrgListCommand>command);
 
       case cli.CommandType.appAdd:
         return appAdd(<cli.IAppAddCommand>command);
@@ -660,6 +680,20 @@ function printAppList(format: string, apps: App[]): void {
     printTable(headers, (dataSource: any[]): void => {
       apps.forEach((app: App, index: number): void => {
         const row = [app.name, wordwrap(50)(app.deployments.join(", "))];
+        dataSource.push(row);
+      });
+    });
+  }
+}
+
+function printOrgList(format: string, orgs: Organisation[]): void {
+  if (format === "json") {
+    printJson(orgs);
+  } else if (format === "table") {
+    const headers = ["Organisation Name"];
+    printTable(headers, (dataSource: any[]): void => {
+      orgs.forEach((org: Organisation, index: number): void => {
+        const row = [org.displayName];
         dataSource.push(row);
       });
     });

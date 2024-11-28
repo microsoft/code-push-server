@@ -8,6 +8,7 @@ export enum CommandType {
   accessKeyPatch,
   accessKeyList,
   accessKeyRemove,
+  orgList,
   appAdd,
   appList,
   appRemove,
@@ -59,6 +60,10 @@ export interface IAccessKeyListCommand extends ICommand {
 
 export interface IAccessKeyRemoveCommand extends ICommand {
   accessKey: string;
+}
+
+export interface IOrgListCommand extends ICommand {
+  format: string;
 }
 
 export interface IAppAddCommand extends ICommand {

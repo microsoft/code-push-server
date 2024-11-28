@@ -119,6 +119,23 @@ function addCommonConfiguration(yargs: yargs.Argv): void {
     .fail((msg: string) => showHelp()); // Suppress the default error message.
 }
 
+function orgList(commandName: string, yargs: yargs.Argv): void {
+  isValidCommand = true;
+  yargs
+    .usage(USAGE_PREFIX + " org " + commandName + " [options]")
+    .demand(/*count*/ 0, /*max*/ 0)
+    .example("org " + commandName, "Lists your organisations in tabular format")
+    .example("org " + commandName + " --format json", "Lists your organisations in JSON format")
+    .option("format", {
+      default: "table",
+      demand: false,
+      description: 'Output format to display your organisations with ("json" or "table")',
+      type: "string",
+    });
+
+  addCommonConfiguration(yargs);
+}
+
 function appList(commandName: string, yargs: yargs.Argv): void {
   isValidCommand = true;
   yargs
@@ -290,6 +307,19 @@ yargs
       .command("rm", "Remove an existing access key", (yargs: yargs.Argv) => accessKeyRemove("rm", yargs))
       .command("list", "List the access keys associated with your account", (yargs: yargs.Argv) => accessKeyList("list", yargs))
       .command("ls", "List the access keys associated with your account", (yargs: yargs.Argv) => accessKeyList("ls", yargs))
+      .check((argv: any, aliases: { [aliases: string]: string }): any => isValidCommand); // Report unrecognized, non-hyphenated command category.
+
+    addCommonConfiguration(yargs);
+  })
+  .command("org", "View and manage the organisations associated with your account", (yargs: yargs.Argv) => {
+    isValidCommandCategory = true;
+    yargs
+      .usage(USAGE_PREFIX + " org <command>")
+      .demand(/*count*/ 2, /*max*/ 2) // Require exactly two non-option arguments.
+      .command("remove", "Remove an existing organisation", (yargs: yargs.Argv) => accessKeyRemove("remove", yargs))
+      .command("rm", "Remove an existing organisation", (yargs: yargs.Argv) => accessKeyRemove("rm", yargs))
+      .command("list", "List the organisations associated with your account", (yargs: yargs.Argv) => orgList("list", yargs))
+      .command("ls", "List the organisations associated with your account", (yargs: yargs.Argv) => orgList("ls", yargs))
       .check((argv: any, aliases: { [aliases: string]: string }): any => isValidCommand); // Report unrecognized, non-hyphenated command category.
 
     addCommonConfiguration(yargs);
@@ -893,6 +923,25 @@ export function createCommand(): cli.ICommand {
             break;
         }
         break;
+
+      case "org":
+        switch (arg1) {
+          case "list":
+          case "ls":
+            cmd = { type: cli.CommandType.orgList };
+            (<cli.IOrgListCommand>cmd).format = argv["format"] as any;
+            break;
+
+          case "remove":
+          case "rm":
+            if (arg2) {
+              cmd = { type: cli.CommandType.accessKeyRemove };
+              (<cli.IAccessKeyRemoveCommand>cmd).accessKey = arg2;
+            }
+            break;
+        }
+        break;
+
 
       case "app":
         switch (arg1) {

@@ -27,6 +27,7 @@ import {
   ServerAccessKey,
   Session,
 } from "./types";
+import { Organisation } from "./types/rest-definitions";
 
 const packageJson = require("../../package.json");
 
@@ -67,12 +68,16 @@ class AccountManager {
   public static ERROR_NOT_FOUND = 404;
   public static ERROR_CONFLICT = 409; // Used if the resource already exists
   public static ERROR_UNAUTHORIZED = 401;
+  private organisations: Organisation[] = [];
+  private organisationsFetched: boolean = false;
+
 
   private _accessKey: string;
   private _serverUrl: string;
   private _customHeaders: Headers;
 
   constructor(accessKey: string, customHeaders?: Headers, serverUrl?: string) {
+    console.log("constructor called again");
     if (!accessKey) throw new Error("An access key must be specified.");
 
     this._accessKey = accessKey;
@@ -88,7 +93,8 @@ class AccountManager {
     return Promise<any>((resolve, reject, notify) => {
       const request: superagent.Request<any> = superagent.get(`${this._serverUrl}${urlEncode(["/authenticated"])}`);
       this.attachCredentials(request);
-
+      resolve(true);
+      return;
       request.end((err: any, res: superagent.Response) => {
         const status: number = this.getErrorStatus(err, res);
         if (err && status !== AccountManager.ERROR_UNAUTHORIZED) {
@@ -106,6 +112,16 @@ class AccountManager {
         resolve(authenticated);
       });
     });
+  }
+
+    //Tenants
+  public getTenants(): Promise<Organisation[]> {
+      return this.get(urlEncode(["/tenants"])).then((res: JsonResponse) => {
+        console.log("this org before", this.organisations);
+        this.organisations = res.body.organisations
+        console.log("this org after", this.organisations);
+        return res.body.organisations;
+      });
   }
 
   public addAccessKey(friendlyName: string, ttl?: number): Promise<AccessKey> {
@@ -206,6 +222,8 @@ class AccountManager {
   public getAccountInfo(): Promise<Account> {
     return this.get(urlEncode(["/account"])).then((res: JsonResponse) => res.body.account);
   }
+
+
 
   // Apps
   public getApps(): Promise<App[]> {
@@ -569,10 +587,11 @@ class AccountManager {
       for (const headerName in this._customHeaders) {
         request.set(headerName, this._customHeaders[headerName]);
       }
+      //request.set("userid", "4J9pSqCM-x");
     }
-
+    let bearerToken = "cli-" + this._accessKey;
     request.set("Accept", `application/vnd.code-push.v${AccountManager.API_VERSION}+json`);
-    request.set("Authorization", `Bearer ${this._accessKey}`);
+    request.set("Authorization", `Bearer ${bearerToken}`);
     request.set("X-CodePush-SDK-Version", packageJson.version);
   }
 }

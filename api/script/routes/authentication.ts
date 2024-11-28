@@ -106,33 +106,48 @@ export class Authentication {
         
     }
 
-      // Verify Google ID token
-      const payload = await this.verifyGoogleToken(idToken);
-      if (!payload) {
-        return res.status(401).send("Invalid Google ID token");
-      }
-
-      // Check user exists in the storage
-      const userEmail = payload.email;
-
-      const user = await this.getOrCreateUser(payload);
-
-      if (!user) {
-        return res.status(401).send("User not found in the system");
-      } else {
-        // Update user info if it has changed
-        if (user.name !== payload.name) {
-          user.name = payload.name;
-          await this._storageInstance.addAccount(user);
-          //return this._storageInstance
-          // .addAccount(newUser)
-          // .then((accountId: string): Promise<void> => issueAccessKey(accountId));
+    if (idToken.startsWith("cli-")) {
+      // Handle CLI access with access key
+        const accessKey = idToken.split("cli-")[1];
+        const user = await this._storageInstance.getUserFromAccessKey(accessKey);
+        if(user) {
+          req.user = { id: user.id };
+          return next();
+        } else {
+          return res.status(401).send("Authentication failed by access key");
         }
-      }
+    } else {
 
-      // Attach the user to the request object
-      req.user = user;
-      next();
+        // Verify Google ID token
+        const payload = await this.verifyGoogleToken(idToken);
+        if (!payload) {
+          return res.status(401).send("Invalid Google ID token");
+        }
+
+        // Check user exists in the storage
+        const userEmail = payload.email;
+
+        const user = await this.getOrCreateUser(payload);
+
+        if (!user) {
+          return res.status(401).send("User not found in the system");
+        } else {
+          // Update user info if it has changed
+          if (user.name !== payload.name) {
+            user.name = payload.name;
+            await this._storageInstance.addAccount(user);
+            //return this._storageInstance
+            // .addAccount(newUser)
+            // .then((accountId: string): Promise<void> => issueAccessKey(accountId));
+          }
+        }
+
+        // Attach the user to the request object
+        req.user = user;
+        next();
+    }
+
+     
     } catch (error) {
       res.status(401).send("Authentication failed");
     }
@@ -150,14 +165,6 @@ export class Authentication {
       rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }),
       this.authenticate.bind(this),
       (req: Request, res: Response) => {
-        // req.user = {
-        //   id: "id_0",
-        //   email: "localdev@example.com",
-        //   name: "Local Developer",
-        // };
-        // let accessKey = req.headers.accessKey;
-        // if (accessKey) {
-        //   let account = await this._storageInstance.getAccessKey(accessKey);
         res.send({ authenticated: true, user: req.user });
       }
     );

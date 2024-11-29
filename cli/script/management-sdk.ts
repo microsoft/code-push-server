@@ -10,6 +10,8 @@ import * as recursiveFs from "recursive-fs";
 import * as yazl from "yazl";
 import slash = require("slash");
 
+const ORG_FILE_PATH = path.resolve(__dirname, 'organisations.json');
+
 import Promise = Q.Promise;
 
 import {
@@ -54,6 +56,37 @@ function urlEncode(strings: string[], ...values: string[]): string {
   return result;
 }
 
+function saveOrganizationsSync(orgs: Organisation[], forceSave = false): void {
+  try {
+    // Check if file exists and is non-empty
+    const fileExists = fs.existsSync(ORG_FILE_PATH);
+    const isFileEmpty = fileExists && fs.readFileSync(ORG_FILE_PATH, 'utf-8').trim() === '';
+
+    if (forceSave || !fileExists || isFileEmpty) {
+      fs.writeFileSync(ORG_FILE_PATH, JSON.stringify(orgs, null, 2), 'utf-8');
+      console.log(`Organizations saved to ${ORG_FILE_PATH}`);
+    } else {
+      console.log("Organizations already exist, skipping save.");
+    }
+  } catch (error) {
+    console.error(`Error saving organizations: ${error.message}`);
+  }
+}
+
+// Load organizations from the file (synchronous)
+function loadOrganizationsSync(): Organisation[] {
+  try {
+    if (fs.existsSync(ORG_FILE_PATH)) {
+      const data = fs.readFileSync(ORG_FILE_PATH, 'utf-8');
+      return JSON.parse(data) as Organisation[];
+    }
+    return [];
+  } catch (error) {
+    console.error(`Error loading organizations: ${error.message}`);
+    return [];
+  }
+}
+
 class AccountManager {
   public static AppPermission = {
     OWNER: "Owner",
@@ -75,6 +108,7 @@ class AccountManager {
   private _accessKey: string;
   private _serverUrl: string;
   private _customHeaders: Headers;
+  public passedOrgName: string;
 
   constructor(accessKey: string, customHeaders?: Headers, serverUrl?: string) {
     console.log("constructor called again");
@@ -83,6 +117,7 @@ class AccountManager {
     this._accessKey = accessKey;
     this._customHeaders = customHeaders;
     this._serverUrl = serverUrl || AccountManager.SERVER_URL;
+    this.organisations = loadOrganizationsSync();
   }
 
   public get accessKey(): string {
@@ -119,9 +154,27 @@ class AccountManager {
       return this.get(urlEncode(["/tenants"])).then((res: JsonResponse) => {
         console.log("this org before", this.organisations);
         this.organisations = res.body.organisations
+        saveOrganizationsSync(res.body.organisations, true);
         console.log("this org after", this.organisations);
         return res.body.organisations;
       });
+  }
+
+  public getOrganisations(): Organisation[] {
+    return this.organisations;
+  }
+
+  public getTenantId(tenantName: string): string {
+      if(!this.organisations || this.organisations.length === 0){
+          return "";
+      }
+      let tenantId: string = "";
+      this.organisations.forEach((org: Organisation) => {
+          if(org.displayName === tenantName){
+              tenantId = org.id;
+          }
+      });
+      return tenantId;
   }
 
   public addAccessKey(friendlyName: string, ttl?: number): Promise<AccessKey> {
@@ -238,7 +291,16 @@ class AccountManager {
 
   public addApp(appName: string): Promise<App> {
     //add tenant here
-    const app: App = { name: appName };
+    const app : any = { name: appName };
+    let tenantId = this.getTenantId(this.passedOrgName);
+    if(tenantId && tenantId.length > 0){
+        app.organisation = {}
+        app.organisation.orgId = tenantId;
+    } else if(this.passedOrgName && this.passedOrgName.length > 0){
+        app.organisation = {}
+        app.organisation.orgName = this.passedOrgName;
+    }
+    console.log("app here", app);
     return this.post(urlEncode(["/apps/"]), JSON.stringify(app), /*expectResponseBody=*/ false).then(() => app);
   }
 
@@ -333,6 +395,7 @@ class AccountManager {
       );
 
       this.attachCredentials(request);
+      console.log("request here", request);
 
       const getPackageFilePromise = Q.Promise((resolve, reject) => {
         this.packageFileFromPath(filePath)
@@ -513,7 +576,7 @@ class AccountManager {
   ): Promise<JsonResponse> {
     return Promise<JsonResponse>((resolve, reject, notify) => {
       let request: superagent.Request<any> = (<any>superagent)[method](this._serverUrl + endpoint);
-
+      console.log('attached credentials');
       this.attachCredentials(request);
 
       if (requestBody) {
@@ -587,7 +650,11 @@ class AccountManager {
       for (const headerName in this._customHeaders) {
         request.set(headerName, this._customHeaders[headerName]);
       }
-      //request.set("userid", "4J9pSqCM-x");
+    }
+    if(this.passedOrgName && this.passedOrgName.length > 0){
+        let tenantId = this.getTenantId(this.passedOrgName);
+        console.log("org id here", this.passedOrgName, tenantId);
+        request.set("tenantid", tenantId);
     }
     let bearerToken = "cli-" + this._accessKey;
     request.set("Accept", `application/vnd.code-push.v${AccountManager.API_VERSION}+json`);

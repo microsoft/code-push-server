@@ -163,6 +163,7 @@ function accessKeyRemove(command: cli.IAccessKeyRemoveCommand): Promise<void> {
 }
 
 function appAdd(command: cli.IAppAddCommand): Promise<void> {
+  
   return sdk.addApp(command.appName).then((app: App): Promise<void> => {
     log('Successfully added the "' + command.appName + '" app, along with the following default deployments:');
     const deploymentListCommand: cli.IDeploymentListCommand = {
@@ -435,6 +436,7 @@ export function execute(command: cli.ICommand) {
   connectionInfo = deserializeConnectionInfo();
   console.log("connectionInfo: ", connectionInfo);
 
+
   return Q(<void>null).then(() => {
     switch (command.type) {
       // Must not be logged in
@@ -460,9 +462,22 @@ export function execute(command: cli.ICommand) {
         }
 
         sdk = getSdk(connectionInfo.accessKey, CLI_HEADERS, connectionInfo.customServerUrl);
-        sdk.getTenants().then((orgs: Organisation[]) => {
-          console.log("organisations here in command executer: ", orgs);
-        });
+        console.log("organisations here in command executer: ", sdk.getOrganisations());
+        // sdk.getTenants().then((orgs: Organisation[]) => {
+        //   console.log("organisations here in command executer: ", orgs);
+        // });
+        if((<cli.IAppCommand>command).appName) {
+          const arg : string = (<cli.IAppCommand>command).appName
+          console.log("Yes boyy", arg);
+          const parsedName = cli.parseAppName(arg);
+          console.log("parsedName in command executer: ", parsedName);
+          
+          if(parsedName.ownerName) {
+            (<cli.IAppCommand>command).appName = parsedName.appName;
+            console.log("owner in appAdd: ", parsedName.ownerName);
+            sdk.passedOrgName = parsedName.ownerName;
+          }
+        }
         break;
     }
 
@@ -1195,6 +1210,7 @@ function patch(command: cli.IPatchCommand): Promise<void> {
 }
 
 export const release = (command: cli.IReleaseCommand): Promise<void> => {
+  console.log('reaching here at release');
   if (isBinaryOrZip(command.package)) {
     throw new Error(
       "It is unnecessary to package releases in a .zip or binary file. Please specify the direct path to the update content's directory (e.g. /platforms/ios/www) or file (e.g. main.jsbundle)."
@@ -1229,9 +1245,12 @@ export const release = (command: cli.IReleaseCommand): Promise<void> => {
     rollout: command.rollout,
   };
 
+  console.log('updateMetaData ::', updateMetadata);
+
   return sdk
     .isAuthenticated(true)
     .then((isAuth: boolean): Promise<void> => {
+      console.log('authenticated making release call');
       return sdk.release(command.appName, command.deploymentName, filePath, command.appStoreVersion, updateMetadata, uploadProgress);
     })
     .then((): void => {

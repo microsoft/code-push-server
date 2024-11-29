@@ -708,7 +708,11 @@ export class AzureStorage implements storage.Storage {
   public getBlobUrl(blobId: string): q.Promise<string> {
     return this._setupPromise
       .then(() => {
-        return this._blobService.getContainerClient(AzureStorage.TABLE_NAME).getBlobClient(blobId).url;
+        const blobUrl = this._blobService.getContainerClient(AzureStorage.TABLE_NAME).getBlobClient(blobId).url;
+        if (process.env.EMULATED && process.env["BLOB_SERVER_URL"]) {
+          return AzureStorage.replaceBlobUrl(blobUrl);
+        }
+        return blobUrl;
       })
       .catch(AzureStorage.azureErrorHandler);
   }
@@ -960,6 +964,17 @@ export class AzureStorage implements storage.Storage {
       .downloadToBuffer()
       .then((blobContents: Buffer) => {
         const parsedContents = JSON.parse(blobContents.toString());
+
+        if (process.env.EMULATED && process.env["BLOB_SERVER_URL"]) {
+          if (Array.isArray(parsedContents)) {
+            parsedContents.forEach((deployment, index) => {
+              parsedContents[index].blobUrl = AzureStorage.replaceBlobUrl(deployment.blobUrl);
+            });
+          } else {
+            parsedContents.blobUrl = AzureStorage.replaceBlobUrl(parsedContents.blobUrl);
+          }
+        }
+
         deferred.resolve(parsedContents);
       })
       .catch((error: any) => {
@@ -1421,11 +1436,27 @@ export class AzureStorage implements storage.Storage {
     return flatDeployment;
   }
 
+  private static replaceBlobUrl(blobUrl: string): string {
+    if (process.env.EMULATED && blobUrl.startsWith("http://127.0.0.1:10000") && process.env["BLOB_SERVER_URL"]) {
+      return blobUrl.replace("http://127.0.0.1:10000", process.env["BLOB_SERVER_URL"]);
+    }
+    return blobUrl;
+  }
+
   // Note: This does not copy the object before unflattening it
   private static unflattenDeployment(flatDeployment: any): storage.Deployment {
     delete flatDeployment.packageHistory;
     flatDeployment.package = flatDeployment.package ? JSON.parse(flatDeployment.package) : null;
 
+    if (process.env.EMULATED && process.env["BLOB_SERVER_URL"] && flatDeployment.package) {
+      if (Array.isArray(flatDeployment.package)) {
+        flatDeployment.package.forEach((deployment, index) => {
+          flatDeployment.package[index].blobUrl = AzureStorage.replaceBlobUrl(deployment.blobUrl);
+        });
+      } else {
+        flatDeployment.package.blobUrl = AzureStorage.replaceBlobUrl(flatDeployment.package.blobUrl);
+      }
+    }
     return flatDeployment;
   }
 

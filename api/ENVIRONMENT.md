@@ -16,6 +16,7 @@ To emulate Azure Blob Storage locally. Azurite needs to be installed and running
 #### Azure
 - `AZURE_STORAGE_ACCOUNT`: The name of your hosted Azure storage instance
 - `AZURE_STORAGE_ACCESS_KEY`: The key to your Azure storage instance (if KeyVault credentials are not provided)
+- `BLOB_SERVER_URL`: The URL of your blob server, look like http://localhost:10000 or either
 
 ### Authentication 
 

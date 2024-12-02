@@ -654,7 +654,7 @@ class AccountManager {
     if(this.passedOrgName && this.passedOrgName.length > 0){
         let tenantId = this.getTenantId(this.passedOrgName);
         console.log("org id here", this.passedOrgName, tenantId);
-        request.set("tenantid", tenantId);
+        request.set("tenant", tenantId);
     }
     let bearerToken = "cli-" + this._accessKey;
     request.set("Accept", `application/vnd.code-push.v${AccountManager.API_VERSION}+json`);

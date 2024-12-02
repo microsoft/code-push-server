@@ -86,6 +86,7 @@ export interface IAppAddCommand extends IAppCommand {
 
 export interface IAppListCommand extends ICommand {
   format: string;
+  org? : string;
 }
 
 export interface IAppRemoveCommand extends IAppCommand {

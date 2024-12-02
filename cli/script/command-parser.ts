@@ -142,7 +142,15 @@ function appList(commandName: string, yargs: yargs.Argv): void {
     .usage(USAGE_PREFIX + " app " + commandName + " [options]")
     .demand(/*count*/ 0, /*max*/ 0)
     .example("app " + commandName, "List your apps in tabular format")
+    .example("app <orgName> " + commandName, "List your apps in tabular format")
     .example("app " + commandName + " --format json", "List your apps in JSON format")
+    .example("app <orgName> " + commandName + " --format json", "List org apps in JSON format")
+    .option("org", {
+      default: null,
+      demand: false,
+      description: "Organisation name",
+      type: "string",
+    })
     .option("format", {
       default: "table",
       demand: false,
@@ -349,8 +357,8 @@ yargs
 
         addCommonConfiguration(yargs);
       })
-      .command("list", "Lists the apps associated with your account", (yargs: yargs.Argv) => appList("list", yargs))
-      .command("ls", "Lists the apps associated with your account", (yargs: yargs.Argv) => appList("ls", yargs))
+      .command("list", "Lists the apps associated with your/passed org account", (yargs: yargs.Argv) => appList("list", yargs))
+      .command("ls", "Lists the apps associated with your/passed org account", (yargs: yargs.Argv) => appList("ls", yargs))
       .command("transfer", "Transfer the ownership of an app to another account", (yargs: yargs.Argv) => {
         yargs
           .usage(USAGE_PREFIX + " app transfer <ownerName>/<appName> <email>")
@@ -864,7 +872,7 @@ export function createCommand(): cli.ICommand {
   let cmd: cli.ICommand;
 
   const argv = yargs.parseSync();
-
+  console.log(argv);
   if (!wasHelpShown && argv._ && argv._.length > 0) {
     // Create a command object
     const arg0: any = argv._[0];
@@ -956,7 +964,7 @@ export function createCommand(): cli.ICommand {
           case "list":
           case "ls":
             cmd = { type: cli.CommandType.appList };
-
+            (<cli.IAppListCommand>cmd).org = argv["org"] as string;
             (<cli.IAppListCommand>cmd).format = argv["format"] as any;
             break;
 

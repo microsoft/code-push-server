@@ -463,12 +463,9 @@ export function execute(command: cli.ICommand) {
 
         sdk = getSdk(connectionInfo.accessKey, CLI_HEADERS, connectionInfo.customServerUrl);
         console.log("organisations here in command executer: ", sdk.getOrganisations());
-        // sdk.getTenants().then((orgs: Organisation[]) => {
-        //   console.log("organisations here in command executer: ", orgs);
-        // });
         if((<cli.IAppCommand>command).appName) {
           const arg : string = (<cli.IAppCommand>command).appName
-          console.log("Yes boyy", arg);
+          console.log("app Name here", arg);
           const parsedName = cli.parseAppName(arg);
           console.log("parsedName in command executer: ", parsedName);
           
@@ -477,6 +474,10 @@ export function execute(command: cli.ICommand) {
             console.log("owner in appAdd: ", parsedName.ownerName);
             sdk.passedOrgName = parsedName.ownerName;
           }
+        } else if ((<cli.IAppListCommand>command).org && (<cli.IAppListCommand>command).org.length > 0) {
+          const arg : string = (<cli.IAppListCommand>command).org
+          console.log("input argument Name here", arg);
+          sdk.passedOrgName = arg;
         }
         break;
     }

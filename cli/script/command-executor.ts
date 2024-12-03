@@ -177,7 +177,6 @@ function appAdd(command: cli.IAppAddCommand): Promise<void> {
 }
 
 function appList(command: cli.IAppListCommand): Promise<void> {
-  //console.log("savedOrgs: ", sdk.getOrganisations());
   throwForInvalidOutputFormat(command.format);
   let apps: App[];
   return sdk.getApps().then((retrievedApps: App[]): void => {
@@ -412,20 +411,8 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
     const savedConnection: string = fs.readFileSync(configFilePath, {
       encoding: "utf8",
     });
-    //console.log("savedConnection: ", savedConnection);
     let connectionInfo: ILoginConnectionInfo = JSON.parse(savedConnection);
-    //console.log("connectionInfo in deserialize: ", connectionInfo);
-    
-    // // If the connection info is in the legacy format, convert it to the modern format
-    // if ((<ILegacyLoginConnectionInfo>connectionInfo).accessKeyName) {
-    //   connectionInfo = <ILoginConnectionInfo>{
-    //     accessKey: (<ILegacyLoginConnectionInfo>connectionInfo).accessKeyName,
-    //   };
-    // }
-
     const connInfo = <ILoginConnectionInfo>connectionInfo;
-    //console.log("connInfo: ", connInfo);
-
     return connInfo;
   } catch (ex) {
     return;
@@ -434,7 +421,7 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
 
 export function execute(command: cli.ICommand) {
   connectionInfo = deserializeConnectionInfo();
-  console.log("connectionInfo: ", connectionInfo);
+  //console.log("connectionInfo: ", connectionInfo);
 
 
   return Q(<void>null).then(() => {
@@ -462,21 +449,16 @@ export function execute(command: cli.ICommand) {
         }
 
         sdk = getSdk(connectionInfo.accessKey, CLI_HEADERS, connectionInfo.customServerUrl);
-        console.log("organisations here in command executer: ", sdk.getOrganisations());
         if((<cli.IAppCommand>command).appName) {
           const arg : string = (<cli.IAppCommand>command).appName
-          console.log("app Name here", arg);
           const parsedName = cli.parseAppName(arg);
-          console.log("parsedName in command executer: ", parsedName);
           
           if(parsedName.ownerName) {
             (<cli.IAppCommand>command).appName = parsedName.appName;
-            console.log("owner in appAdd: ", parsedName.ownerName);
             sdk.passedOrgName = parsedName.ownerName;
           }
         } else if ((<cli.IAppListCommand>command).org && (<cli.IAppListCommand>command).org.length > 0) {
           const arg : string = (<cli.IAppListCommand>command).org
-          console.log("input argument Name here", arg);
           sdk.passedOrgName = arg;
         }
         break;

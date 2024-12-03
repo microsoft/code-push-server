@@ -64,9 +64,9 @@ function saveOrganizationsSync(orgs: Organisation[], forceSave = false): void {
 
     if (forceSave || !fileExists || isFileEmpty) {
       fs.writeFileSync(ORG_FILE_PATH, JSON.stringify(orgs, null, 2), 'utf-8');
-      console.log(`Organizations saved to ${ORG_FILE_PATH}`);
+      //console.log(`Organizations saved to ${ORG_FILE_PATH}`);
     } else {
-      console.log("Organizations already exist, skipping save.");
+      //console.log("Organizations already exist, skipping save.");
     }
   } catch (error) {
     console.error(`Error saving organizations: ${error.message}`);
@@ -111,7 +111,6 @@ class AccountManager {
   public passedOrgName: string;
 
   constructor(accessKey: string, customHeaders?: Headers, serverUrl?: string) {
-    console.log("constructor called again");
     if (!accessKey) throw new Error("An access key must be specified.");
 
     this._accessKey = accessKey;
@@ -152,10 +151,8 @@ class AccountManager {
     //Tenants
   public getTenants(): Promise<Organisation[]> {
       return this.get(urlEncode(["/tenants"])).then((res: JsonResponse) => {
-        console.log("this org before", this.organisations);
         this.organisations = res.body.organisations
         saveOrganizationsSync(res.body.organisations, true);
-        console.log("this org after", this.organisations);
         return res.body.organisations;
       });
   }
@@ -300,7 +297,6 @@ class AccountManager {
         app.organisation = {}
         app.organisation.orgName = this.passedOrgName;
     }
-    console.log("app here", app);
     return this.post(urlEncode(["/apps/"]), JSON.stringify(app), /*expectResponseBody=*/ false).then(() => app);
   }
 
@@ -395,7 +391,6 @@ class AccountManager {
       );
 
       this.attachCredentials(request);
-      console.log("request here", request);
 
       const getPackageFilePromise = Q.Promise((resolve, reject) => {
         this.packageFileFromPath(filePath)
@@ -576,7 +571,6 @@ class AccountManager {
   ): Promise<JsonResponse> {
     return Promise<JsonResponse>((resolve, reject, notify) => {
       let request: superagent.Request<any> = (<any>superagent)[method](this._serverUrl + endpoint);
-      console.log('attached credentials');
       this.attachCredentials(request);
 
       if (requestBody) {
@@ -653,7 +647,6 @@ class AccountManager {
     }
     if(this.passedOrgName && this.passedOrgName.length > 0){
         let tenantId = this.getTenantId(this.passedOrgName);
-        console.log("org id here", this.passedOrgName, tenantId);
         request.set("tenant", tenantId);
     }
     let bearerToken = "cli-" + this._accessKey;

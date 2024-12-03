@@ -872,7 +872,7 @@ export function createCommand(): cli.ICommand {
   let cmd: cli.ICommand;
 
   const argv = yargs.parseSync();
-  console.log(argv);
+  //console.log(argv);
   if (!wasHelpShown && argv._ && argv._.length > 0) {
     // Create a command object
     const arg0: any = argv._[0];
@@ -1185,9 +1185,9 @@ export function createCommand(): cli.ICommand {
         break;
 
       case "release":
-        console.log('arg0, arg1, arg2, arg3', arg0, arg1, arg2, arg3);
+        //console.log('arg0, arg1, arg2, arg3', arg0, arg1, arg2, arg3);
         if (arg1 && arg2 && arg3) {
-          console.log('arg0, arg1, arg2, arg3', arg0, arg1, arg2, arg3);
+          //console.log('arg0, arg1, arg2, arg3', arg0, arg1, arg2, arg3);
           cmd = { type: cli.CommandType.release };
 
           const releaseCommand = <cli.IReleaseCommand>cmd;

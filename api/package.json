@@ -39,6 +39,7 @@
     "express-domain-middleware": "0.1.0",
     "express-rate-limit": "^7.4.0",
     "google-auth-library": "9.9.0",
+    "lusca": "^1.7.0",
     "multer": "^1.4.5-lts.1",
     "mysql2": "3.11.3",
     "nanoid": "5.0.7",

@@ -66,7 +66,7 @@ export class JsonStorage implements storage.Storage {
           fs.readFile(
             pathName,
             function (err: any, data: string) {
-              if (err) throw err;
+              if (err) throw storage.storageError(storage.ErrorCode.NotFound);
 
               const obj = JSON.parse(data);
               JsonStorage.NextIdNumber = obj.NextIdNumber || 0;
@@ -116,7 +116,7 @@ export class JsonStorage implements storage.Storage {
 
     const str = JSON.stringify(obj);
     fs.writeFile("JsonStorage.json", str, function (err) {
-      if (err) throw err;
+      if (err) throw storage.storageError(storage.ErrorCode.NotFound);
     });
   }
 

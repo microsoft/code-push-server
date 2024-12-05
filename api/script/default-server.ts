@@ -11,6 +11,7 @@ import { JsonStorage } from "./storage/json-storage";
 import { RedisManager } from "./redis-manager";
 import { Storage } from "./storage/storage";
 import { Response } from "express";
+import rateLimit from "express-rate-limit";
 // const { DefaultAzureCredential } = require("@azure/identity");
 // const { SecretClient } = require("@azure/keyvault-secrets");
 const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || "<your-s3-bucket-name>";
@@ -23,6 +24,7 @@ const secretsManager = new SecretsManager(); // Secrets Manager instance for fet
 import * as bodyParser from "body-parser";
 const domain = require("express-domain-middleware");
 import * as express from "express";
+const csrf = require('lusca').csrf;
 import * as q from "q";
 import { S3Storage } from "./storage/aws-storage";
 
@@ -106,6 +108,8 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       // Before other middleware which may use request data that this middleware modifies.
       app.use(api.inputSanitizer());
 
+      app.use(csrf());
+
       // body-parser must be before the Application Insights router.
       app.use(bodyParser.urlencoded({ extended: true }));
       const jsonOptions: any = { limit: "10kb", strict: true };
@@ -135,6 +139,13 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use("/auth/images/", express.static(__dirname + "/views/images"));
       app.use(api.headers({ origin: process.env.CORS_ORIGIN || "http://localhost:4000" }));
       app.use(api.health({ storage: storage, redisManager: redisManager }));
+
+      const limiter = rateLimit({
+        windowMs: 15 * 60 * 1000, // 15 minutes
+        max: 100, // limit each IP to 100 requests per windowMs
+      });
+
+      app.use(limiter);
 
       if (process.env.DISABLE_ACQUISITION !== "true") {
         app.use(api.acquisition({ storage: storage, redisManager: redisManager }));

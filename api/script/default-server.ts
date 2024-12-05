@@ -108,7 +108,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       // Before other middleware which may use request data that this middleware modifies.
       app.use(api.inputSanitizer());
 
-      app.use(csrf());
+      //app.use(csrf());
 
       // body-parser must be before the Application Insights router.
       app.use(bodyParser.urlencoded({ extended: true }));
@@ -143,6 +143,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       const limiter = rateLimit({
         windowMs: 15 * 60 * 1000, // 15 minutes
         max: 100, // limit each IP to 100 requests per windowMs
+        validate: { xForwardedForHeader: false }
       });
 
       app.use(limiter);

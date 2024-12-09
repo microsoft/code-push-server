@@ -1,7 +1,8 @@
 import * as q from "q";
 import * as storage from "./storage";
-import { S3} from "aws-sdk";
+import { S3, CloudFront} from "aws-sdk";
 import {HeadBucketRequest, CreateBucketRequest} from "aws-sdk/clients/s3"
+import { getSignedUrl } from "aws-cloudfront-sign";
 import * as stream from "stream";
 import { Sequelize, DataTypes } from "sequelize";
 //import * from nanoid;
@@ -1228,15 +1229,32 @@ export class S3Storage implements storage.Storage {
       });
     }
 
+    private getSignedUrlFromCF(blobId: string): string {
+      const cloudFrontUrl = `https://${process.env.CLOUDFRONT_DOMAIN}/${blobId}`;
+      // Generate a signed URL
+      const signedUrl = getSignedUrl(cloudFrontUrl, {
+        keypairId: process.env.CLOUDFRONT_KEY_PAIR_ID, // Replace with your CloudFront Key Pair ID
+        privateKeyString: process.env.CLOUDFRONT_PRIVATE_KEY, // Replace with the private key content or path
+        expireTime: Date.now() + 60 * 60 * 24000, // 24-hour expiration
+      });
+      return signedUrl;
+    }
+
     public getBlobUrl(blobId: string): q.Promise<string> {
         return this.setupPromise
           .then(() => {
-            // Get the signed URL from S3
-            return this.s3.getSignedUrlPromise('getObject', {
-              Bucket: this.bucketName,
-              Key: blobId,
-              Expires: 60 * 60, // URL valid for 1 hour
-            });
+
+            if(process.env.NODE_ENV === "development") {
+              // Get the signed URL from S3
+              return this.s3.getSignedUrlPromise('getObject', {
+                Bucket: this.bucketName,
+                Key: blobId,
+                Expires: 60 * 60 * 24000, // URL valid for 1 hour
+              });
+            } else {
+              return this.getSignedUrlFromCF(blobId);
+            }
+            
           })
           .catch((error) => {
             console.error("Error getting blob URL:", error);

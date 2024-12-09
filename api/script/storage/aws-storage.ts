@@ -9,6 +9,7 @@ import { Sequelize, DataTypes } from "sequelize";
 import * as shortid from "shortid";
 import * as utils from "../utils/common";
 import * as mysql from "mysql2/promise";
+import * as fs from "fs";
 
 //Creating Access Key
 export function createAccessKey(sequelize: Sequelize) {
@@ -1232,12 +1233,14 @@ export class S3Storage implements storage.Storage {
     private getSignedUrlFromCF(blobId: string): string {
       const cloudFrontUrl = `https://${process.env.CLOUDFRONT_DOMAIN}/${blobId}`;
       // Generate a signed URL
-      const signedUrl = getSignedUrl(cloudFrontUrl, {
-        keypairId: process.env.CLOUDFRONT_KEY_PAIR_ID, // Replace with your CloudFront Key Pair ID
-        privateKeyString: process.env.CLOUDFRONT_PRIVATE_KEY, // Replace with the private key content or path
-        expireTime: Date.now() + 60 * 60 * 24000, // 24-hour expiration
-      });
-      return signedUrl;
+      // const privateKey = fs.readFileSync(process.env.CLOUDFRONT_PRIVATE_KEY_PATH, 'utf8')
+      // const signedUrl = getSignedUrl(cloudFrontUrl, {
+      //   keypairId: process.env.CLOUDFRONT_KEY_PAIR_ID, // Replace with your CloudFront Key Pair ID
+      //   privateKeyString: privateKey, // Replace with the private key content or path
+      //   expireTime: Date.now() + 60 * 60 * 12000, // 24-hour expiration
+      // });
+      // console.log('signedUrl here ::', signedUrl);
+      return cloudFrontUrl;
     }
 
     public getBlobUrl(blobId: string): q.Promise<string> {

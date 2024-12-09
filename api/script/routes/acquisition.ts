@@ -157,7 +157,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         })
         .then((cachedResponse: redis.CacheableResponse) => {
           fromCache = !!cachedResponse;
-          return createResponseUsingStorage(req, res, storage);
+          return cachedResponse || createResponseUsingStorage(req, res, storage);
         })
         .then((response: redis.CacheableResponse) => {
           if (!response) {

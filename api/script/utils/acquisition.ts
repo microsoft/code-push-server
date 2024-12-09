@@ -13,7 +13,6 @@ interface UpdatePackage {
 
 export function getUpdatePackageInfo(packageHistory: Package[], request: UpdateCheckRequest): UpdateCheckCacheResponse {
   const updatePackage: UpdatePackage = getUpdatePackage(packageHistory, request, /*ignoreRolloutPackages*/ false);
-  updatePackage.response.downloadURL = "https://d2s8npvy8m502c.cloudfront.net/sr3Ry1Gp6O5AGaxSe9h8ebOU4BTNNyC653RX-l";
   let cacheResponse: UpdateCheckCacheResponse;
 
   if (isUnfinishedRollout(updatePackage.rollout)) {

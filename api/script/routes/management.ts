@@ -610,13 +610,39 @@ export function getManagementRouter(config: ManagementConfig): Router {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return storage.getDeployments(accountId, appId);
       })
-      .then((deployments: storageTypes.Deployment[]) => {
+      .then(async (deployments: storageTypes.Deployment[]) => {
         deployments.sort((first: restTypes.Deployment, second: restTypes.Deployment) => {
-          return first.name.localeCompare(second.name);
+            return first.name.localeCompare(second.name);
         });
 
+        if (redisManager.isEnabled) {
+            for (const deployment of deployments) {
+                const metrics = await redisManager.getMetricsWithDeploymentKey(deployment.key);
+                const deploymentMetrics = converterUtils.toRestDeploymentMetrics(metrics);
+                let totalActiveCount : number = 0;
+                Object.keys(deploymentMetrics).forEach((label) => {
+                    const metrics = deploymentMetrics[label];
+                    if (metrics.active < 0) metrics.active = 0;
+                    totalActiveCount += metrics.active;
+                });
+
+                if (deployment.packageHistory) {
+                  deployment.packageHistory.forEach((pkg) => {
+                      if (deploymentMetrics[pkg.label]) {
+                          const pkgMetrics = deploymentMetrics[pkg.label];
+                          pkg.active = pkgMetrics.active || 0;
+                          pkg.downloaded = pkgMetrics.downloaded || 0;
+                          pkg.failed = pkgMetrics.failed || 0;
+                          pkg.installed = pkgMetrics.installed || 0;
+                          pkg.totalActive = totalActiveCount;
+                      }
+                  });
+                }
+            }
+        }
+
         res.send({ deployments: deployments });
-      })
+    })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
   });
@@ -675,9 +701,33 @@ export function getManagementRouter(config: ManagementConfig): Router {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return nameResolver.resolveDeployment(accountId, appId, deploymentName);
       })
-      .then((deployment: storageTypes.Deployment) => {
-        const restDeployment: restTypes.Deployment = converterUtils.toRestDeployment(deployment);
-        res.send({ deployment: restDeployment });
+      .then(async (deployment: storageTypes.Deployment) => {
+          const metrics = await redisManager.getMetricsWithDeploymentKey(deployment.key);
+          const deploymentMetrics = converterUtils.toRestDeploymentMetrics(metrics);
+
+          let totalActiveCount : number = 0;
+          Object.keys(deploymentMetrics).forEach((label) => {
+            const metrics = deploymentMetrics[label];
+            if (metrics.active < 0) {
+              metrics.active = 0;
+            }
+            totalActiveCount += metrics.active;
+          });
+
+          if (deployment.packageHistory) {
+            deployment.packageHistory.forEach((pkg) => {
+                if (deploymentMetrics[pkg.label]) {
+                  const pkgMetrics = deploymentMetrics[pkg.label];
+                  pkg.active = pkgMetrics.active || 0;
+                  pkg.downloaded = pkgMetrics.downloaded || 0;
+                  pkg.failed = pkgMetrics.failed || 0;
+                  pkg.installed = pkgMetrics.installed || 0;
+                  pkg.totalActive = totalActiveCount;
+                }
+            });
+          }
+          const restDeployment: restTypes.Deployment = converterUtils.toRestDeployment(deployment);
+          res.send({ deployment: restDeployment });
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();

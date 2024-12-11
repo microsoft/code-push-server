@@ -565,11 +565,21 @@ export class S3Storage implements storage.Storage {
     public getApps(accountId: string): q.Promise<storage.App[]> {
       return this.setupPromise
         .then(() => {
-          return this.sequelize.models[MODELS.APPS].findAll({
-            where: { accountId },
-            include: [{ model: this.sequelize.models[MODELS.TENANT], as: 'tenant' }], // Include tenant details if available
+        // Fetch all tenants where the account is a collaborator
+        return this.sequelize.models[exports.MODELS.COLLABORATOR].findAll({
+            where: { accountId: accountId },
+        });
+      }).then((collaborators) => {
+          const appIds = collaborators.map((collaborator) => {
+              const collaboratorModel = collaborator.dataValues;
+              return collaboratorModel.appId;
           });
-        })
+          return this.sequelize.models[exports.MODELS.APPS].findAll({
+              where: {
+                  id: appIds, // Match app IDs
+              }
+          });
+      })
         .then(async (flatAppsModel) => {
           const flatApps = flatAppsModel.map((val) => val.dataValues);
           const apps = [];
@@ -582,18 +592,33 @@ export class S3Storage implements storage.Storage {
         .catch(S3Storage.storageErrorHandler);
     }
     
-
     public getTenants(accountId: string): q.Promise<storage.Organization[]> {
+      //first get all tenants
+      //get apps for each tenant
+      //check if user is owner or collaborator of one of that app
+      //if yes then serve that tenant
       return this.setupPromise
         .then(() => {
           // Fetch all tenants where the account is a collaborator
+          return this.sequelize.models[MODELS.COLLABORATOR].findAll({
+            where: { accountId: accountId },
+          });
+        }).then((collaborators) => {
+          const appIds = collaborators.map((collaborator) => {
+            const collaboratorModel = collaborator.dataValues;
+            return collaboratorModel.appId
+          });
+          return this.sequelize.models[MODELS.APPS].findAll({
+            where: {
+              id: appIds, // Match app IDs
+            }
+          });
+        }).then((apps) => {
+          const tenantIds = apps.map((app) => app.dataValues.tenantId);
           return this.sequelize.models[MODELS.TENANT].findAll({
-            include: [
-              {
-                model: this.sequelize.models[MODELS.APPS],
-                where: { accountId },
-              },
-            ],
+            where: {
+              id: tenantIds, // Match tenant IDs
+            }
           });
         })
         .then((tenantsModel) => {

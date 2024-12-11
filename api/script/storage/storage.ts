@@ -115,6 +115,11 @@ export interface Package {
   rollout?: number;
   size: number;
   uploadTime: number;
+  active?: number;
+  downloaded?: number;
+  failed?: number;
+  installed?: number;
+  totalActive?: number;
 }
 
 export interface AccessKey {

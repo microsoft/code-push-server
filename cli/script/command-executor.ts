@@ -452,7 +452,7 @@ export function execute(command: cli.ICommand) {
         if((<cli.IAppCommand>command).appName) {
           const arg : string = (<cli.IAppCommand>command).appName
           const parsedName = cli.parseAppName(arg);
-          
+          // console.log("parsedName: ", parsedName);
           if(parsedName.ownerName) {
             (<cli.IAppCommand>command).appName = parsedName.appName;
             sdk.passedOrgName = parsedName.ownerName;

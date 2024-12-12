@@ -78,6 +78,7 @@ function loadOrganizationsSync(): Organisation[] {
   try {
     if (fs.existsSync(ORG_FILE_PATH)) {
       const data = fs.readFileSync(ORG_FILE_PATH, 'utf-8');
+      // console.log("data ::", data);
       return JSON.parse(data) as Organisation[];
     }
     return [];
@@ -127,8 +128,6 @@ class AccountManager {
     return Promise<any>((resolve, reject, notify) => {
       const request: superagent.Request<any> = superagent.get(`${this._serverUrl}${urlEncode(["/authenticated"])}`);
       this.attachCredentials(request);
-      resolve(true);
-      return;
       request.end((err: any, res: superagent.Response) => {
         const status: number = this.getErrorStatus(err, res);
         if (err && status !== AccountManager.ERROR_UNAUTHORIZED) {
@@ -645,6 +644,8 @@ class AccountManager {
         request.set(headerName, this._customHeaders[headerName]);
       }
     }
+    // console.log("this.organisations ::", this.organisations);
+    // console.log("this.passedOrgName ::", this.passedOrgName);
     if(this.passedOrgName && this.passedOrgName.length > 0){
         let tenantId = this.getTenantId(this.passedOrgName);
         request.set("tenant", tenantId);

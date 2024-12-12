@@ -380,6 +380,12 @@ export class JsonStorage implements storage.Storage {
     });
   }
 
+  public getUserFromAccessToken(accessToken: string): q.Promise<storage.Account> {
+    return this.getAccountIdFromAccessKey(accessToken).then((accountId: string) => {
+      return this.getAccount(accountId);
+    });
+  }
+
   public updateCollaborators(accountId: string, appId: string, email: string, role: string): Promise<void> {
     //MARK: TODO TEST
     return this.getApp(accountId, appId).then((app: storage.App) => {

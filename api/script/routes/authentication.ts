@@ -108,8 +108,8 @@ export class Authentication {
 
     if (idToken.startsWith("cli-")) {
       // Handle CLI access with access key
-        const accessKey = idToken.split("cli-")[1];
-        const user = await this._storageInstance.getUserFromAccessKey(accessKey);
+        const accessToken = idToken.split("cli-")[1];
+        const user = await this._storageInstance.getUserFromAccessToken(accessToken);
         if(user) {
           req.user = { id: user.id };
           return next();

@@ -4,7 +4,8 @@
 import * as assert from "assert";
 import * as express from "express";
 import * as q from "q";
-import * as redis from "redis";
+// import * as redis from "redis";
+import { Cluster, Redis } from "ioredis"
 
 import Promise = q.Promise;
 
@@ -55,88 +56,93 @@ export module Utilities {
     return "deploymentKeyClients:" + deploymentKey;
   }
 }
-
 class PromisifiedRedisClient {
-  public del: (...keys: string[]) => Promise<number>;
-  public execBatch: (redisBatchClient: any) => Promise<any[]>;
-  public exists: (...keys: string[]) => Promise<number>;
-  public expire: (key: string, seconds: number) => Promise<number>;
-  public hdel: (key: string, field: string) => Promise<number>;
-  public hget: (key: string, field: string) => Promise<string>;
-  public hgetall: (key: string) => Promise<any>;
-  public hincrby: (key: string, field: string, value: number) => Promise<number>;
-  public hset: (key: string, field: string, value: string) => Promise<number>;
-  public ping: (payload?: any) => Promise<any>;
-  public quit: () => Promise<void>;
-  public select: (databaseNumber: number) => Promise<void>;
-  public set: (key: string, value: string) => Promise<void>;
+  private client: Redis | Cluster;
 
-  constructor(redisClient: redis.RedisClient) {
-    // List of Redis methods to promisify
-    const methodsToPromisify = [
-      "del",
-      "exists",
-      "expire",
-      "hdel",
-      "hget",
-      "hgetall",
-      "hincrby",
-      "hset",
-      "ping",
-      "quit",
-      "select",
-      "set",
-    ];
+  constructor(client: Redis | Cluster) {
+    this.client = client;
+  }
 
-    // Wrap each method using q.nbind
-    methodsToPromisify.forEach((methodName) => {
-      const originalFunction = redisClient[methodName];
-      if (typeof originalFunction === "function") {
-        this[methodName] = q.nbind(originalFunction, redisClient);
-      } else {
-        throw new Error(`Redis method ${methodName} does not exist or is not a function.`);
-      }
-    });
+  public set(key: string, value: string, expiry?: number): Promise<void> {
+    const args = expiry ? [key, value, "EX", expiry] : [key, value];
+    return q.ninvoke(this.client, "set", ...args);
+  }
 
-    this.ping = (payload?: any) => {
-      if (payload) {
-        return q.ninvoke(redisClient, "ping", payload);
-      } else {
-        return q.ninvoke(redisClient, "ping");
-      }
-    };
+  public get(key: string): Promise<string | null> {
+    return q.ninvoke(this.client, "get", key);
+  }
 
-    // Custom handling for batch operations (e.g., execBatch)
-    this.execBatch = (redisBatchClient: any) => {
-      return q.ninvoke<any[]>(redisBatchClient, "exec");
-    };
+  public exists(...keys: string[]): Promise<number> {
+    return q.ninvoke(this.client, "exists", ...keys);
+  }
+
+  public hget(key: string, field: string): Promise<string | null> {
+    return q.ninvoke(this.client, "hget", key, field);
+  }
+
+  public hdel(key: string, field: string): Promise<string | null> {
+    return q.ninvoke(this.client, "hdel", key, field);
+  }
+
+  public hset(key: string, field: string, value: string): Promise<number> {
+    return q.ninvoke(this.client, "hset", key, field, value);
+  }
+
+  public del(key: string): Promise<number> {
+    return q.ninvoke(this.client, "del", key);
+  }
+
+  public ping(): Promise<string> {
+    return q.ninvoke(this.client, "ping");
+  }
+
+  public hgetall(key: string): Promise<any> {
+    return q.ninvoke(this.client, "hgetall", key);
+  }
+
+  // public execBatch(redisBatchClient: BatchC): Promise<any[]> {
+  //   new Redis().pipeline();
+  //   return q.ninvoke<any[]>(redisBatchClient, "exec");
+  // }
+
+  public expire(key: string, seconds: number): Promise<number> {
+    return q.ninvoke(this.client, "expire", key, seconds);
+  }
+
+  public hincrby(key: string, field: string, incrementBy: number): Promise<number> {
+    return q.ninvoke(this.client, "hincrby", key, field, incrementBy);
+  }
+
+  public quit(): Promise<void> {
+    return q.ninvoke(this.client, "quit");
   }
 }
 
-
 export class RedisManager {
   private static DEFAULT_EXPIRY: number = 3600; // one hour, specified in seconds
-  private static METRICS_DB: number = 1;
+  private _opsClient: Cluster | Redis = null;
+  private _promisifiedOpsClient: PromisifiedRedisClient | null = null;
 
-  private _opsClient: redis.RedisClient;
-  private _promisifiedOpsClient: PromisifiedRedisClient;
-  private _metricsClient: redis.RedisClient;
-  private _promisifiedMetricsClient: PromisifiedRedisClient;
-  private _setupMetricsClientPromise: Promise<void>;
+  private _metricsClient: Cluster | Redis = null;
+  private _promisifiedMetricsClient: PromisifiedRedisClient | null = null;
+
+  private _setupMetricsClientPromise: Promise<void> | null = null;
 
   constructor() {
     if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
+      console.log("port redis:", process.env.REDIS_PORT);
       const redisConfig = {
         host: process.env.REDIS_HOST,
-        port: process.env.REDIS_PORT,
+        port: parseInt(process.env.REDIS_PORT),
         // auth_pass: process.env.REDIS_KEY,
         // tls: {
         //   // Note: Node defaults CA's to those trusted by Mozilla
         //   rejectUnauthorized: true,
         // },
       };
-      this._opsClient = redis.createClient(redisConfig);
-      this._metricsClient = redis.createClient(redisConfig);
+      console.log("Redis config:", redisConfig);
+      this._opsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster([redisConfig]) : new Redis(redisConfig);
+      this._metricsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster([redisConfig]) : new Redis(redisConfig);
       this._opsClient.on("error", (err: Error) => {
         console.error("Redis ops client error:", err);
       });
@@ -148,8 +154,9 @@ export class RedisManager {
       this._promisifiedOpsClient = new PromisifiedRedisClient(this._opsClient);
       this._promisifiedMetricsClient = new PromisifiedRedisClient(this._metricsClient);
       this._setupMetricsClientPromise = this._promisifiedMetricsClient
-        .select(RedisManager.METRICS_DB)
-        .then(() => this._promisifiedMetricsClient.set("health", "healthy"));
+        .set("health", "healthy")
+        .then(() => {})
+        .catch((err) => console.error("Failed to set initial health status:", err));
     } else {
       console.warn("No REDIS_HOST or REDIS_PORT environment variable configured.");
     }
@@ -256,7 +263,10 @@ export class RedisManager {
     return this._setupMetricsClientPromise
       .then(() =>
         this._promisifiedMetricsClient.del(
-          Utilities.getDeploymentKeyLabelsHash(deploymentKey),
+          Utilities.getDeploymentKeyLabelsHash(deploymentKey)
+        )
+      ).then(() => 
+        this._promisifiedMetricsClient.del(
           Utilities.getDeploymentKeyClientsHash(deploymentKey)
         )
       )
@@ -293,7 +303,7 @@ export class RedisManager {
 
     return this._setupMetricsClientPromise
       .then(() => {
-        const batchClient: any = (<any>this._metricsClient).batch();
+        const batchClient: any = (<any>this._metricsClient).pipeline();
         const currentDeploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(currentDeploymentKey);
         const currentLabelActiveField: string = Utilities.getLabelActiveCountField(currentLabel);
         const currentLabelDeploymentSucceededField: string = Utilities.getLabelStatusField(currentLabel, DEPLOYMENT_SUCCEEDED);
@@ -306,7 +316,7 @@ export class RedisManager {
           batchClient.hincrby(previousDeploymentKeyLabelsHash, previousLabelActiveField, /* incrementBy */ -1);
         }
 
-        return this._promisifiedMetricsClient.execBatch(batchClient);
+        return batchClient.exec(batchClient);
       })
       .then(() => {});
   }
@@ -354,7 +364,7 @@ export class RedisManager {
 
     return this._setupMetricsClientPromise
       .then(() => {
-        const batchClient: any = (<any>this._metricsClient).batch();
+        const batchClient: any = (<any>this._metricsClient).pipeline();
         const deploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(deploymentKey);
         const deploymentKeyClientsHash: string = Utilities.getDeploymentKeyClientsHash(deploymentKey);
         const toLabelActiveField: string = Utilities.getLabelActiveCountField(toLabel);
@@ -366,8 +376,9 @@ export class RedisManager {
           batchClient.hincrby(deploymentKeyLabelsHash, fromLabelActiveField, /* incrementBy */ -1);
         }
 
-        return this._promisifiedMetricsClient.execBatch(batchClient);
+        return batchClient.exec(batchClient);
       })
       .then(() => {});
   }
 }
+

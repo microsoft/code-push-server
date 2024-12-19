@@ -290,7 +290,7 @@ function deleteFolder(folderPath: string): Promise<void> {
 }
 
 function deploymentAdd(command: cli.IDeploymentAddCommand): Promise<void> {
-  return sdk.addDeployment(command.appName, command.deploymentName).then((deployment: Deployment): void => {
+  return sdk.addDeployment(command.appName, command.deploymentName, command.key).then((deployment: Deployment): void => {
     log(
       'Successfully added the "' +
         command.deploymentName +

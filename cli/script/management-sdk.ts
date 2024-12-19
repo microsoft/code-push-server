@@ -253,8 +253,8 @@ class AccountManager {
   }
 
   // Deployments
-  public addDeployment(appName: string, deploymentName: string): Promise<Deployment> {
-    const deployment = <Deployment>{ name: deploymentName };
+  public addDeployment(appName: string, deploymentName: string, deploymentKey?: string): Promise<Deployment> {
+    const deployment = <Deployment>{ name: deploymentName, key: deploymentKey };
     return this.post(urlEncode([`/apps/${appName}/deployments/`]), JSON.stringify(deployment), /*expectResponseBody=*/ true).then(
       (res: JsonResponse) => res.body.deployment
     );

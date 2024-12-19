@@ -1046,6 +1046,10 @@ export function createCommand(): cli.ICommand {
 
               deploymentAddCommand.appName = arg2;
               deploymentAddCommand.deploymentName = arg3;
+              if(argv["key"]){
+                deploymentAddCommand.key = argv["key"] as any;
+              }
+
             }
             break;
 

@@ -107,6 +107,7 @@ export interface IDebugCommand extends ICommand {
 export interface IDeploymentAddCommand extends ICommand {
   appName: string;
   deploymentName: string;
+  key?: string;
   default: boolean;
 }
 

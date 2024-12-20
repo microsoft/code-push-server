@@ -21,7 +21,6 @@ services:
     image: localstack/localstack
     environment:
       - SERVICES=s3
-      - AWS_DEFAULT_REGION=us-east-1
     ports:
       - "4566:4566"  # LocalStack running on localhost:4566
 

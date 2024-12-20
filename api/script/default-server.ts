@@ -12,8 +12,6 @@ import { RedisManager } from "./redis-manager";
 import { Storage } from "./storage/storage";
 import { Response } from "express";
 import rateLimit from "express-rate-limit";
-// const { DefaultAzureCredential } = require("@azure/identity");
-// const { SecretClient } = require("@azure/keyvault-secrets");
 const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || "<your-s3-bucket-name>";
 const RDS_DB_INSTANCE_IDENTIFIER = process.env.RDS_DB_INSTANCE_IDENTIFIER || "<your-rds-instance>";
 const SECRETS_MANAGER_SECRET_ID = process.env.SECRETS_MANAGER_SECRET_ID || "<your-secret-id>";

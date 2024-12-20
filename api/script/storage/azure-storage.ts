@@ -249,6 +249,29 @@ export class AzureStorage implements storage.Storage {
       .catch(AzureStorage.azureErrorHandler);
   }
 
+  public getUserFromAccessKey(accessKey: string): q.Promise<storage.Account> {
+    //MARK: TODO TEST THIS
+    const partitionKey: string = Keys.getShortcutAccessKeyPartitionKey(accessKey);
+    const rowKey: string = "";
+
+    return this._setupPromise
+      .then(() => {
+        return this.retrieveByKey(partitionKey, rowKey);
+      })
+      .catch(AzureStorage.azureErrorHandler);
+  }
+
+  public getUserFromAccessToken(accessToken: string): q.Promise<storage.Account> {
+    const partitionKey: string = Keys.getShortcutAccessKeyPartitionKey(accessToken);
+    const rowKey: string = "";
+
+    return this._setupPromise
+      .then(() => {
+        return this.retrieveByKey(partitionKey, rowKey);
+      })
+      .catch(AzureStorage.azureErrorHandler);
+  }
+
   public getAccountByEmail(email: string): q.Promise<storage.Account> {
     const address: Pointer = Keys.getEmailShortcutAddress(email);
     return this._setupPromise
@@ -298,6 +321,21 @@ export class AzureStorage implements storage.Storage {
         return accountIdObject.accountId;
       })
       .catch(AzureStorage.azureErrorHandler);
+  }
+
+  public getTenants(accountId: string): q.Promise<storage.Organization[]> {
+    return this._setupPromise
+      .then(() => {
+        return this.getAccount(accountId);
+      })
+      .then((account: storage.Account) => {
+        return [];
+      })
+      .catch(AzureStorage.azureErrorHandler);
+  }
+
+  public removeTenant(accountId: string, tenantId: string): q.Promise<void> {
+    return q(<void>null);
   }
 
   public addApp(accountId: string, app: storage.App): q.Promise<storage.App> {
@@ -459,6 +497,24 @@ export class AzureStorage implements storage.Storage {
       })
       .then((app: storage.App) => {
         return q<storage.CollaboratorMap>(app.collaborators);
+      })
+      .catch(AzureStorage.azureErrorHandler);
+  }
+
+  public updateCollaborators(accountId: string, appId: string, email: string, role: string): q.Promise<void> {
+    //MARK: TODO TEST
+    return this._setupPromise
+      .then(() => {
+        return this.getApp(accountId, appId, /*keepCollaboratorIds*/ true);
+      })
+      .then((app: storage.App) => {
+        const collaboratorEmails: string[] = Object.keys(app.collaborators);
+        collaboratorEmails.forEach((email: string) => {
+          const collaboratorProperties: storage.CollaboratorProperties = app.collaborators[email];
+          collaboratorProperties.permission = role;
+        });
+
+        return this.updateAppWithPermission(accountId, app, /*updateCollaborator*/ true);
       })
       .catch(AzureStorage.azureErrorHandler);
   }
@@ -1308,64 +1364,6 @@ export class AzureStorage implements storage.Storage {
     return "v" + (lastVersion + 1);
   }
 
-  private static azureErrorHandler(
-    azureError: any,
-    overrideMessage: boolean = false,
-    overrideCondition?: string,
-    overrideValue?: string
-  ): any {
-    let errorCodeRaw: number | string;
-    let errorMessage: string;
-
-    try {
-      const parsedMessage = JSON.parse(azureError.message);
-      errorCodeRaw = parsedMessage["odata.error"].code;
-      errorMessage = parsedMessage["odata.error"].message.value;
-    } catch (error) {
-      errorCodeRaw = azureError.code;
-      errorMessage = azureError.message;
-    }
-
-    if (overrideMessage && overrideCondition == errorCodeRaw) {
-      errorMessage = overrideValue;
-    }
-
-    if (typeof errorCodeRaw === "number") {
-      // This is a storage.Error that we previously threw; just re-throw it
-      throw azureError;
-    }
-
-    let errorCode: storage.ErrorCode;
-    switch (errorCodeRaw) {
-      case "BlobNotFound":
-      case "ResourceNotFound":
-      case "TableNotFound":
-        errorCode = storage.ErrorCode.NotFound;
-        break;
-      case "EntityAlreadyExists":
-      case "TableAlreadyExists":
-        errorCode = storage.ErrorCode.AlreadyExists;
-        break;
-      case "EntityTooLarge":
-      case "PropertyValueTooLarge":
-        errorCode = storage.ErrorCode.TooLarge;
-        break;
-      case "ETIMEDOUT":
-      case "ESOCKETTIMEDOUT":
-      case "ECONNRESET":
-        // This is an error emitted from the 'request' module, which is a
-        // dependency of 'azure-storage', and indicates failure after multiple
-        // retries.
-        errorCode = storage.ErrorCode.ConnectionFailed;
-        break;
-      default:
-        errorCode = storage.ErrorCode.Other;
-        break;
-    }
-
-    throw storage.storageError(errorCode, errorMessage);
-  }
-
   private static deleteIsCurrentAccountProperty(map: storage.CollaboratorMap): void {
     if (map) {
       Object.keys(map).forEach((key: string) => {
@@ -1473,5 +1471,63 @@ export class AzureStorage implements storage.Storage {
     }
 
     return null;
+  }
+
+  private static azureErrorHandler(
+    azureError: any,
+    overrideMessage: boolean = false,
+    overrideCondition?: string,
+    overrideValue?: string
+  ): any {
+    let errorCodeRaw: number | string;
+    let errorMessage: string;
+
+    try {
+      const parsedMessage = JSON.parse(azureError.message);
+      errorCodeRaw = parsedMessage["odata.error"].code;
+      errorMessage = parsedMessage["odata.error"].message.value;
+    } catch (error) {
+      errorCodeRaw = azureError.code;
+      errorMessage = azureError.message;
+    }
+
+    if (overrideMessage && overrideCondition == errorCodeRaw) {
+      errorMessage = overrideValue;
+    }
+
+    if (typeof errorCodeRaw === "number") {
+      // This is a storage.Error that we previously threw; just re-throw it
+      throw azureError;
+    }
+
+    let errorCode: storage.ErrorCode;
+    switch (errorCodeRaw) {
+      case "BlobNotFound":
+      case "ResourceNotFound":
+      case "TableNotFound":
+        errorCode = storage.ErrorCode.NotFound;
+        break;
+      case "EntityAlreadyExists":
+      case "TableAlreadyExists":
+        errorCode = storage.ErrorCode.AlreadyExists;
+        break;
+      case "EntityTooLarge":
+      case "PropertyValueTooLarge":
+        errorCode = storage.ErrorCode.TooLarge;
+        break;
+      case "ETIMEDOUT":
+      case "ESOCKETTIMEDOUT":
+      case "ECONNRESET":
+        // This is an error emitted from the 'request' module, which is a
+        // dependency of 'azure-storage', and indicates failure after multiple
+        // retries.
+        errorCode = storage.ErrorCode.ConnectionFailed;
+        break;
+      default:
+        errorCode = storage.ErrorCode.Other;
+        break;
+    }
+
+    throw storage.storageError(errorCode, errorMessage);
   }
 }

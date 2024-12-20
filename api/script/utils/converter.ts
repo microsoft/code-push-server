@@ -34,10 +34,17 @@ export function accessKeyRequestFromBody(body: AccessKeyRequest): AccessKeyReque
     accessKeyRequest.name = body.name;
   }
 
+  if(body.scope !== undefined)  {
+    accessKeyRequest.scope = body.scope;
+  }
+
   // This caters to legacy CLIs, before "description" was renamed to "friendlyName".
-  accessKeyRequest.friendlyName = body.friendlyName === undefined ? body.description : body.friendlyName;
+  if(body.scope !== undefined)  {
+    accessKeyRequest.friendlyName = body.friendlyName;
+  }
+  
   accessKeyRequest.friendlyName = accessKeyRequest.friendlyName && accessKeyRequest.friendlyName.trim();
-  accessKeyRequest.description = accessKeyRequest.friendlyName;
+  accessKeyRequest.description = accessKeyRequest.description;
 
   return accessKeyRequest;
 }
@@ -64,6 +71,11 @@ export function appCreationRequestFromBody(body: AppCreationRequest): AppCreatio
 
   appCreationRequest.name = body.name;
   appCreationRequest.manuallyProvisionDeployments = body.manuallyProvisionDeployments;
+  if(body.organisation !== undefined) {
+    appCreationRequest.organisation = {};
+    appCreationRequest.organisation.orgId = body.organisation.orgId;
+    appCreationRequest.organisation.orgName = body.organisation.orgName;
+  }
 
   return appCreationRequest;
 }
@@ -109,7 +121,9 @@ export function sortAndUpdateDisplayNameOfRestAppsList(apps: App[]): App[] {
       let name: string = app.name;
       if (nameToCountMap[app.name] > 1 && !Storage.isOwnedByCurrentUser(storageApp)) {
         const ownerEmail: string = Storage.getOwnerEmail(storageApp);
-        name = `${ownerEmail}:${app.name}`;
+        if(!ownerEmail) {
+          name = `${ownerEmail}:${app.name}`;
+        }
       }
 
       return toRestApp(storageApp, name, app.deployments);
@@ -130,9 +144,14 @@ export function toRestApp(storageApp: Storage.App, displayName: string, deployme
   };
 }
 
-export function toRestCollaboratorMap(storageCollaboratorMap: Storage.CollaboratorMap): CollaboratorMap {
-  const collaboratorMap: CollaboratorMap = {};
+export function toRestCollaboratorMap(storageCollaboratorMap: Storage.CollaboratorMap | null | undefined): CollaboratorMap {
+  // Safeguard against null or undefined input
+  if (!storageCollaboratorMap) {
+    return {};
+  }
 
+  const collaboratorMap: CollaboratorMap = {};
+  
   Object.keys(storageCollaboratorMap)
     .sort()
     .forEach(function (key: string) {
@@ -150,6 +169,7 @@ export function toRestDeployment(storageDeployment: Storage.Deployment): Deploym
     name: storageDeployment.name,
     key: storageDeployment.key,
     package: storageDeployment.package,
+    packageHistory: storageDeployment.packageHistory,
   };
 
   if (restDeployment.package) {
@@ -223,6 +243,7 @@ export function toStorageAccessKey(restAccessKey: AccessKey): Storage.AccessKey 
     expires: restAccessKey.expires,
     friendlyName: restAccessKey.friendlyName,
     description: restAccessKey.friendlyName,
+    scope: restAccessKey.scope,
   };
 
   return storageAccessKey;
@@ -233,6 +254,8 @@ export function toStorageApp(restApp: App, createdTime: number): Storage.App {
     createdTime: createdTime,
     name: restApp.name,
     collaborators: toStorageCollaboratorMap(restApp.collaborators),
+    tenantId: restApp.organisation?.orgId,
+    tenantName: restApp.organisation?.orgName,
   };
   return storageApp;
 }

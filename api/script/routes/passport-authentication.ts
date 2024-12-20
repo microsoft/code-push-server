@@ -138,9 +138,9 @@ export class PassportAuthentication {
 
     router.use(passport.initialize());
 
-    router.get("/authenticated", limiter, this.authenticate, (req: Request, res: Response): any => {
-      res.send({ authenticated: true });
-    });
+    // router.get("/authenticated", limiter, this.authenticate, (req: Request, res: Response): any => {
+    //   res.send({ authenticated: true });
+    // });
 
     // See https://developer.github.com/v3/oauth/ for more information.
     // GITHUB_CLIENT_ID:     The client ID you received from GitHub when registering a developer app.

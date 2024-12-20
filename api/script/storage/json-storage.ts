@@ -23,6 +23,7 @@ export class JsonStorage implements storage.Storage {
   public static NextIdNumber: number = 0;
   public accounts: { [id: string]: storage.Account } = {};
   public apps: { [id: string]: storage.App } = {};
+  public tenants: {[id: string]: storage.Organization} = {};
   public deployments: { [id: string]: storage.Deployment } = {};
   public packages: { [id: string]: storage.Package } = {};
   public blobs: { [id: string]: string } = {};
@@ -31,6 +32,7 @@ export class JsonStorage implements storage.Storage {
   public accountToAppsMap: { [id: string]: string[] } = {};
   public appToAccountMap: { [id: string]: string } = {};
   public emailToAccountMap: { [email: string]: string } = {};
+  public accountToTenantsMap: { [id: string]: string[] } = {};
 
   public appToDeploymentsMap: { [id: string]: string[] } = {};
   public deploymentToAppMap: { [id: string]: string } = {};
@@ -45,26 +47,32 @@ export class JsonStorage implements storage.Storage {
   private static CollaboratorNotFound: string = "The specified e-mail address doesn't represent a registered user";
   private _blobServerPromise: Promise<http.Server>;
 
-  constructor(public disablePersistence: boolean = true) {
+  constructor(public disablePersistence: boolean = false) {
     this.loadStateAsync(); // Attempts to load real data if any exists
   }
 
   private loadStateAsync(): void {
     if (this.disablePersistence) return;
-
+    console.log(__dirname)
+    let pathName = __dirname + "/JsonStorage.json";
+        
+    fs.access(pathName, fs.constants.F_OK, (err) => {
+            console.log(err ? "File does not exist" : "File exists");
+    });
     fs.exists(
-      "JsonStorage.json",
+      pathName,
       function (exists: boolean) {
         if (exists) {
           fs.readFile(
-            "JsonStorage.json",
+            pathName,
             function (err: any, data: string) {
-              if (err) throw err;
+              if (err) console.log(err);
 
               const obj = JSON.parse(data);
               JsonStorage.NextIdNumber = obj.NextIdNumber || 0;
               this.accounts = obj.accounts || {};
               this.apps = obj.apps || {};
+              this.tenants = obj.tenants || {};
               this.deployments = obj.deployments || {};
               this.deploymentKeys = obj.deploymentKeys || {};
               this.blobs = obj.blobs || {};
@@ -108,7 +116,7 @@ export class JsonStorage implements storage.Storage {
 
     const str = JSON.stringify(obj);
     fs.writeFile("JsonStorage.json", str, function (err) {
-      if (err) throw err;
+      if (err) console.log(err);
     });
   }
 
@@ -141,6 +149,35 @@ export class JsonStorage implements storage.Storage {
     }
 
     return q(clone(this.accounts[accountId]));
+  }
+
+  public removeTenant(accountId: string, tenantId: string): Promise<void> {
+    if (!this.accounts[accountId] || !this.tenants[tenantId]) {
+      return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
+    }
+
+    const tenant = this.tenants[tenantId];
+    const tenantAccounts = this.accountToTenantsMap[accountId];
+    if (tenantAccounts.indexOf(tenantId) !== -1) {
+      tenantAccounts.splice(tenantAccounts.indexOf(tenantId), 1);
+    }
+
+    delete this.tenants[tenantId];
+    this.saveStateAsync();
+
+    return q(<void>null);
+  }
+
+  public getTenants(accountId: string): Promise<storage.Organization[]> {
+    const tenantIds = this.accountToTenantsMap[accountId];
+    if (tenantIds) {
+      const tenants = tenantIds.map((id: string) => {
+        return this.tenants[id];
+      });
+      return q(clone(tenants));
+    }
+
+    return JsonStorage.getRejectedPromise(storage.ErrorCode.NotFound);
   }
 
   public getAccountByEmail(email: string): Promise<storage.Account> {
@@ -333,6 +370,35 @@ export class JsonStorage implements storage.Storage {
 
       app.collaborators[email] = { accountId: targetCollaboratorAccountId, permission: storage.Permissions.Collaborator };
       this.addAppPointer(targetCollaboratorAccountId, app.id);
+      return this.updateApp(accountId, app);
+    });
+  }
+
+  public getUserFromAccessKey(accessKey: string): Promise<storage.Account> {
+    return this.getAccountIdFromAccessKey(accessKey).then((accountId: string) => {
+      return this.getAccount(accountId);
+    });
+  }
+
+  public getUserFromAccessToken(accessToken: string): q.Promise<storage.Account> {
+    return this.getAccountIdFromAccessKey(accessToken).then((accountId: string) => {
+      return this.getAccount(accountId);
+    });
+  }
+
+  public updateCollaborators(accountId: string, appId: string, email: string, role: string): Promise<void> {
+    //MARK: TODO TEST
+    return this.getApp(accountId, appId).then((app: storage.App) => {
+      if (role === "Owner") {
+        return JsonStorage.getRejectedPromise(storage.ErrorCode.Invalid, "Cannot update role to Owner");
+      }
+
+      Object.keys(app.collaborators).forEach((email: string) => {
+        if (app.collaborators[email].isCurrentAccount) {
+          app.collaborators[email].permission = role;
+        }
+      });
+
       return this.updateApp(accountId, app);
     });
   }

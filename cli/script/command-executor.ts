@@ -42,6 +42,7 @@ const emailValidator = require("email-validator");
 const packageJson = require("../../package.json");
 const parseXml = Q.denodeify(require("xml2js").parseString);
 import Promise = Q.Promise;
+import { Organisation } from "./types/rest-definitions";
 const properties = require("properties");
 
 const CLI_HEADERS: Headers = {
@@ -162,6 +163,7 @@ function accessKeyRemove(command: cli.IAccessKeyRemoveCommand): Promise<void> {
 }
 
 function appAdd(command: cli.IAppAddCommand): Promise<void> {
+  
   return sdk.addApp(command.appName).then((app: App): Promise<void> => {
     log('Successfully added the "' + command.appName + '" app, along with the following default deployments:');
     const deploymentListCommand: cli.IDeploymentListCommand = {
@@ -179,6 +181,14 @@ function appList(command: cli.IAppListCommand): Promise<void> {
   let apps: App[];
   return sdk.getApps().then((retrievedApps: App[]): void => {
     printAppList(command.format, retrievedApps);
+  });
+}
+
+function orgList(command: cli.IOrgListCommand): Promise<void> {
+  throwForInvalidOutputFormat(command.format);
+  let orgs: Organisation[];
+  return sdk.getTenants().then((retrievedOrgs: Organisation[]): void => {
+    printOrgList(command.format, retrievedOrgs);
   });
 }
 
@@ -401,17 +411,8 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
     const savedConnection: string = fs.readFileSync(configFilePath, {
       encoding: "utf8",
     });
-    let connectionInfo: ILegacyLoginConnectionInfo | ILoginConnectionInfo = JSON.parse(savedConnection);
-
-    // If the connection info is in the legacy format, convert it to the modern format
-    if ((<ILegacyLoginConnectionInfo>connectionInfo).accessKeyName) {
-      connectionInfo = <ILoginConnectionInfo>{
-        accessKey: (<ILegacyLoginConnectionInfo>connectionInfo).accessKeyName,
-      };
-    }
-
+    let connectionInfo: ILoginConnectionInfo = JSON.parse(savedConnection);
     const connInfo = <ILoginConnectionInfo>connectionInfo;
-
     return connInfo;
   } catch (ex) {
     return;
@@ -420,6 +421,8 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
 
 export function execute(command: cli.ICommand) {
   connectionInfo = deserializeConnectionInfo();
+  //console.log("connectionInfo: ", connectionInfo);
+
 
   return Q(<void>null).then(() => {
     switch (command.type) {
@@ -446,6 +449,18 @@ export function execute(command: cli.ICommand) {
         }
 
         sdk = getSdk(connectionInfo.accessKey, CLI_HEADERS, connectionInfo.customServerUrl);
+        if((<cli.IAppCommand>command).appName) {
+          const arg : string = (<cli.IAppCommand>command).appName
+          const parsedName = cli.parseAppName(arg);
+          // console.log("parsedName: ", parsedName);
+          if(parsedName.ownerName) {
+            (<cli.IAppCommand>command).appName = parsedName.appName;
+            sdk.passedOrgName = parsedName.ownerName;
+          }
+        } else if ((<cli.IAppListCommand>command).org && (<cli.IAppListCommand>command).org.length > 0) {
+          const arg : string = (<cli.IAppListCommand>command).org
+          sdk.passedOrgName = arg;
+        }
         break;
     }
 
@@ -461,6 +476,9 @@ export function execute(command: cli.ICommand) {
 
       case cli.CommandType.accessKeyRemove:
         return accessKeyRemove(<cli.IAccessKeyRemoveCommand>command);
+
+      case cli.CommandType.orgList:
+        return orgList(<cli.IOrgListCommand>command);
 
       case cli.CommandType.appAdd:
         return appAdd(<cli.IAppAddCommand>command);
@@ -660,6 +678,20 @@ function printAppList(format: string, apps: App[]): void {
     printTable(headers, (dataSource: any[]): void => {
       apps.forEach((app: App, index: number): void => {
         const row = [app.name, wordwrap(50)(app.deployments.join(", "))];
+        dataSource.push(row);
+      });
+    });
+  }
+}
+
+function printOrgList(format: string, orgs: Organisation[]): void {
+  if (format === "json") {
+    printJson(orgs);
+  } else if (format === "table") {
+    const headers = ["Organisation Name"];
+    printTable(headers, (dataSource: any[]): void => {
+      orgs.forEach((org: Organisation, index: number): void => {
+        const row = [org.displayName];
         dataSource.push(row);
       });
     });
@@ -1161,6 +1193,7 @@ function patch(command: cli.IPatchCommand): Promise<void> {
 }
 
 export const release = (command: cli.IReleaseCommand): Promise<void> => {
+  console.log('reaching here at release');
   if (isBinaryOrZip(command.package)) {
     throw new Error(
       "It is unnecessary to package releases in a .zip or binary file. Please specify the direct path to the update content's directory (e.g. /platforms/ios/www) or file (e.g. main.jsbundle)."
@@ -1195,9 +1228,12 @@ export const release = (command: cli.IReleaseCommand): Promise<void> => {
     rollout: command.rollout,
   };
 
+  console.log('updateMetaData ::', updateMetadata);
+
   return sdk
     .isAuthenticated(true)
     .then((isAuth: boolean): Promise<void> => {
+      console.log('authenticated making release call');
       return sdk.release(command.appName, command.deploymentName, filePath, command.appStoreVersion, updateMetadata, uploadProgress);
     })
     .then((): void => {

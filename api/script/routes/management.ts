@@ -69,6 +69,21 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  router.post("/account", (req: Request, res: Response, next: (err?: any) => void): any => {
+    const account = req.body.account;
+    //validate blah blah
+    storage
+      .addAccount(account)
+      .then((accountId: string) => {
+        //MARK: TODO issueAccessKey(accountId);
+        // const restAccount: restTypes.Account = converterUtils.toRestAccount(storageAccount);
+        console.log("accounId created");
+        res.send({ account: accountId });
+      })
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
+      .done();
+  });
+
   router.get("/accessKeys", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
 
@@ -154,6 +169,21 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  router.get("/accountByaccessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => { 
+    const accessKeyName = Array.isArray(req.headers.accesskeyname) ? req.headers.accesskeyname[0] : req.headers.accesskeyname;
+    //validate accessKeyName
+    if(!accessKeyName) {
+      res.status(400).send("Access key name is required");
+      return;
+    }
+    storage.getUserFromAccessKey(accessKeyName)
+      .then((storageAccount: storageTypes.Account): void => {
+        res.send({ user: storageAccount });
+      })
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
+      .done();
+  });
+
   router.patch("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyName: string = req.params.accessKeyName;
@@ -177,6 +207,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           throw errorUtils.restError(errorUtils.ErrorCode.NotFound, `The access key "${accessKeyName}" does not exist.`);
         }
 
+        updatedAccessKey.description = accessKeyRequest.description;
         if (accessKeyRequest.friendlyName) {
           if (NameResolver.isDuplicate(accessKeys, accessKeyRequest.friendlyName)) {
             throw errorUtils.restError(
@@ -188,6 +219,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           updatedAccessKey.friendlyName = accessKeyRequest.friendlyName;
           updatedAccessKey.description = updatedAccessKey.friendlyName;
         }
+        updatedAccessKey.scope = accessKeyRequest.scope;
 
         if (accessKeyRequest.ttl !== undefined) {
           updatedAccessKey.expires = new Date().getTime() + accessKeyRequest.ttl;
@@ -213,7 +245,8 @@ export function getManagementRouter(config: ManagementConfig): Router {
         return storage.removeAccessKey(accountId, accessKey.id);
       })
       .then((): void => {
-        res.sendStatus(204);
+        //send message that it is deleted successfully.
+        res.sendStatus(201).send("Access key deleted successfully");
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
@@ -246,17 +279,47 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  router.get("/tenants", (req: Request, res: Response, next: (err?: any) => void): any => {
+    const accountId: string = req.user.id;
+
+    storage
+      .getTenants(accountId) // Calls the storage method we’ll define next
+      .then((tenants: storageTypes.Organization[]) => {
+        res.send({ organisations: tenants });
+      })
+      .catch((error: any) => {
+        next(error); // Forward error to error handler
+      });
+  });
+
+  router.delete("/tenants/:tenantId", (req: Request, res: Response, next: (err?: any) => void): any => {
+    const accountId: string = req.user.id;
+    const tenantId: string = req.params.tenantId;
+
+    storage
+      .removeTenant(accountId, tenantId) // Calls the storage method we’ll define next
+      .then(() => {
+        res.sendStatus(201).send("Org deleted successfully");
+      })
+      .catch((error: any) => {
+        next(error); // Forward error to error handler
+      });
+  });
+
   router.get("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
+    const tenant: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     storage
       .getApps(accountId)
       .then((apps: storageTypes.App[]) => {
-        const restAppPromises: Promise<restTypes.App>[] = apps.map((app: storageTypes.App) => {
-          return storage.getDeployments(accountId, app.id).then((deployments: storageTypes.Deployment[]) => {
-            const deploymentNames: string[] = deployments.map((deployment: storageTypes.Deployment) => deployment.name);
-            return converterUtils.toRestApp(app, app.name, deploymentNames);
+        const restAppPromises: Promise<restTypes.App>[] = apps
+          .filter((app) => !tenant || app.tenantId === tenant)
+          .map((app: storageTypes.App) => {
+            return storage.getDeployments(accountId, app.id).then((deployments: storageTypes.Deployment[]) => {
+              const deploymentNames: string[] = deployments.map((deployment: storageTypes.Deployment) => deployment.name);
+              return converterUtils.toRestApp(app, app.name, deploymentNames);
+            });
           });
-        });
 
         return q.all(restAppPromises);
       })
@@ -278,7 +341,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       storage
         .getApps(accountId)
         .then((apps: storageTypes.App[]): void | Promise<void> => {
-          if (NameResolver.isDuplicate(apps, appRequest.name)) {
+          if (NameResolver.isDuplicateApp(apps, appRequest)) {
             errorUtils.sendConflictError(res, "An app named '" + appRequest.name + "' already exists.");
             return;
           }
@@ -319,9 +382,10 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.get("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let storageApp: storageTypes.App;
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         storageApp = app;
         return storage.getDeployments(accountId, app.id);
@@ -337,11 +401,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.delete("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
     let invalidationError: Error;
-
+    
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -360,7 +425,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         return storage.removeApp(accountId, appId);
       })
       .then(() => {
-        res.sendStatus(204);
+        res.sendStatus(201).send("App deleted successfully");
         if (invalidationError) throw invalidationError;
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
@@ -418,13 +483,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const email: string = req.params.email;
-
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     if (isPrototypePollutionKey(email)) {
       return res.status(400).send("Invalid email parameter");
     }
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
         return storage.transferApp(accountId, app.id, email);
@@ -440,13 +505,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const email: string = req.params.email;
-
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     if (isPrototypePollutionKey(email)) {
       return res.status(400).send("Invalid email parameter");
     }
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
         return storage.addCollaborator(accountId, app.id, email);
@@ -461,9 +526,9 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.get("/apps/:appName/collaborators", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
-
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return storage.getCollaborators(accountId, app.id);
@@ -479,13 +544,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const email: string = req.params.email;
-
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     if (isPrototypePollutionKey(email)) {
       return res.status(400).send("Invalid email parameter");
     }
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         const isAttemptingToRemoveSelf: boolean =
           app.collaborators && email && app.collaborators[email] && app.collaborators[email].isCurrentAccount;
@@ -494,6 +559,36 @@ export function getManagementRouter(config: ManagementConfig): Router {
           isAttemptingToRemoveSelf ? storageTypes.Permissions.Collaborator : storageTypes.Permissions.Owner
         );
         return storage.removeCollaborator(accountId, app.id, email);
+      })
+      .then(() => {
+        res.sendStatus(201).send("Collaborator removed successfully");
+      })
+      .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
+      .done();
+  });
+
+  router.patch("/apps/:appName/collaborators/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
+    const accountId: string = req.user.id;
+    const appName: string = req.params.appName;
+    const email: string = req.params.email;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
+    let role: string = "Collaborator";
+    if(req.body.role !== undefined) {
+      role = req.body.role;
+    }
+
+    if (isPrototypePollutionKey(email)) {
+      return res.status(400).send("Invalid email parameter");
+    }
+
+    nameResolver
+      .resolveApp(accountId, appName, tenantId)
+      .then((app: storageTypes.App) => {
+        const isAdmin: boolean =
+          app.collaborators && email && app.collaborators[email] && app.collaborators[email].isCurrentAccount;
+        let permission = role === "Owner" ? storageTypes.Permissions.Owner : storageTypes.Permissions.Collaborator;
+          throwIfInvalidPermissions(app, permission);
+        return storage.updateCollaborators(accountId, app.id, email, role);
       })
       .then(() => {
         res.sendStatus(204);
@@ -506,21 +601,48 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     let appId: string;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return storage.getDeployments(accountId, appId);
       })
-      .then((deployments: storageTypes.Deployment[]) => {
+      .then(async (deployments: storageTypes.Deployment[]) => {
         deployments.sort((first: restTypes.Deployment, second: restTypes.Deployment) => {
-          return first.name.localeCompare(second.name);
+            return first.name.localeCompare(second.name);
         });
 
+        if (redisManager.isEnabled) {
+            for (const deployment of deployments) {
+                const metrics = await redisManager.getMetricsWithDeploymentKey(deployment.key);
+                const deploymentMetrics = converterUtils.toRestDeploymentMetrics(metrics);
+                let totalActiveCount : number = 0;
+                Object.keys(deploymentMetrics).forEach((label) => {
+                    const metrics = deploymentMetrics[label];
+                    if (metrics.active < 0) metrics.active = 0;
+                    totalActiveCount += metrics.active;
+                });
+
+                if (deployment.packageHistory) {
+                  deployment.packageHistory.forEach((pkg) => {
+                      if (deploymentMetrics[pkg.label]) {
+                          const pkgMetrics = deploymentMetrics[pkg.label];
+                          pkg.active = pkgMetrics.active || 0;
+                          pkg.downloaded = pkgMetrics.downloaded || 0;
+                          pkg.failed = pkgMetrics.failed || 0;
+                          pkg.installed = pkgMetrics.installed || 0;
+                          pkg.totalActive = totalActiveCount;
+                      }
+                  });
+                }
+            }
+        }
+
         res.send({ deployments: deployments });
-      })
+    })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
   });
@@ -528,6 +650,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.post("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
     let restDeployment: restTypes.Deployment = converterUtils.deploymentFromBody(req.body);
 
@@ -539,7 +662,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
     const storageDeployment: storageTypes.Deployment = converterUtils.toStorageDeployment(restDeployment, new Date().getTime());
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -568,18 +691,43 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return nameResolver.resolveDeployment(accountId, appId, deploymentName);
       })
-      .then((deployment: storageTypes.Deployment) => {
-        const restDeployment: restTypes.Deployment = converterUtils.toRestDeployment(deployment);
-        res.send({ deployment: restDeployment });
+      .then(async (deployment: storageTypes.Deployment) => {
+          const metrics = await redisManager.getMetricsWithDeploymentKey(deployment.key);
+          const deploymentMetrics = converterUtils.toRestDeploymentMetrics(metrics);
+
+          let totalActiveCount : number = 0;
+          Object.keys(deploymentMetrics).forEach((label) => {
+            const metrics = deploymentMetrics[label];
+            if (metrics.active < 0) {
+              metrics.active = 0;
+            }
+            totalActiveCount += metrics.active;
+          });
+
+          if (deployment.packageHistory) {
+            deployment.packageHistory.forEach((pkg) => {
+                if (deploymentMetrics[pkg.label]) {
+                  const pkgMetrics = deploymentMetrics[pkg.label];
+                  pkg.active = pkgMetrics.active || 0;
+                  pkg.downloaded = pkgMetrics.downloaded || 0;
+                  pkg.failed = pkgMetrics.failed || 0;
+                  pkg.installed = pkgMetrics.installed || 0;
+                  pkg.totalActive = totalActiveCount;
+                }
+            });
+          }
+          const restDeployment: restTypes.Deployment = converterUtils.toRestDeployment(deployment);
+          res.send({ deployment: restDeployment });
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
@@ -589,11 +737,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
     let deploymentId: string;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -607,7 +756,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         return storage.removeDeployment(accountId, appId, deploymentId);
       })
       .then(() => {
-        res.sendStatus(204);
+        res.sendStatus(201).send("Deployment deleted successfully");
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
@@ -617,6 +766,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
     let restDeployment: restTypes.Deployment = converterUtils.deploymentFromBody(req.body);
 
@@ -627,7 +777,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -663,6 +813,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
     const info: restTypes.PackageInfo = req.body.packageInfo || {};
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(info, /*allOptional*/ true);
     if (validationErrors.length) {
       errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
@@ -674,7 +825,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     let appId: string;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -720,7 +871,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         }
 
         const newRolloutValue: number = info.rollout;
-        if (validationUtils.isDefined(newRolloutValue)) {
+        if (validationUtils.isDefined(newRolloutValue) && newRolloutValue !== 100) {
           let errorMessage: string;
           if (!isUnfinishedRollout(packageToUpdate.rollout)) {
             errorMessage = "Cannot update rollout value for a completed rollout release.";
@@ -732,7 +883,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             throw errorUtils.restError(errorUtils.ErrorCode.Conflict, errorMessage);
           }
 
-          packageToUpdate.rollout = newRolloutValue === 100 ? null : newRolloutValue;
+          packageToUpdate.rollout = newRolloutValue === 100 ? 100 : newRolloutValue;
           updateRelease = true;
         }
 
@@ -743,6 +894,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         }
 
         if (updateRelease) {
+          //MARK TODO: TEST THIS
           return storage.updatePackageHistory(accountId, appId, storageDeployment.id, packageHistory).then(() => {
             res.send({ package: converterUtils.toRestPackage(packageToUpdate) });
             return invalidateCachedPackage(storageDeployment.key);
@@ -760,141 +912,146 @@ export function getManagementRouter(config: ManagementConfig): Router {
     max: 100, // limit each IP to 100 requests per windowMs
   });
 
-  router.post("/apps/:appName/deployments/:deploymentName/release", releaseRateLimiter, (req: Request, res: Response, next: (err?: any) => void): any => {
-    const accountId: string = req.user.id;
-    const appName: string = req.params.appName;
-    const deploymentName: string = req.params.deploymentName;
-    const file: any = getFileWithField(req, "package");
+  router.post(
+    "/apps/:appName/deployments/:deploymentName/release",
+    releaseRateLimiter,
+    (req: Request, res: Response, next: (err?: any) => void): any => {
+      const accountId: string = req.user.id;
+      const appName: string = req.params.appName;
+      const deploymentName: string = req.params.deploymentName;
+      const file: any = getFileWithField(req, "package");
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
 
-    if (!file || !file.buffer) {
-      errorUtils.sendMalformedRequestError(res, "A deployment package must include a file.");
-      return;
-    }
-
-    const filePath: string = createTempFileFromBuffer(file.buffer);
-    const restPackage: restTypes.Package = tryJSON(req.body.packageInfo) || {};
-    const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(
-      restPackage,
-      /*allOptional*/ false
-    );
-    if (validationErrors.length) {
-      errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
-      return;
-    }
-
-    fs.stat(filePath, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
-      if (err) {
-        errorUtils.sendUnknownError(res, err, next);
+      if (!file || !file.buffer) {
+        errorUtils.sendMalformedRequestError(res, "A deployment package must include a file.");
         return;
       }
 
-      // These variables are for hoisting promise results and flattening the following promise chain.
-      let appId: string;
-      let deploymentToReleaseTo: storageTypes.Deployment;
-      let storagePackage: storageTypes.Package;
-      let lastPackageHashWithSameAppVersion: string;
-      let newManifest: PackageManifest;
+      const filePath: string = createTempFileFromBuffer(file.buffer);
+      const restPackage: restTypes.Package = tryJSON(req.body.packageInfo) || {};
+      const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(
+        restPackage,
+        /*allOptional*/ false
+      );
+      if (validationErrors.length) {
+        errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
+        return;
+      }
 
-      nameResolver
-        .resolveApp(accountId, appName)
-        .then((app: storageTypes.App) => {
-          appId = app.id;
-          throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
-          return nameResolver.resolveDeployment(accountId, appId, deploymentName);
-        })
-        .then((deployment: storageTypes.Deployment) => {
-          deploymentToReleaseTo = deployment;
-          const existingPackage: storageTypes.Package = deployment.package;
-          if (existingPackage && isUnfinishedRollout(existingPackage.rollout) && !existingPackage.isDisabled) {
-            throw errorUtils.restError(
-              errorUtils.ErrorCode.Conflict,
-              "Please update the previous release to 100% rollout before releasing a new package."
-            );
-          }
+      fs.stat(filePath, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
+        if (err) {
+          errorUtils.sendUnknownError(res, err, next);
+          return;
+        }
 
-          return storage.getPackageHistory(accountId, appId, deploymentToReleaseTo.id);
-        })
-        .then((history: storageTypes.Package[]) => {
-          lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(history, restPackage.appVersion);
-          return hashUtils.generatePackageManifestFromZip(filePath);
-        })
-        .then((manifest?: PackageManifest) => {
-          if (manifest) {
-            newManifest = manifest;
-            // If update is a zip, generate a packageHash using the manifest, since
-            // that more accurately represents the contents of each file in the zip.
-            return newManifest.computePackageHash();
-          } else {
-            // Update is not a zip (flat file), generate the packageHash over the
-            // entire file contents.
-            return hashUtils.hashFile(filePath);
-          }
-        })
-        .then((packageHash: string) => {
-          restPackage.packageHash = packageHash;
-          if (restPackage.packageHash === lastPackageHashWithSameAppVersion) {
-            throw errorUtils.restError(
-              errorUtils.ErrorCode.Conflict,
-              "The uploaded package was not released because it is identical to the contents of the specified deployment's current release."
-            );
-          }
+        // These variables are for hoisting promise results and flattening the following promise chain.
+        let appId: string;
+        let deploymentToReleaseTo: storageTypes.Deployment;
+        let storagePackage: storageTypes.Package;
+        let lastPackageHashWithSameAppVersion: string;
+        let newManifest: PackageManifest;
 
-          return storage.addBlob(security.generateSecureKey(accountId), fs.createReadStream(filePath), stats.size);
-        })
-        .then((blobId: string) => storage.getBlobUrl(blobId))
-        .then((blobUrl: string) => {
-          restPackage.blobUrl = blobUrl;
-          restPackage.size = stats.size;
-
-          // If newManifest is null/undefined, then the package is not a valid ZIP file.
-          if (newManifest) {
-            const json: string = newManifest.serialize();
-            const readStream: stream.Readable = streamifier.createReadStream(json);
-
-            return storage.addBlob(security.generateSecureKey(accountId), readStream, json.length);
-          }
-
-          return q(<string>null);
-        })
-        .then((blobId?: string) => {
-          if (blobId) {
-            return storage.getBlobUrl(blobId);
-          }
-
-          return q(<string>null);
-        })
-        .then((manifestBlobUrl?: string) => {
-          storagePackage = converterUtils.toStoragePackage(restPackage);
-          if (manifestBlobUrl) {
-            storagePackage.manifestBlobUrl = manifestBlobUrl;
-          }
-
-          storagePackage.releaseMethod = storageTypes.ReleaseMethod.Upload;
-          storagePackage.uploadTime = new Date().getTime();
-          return storage.commitPackage(accountId, appId, deploymentToReleaseTo.id, storagePackage);
-        })
-        .then((committedPackage: storageTypes.Package): Promise<void> => {
-          storagePackage.label = committedPackage.label;
-          const restPackage: restTypes.Package = converterUtils.toRestPackage(committedPackage);
-
-          res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${deploymentName}`]));
-          res.status(201).send({ package: restPackage }); // Send response without blocking on cleanup
-
-          return invalidateCachedPackage(deploymentToReleaseTo.key);
-        })
-        .then(() => processDiff(accountId, appId, deploymentToReleaseTo.id, storagePackage))
-        .finally((): void => {
-          // Cleanup; any errors before this point will still pass to the catch() block
-          fs.unlink(filePath, (err: NodeJS.ErrnoException): void => {
-            if (err) {
-              errorUtils.sendUnknownError(res, err, next);
+        nameResolver
+          .resolveApp(accountId, appName, tenantId)
+          .then((app: storageTypes.App) => {
+            appId = app.id;
+            throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
+            return nameResolver.resolveDeployment(accountId, appId, deploymentName);
+          })
+          .then((deployment: storageTypes.Deployment) => {
+            deploymentToReleaseTo = deployment;
+            const existingPackage: storageTypes.Package = deployment.package;
+            if (existingPackage && isUnfinishedRollout(existingPackage.rollout) && !existingPackage.isDisabled) {
+              throw errorUtils.restError(
+                errorUtils.ErrorCode.Conflict,
+                "Please update the previous release to 100% rollout before releasing a new package."
+              );
             }
-          });
-        })
-        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
-    });
-  });
+
+            return storage.getPackageHistory(accountId, appId, deploymentToReleaseTo.id);
+          })
+          .then((history: storageTypes.Package[]) => {
+            lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(history, restPackage.appVersion);
+            return hashUtils.generatePackageManifestFromZip(filePath);
+          })
+          .then((manifest?: PackageManifest) => {
+            if (manifest) {
+              newManifest = manifest;
+              // If update is a zip, generate a packageHash using the manifest, since
+              // that more accurately represents the contents of each file in the zip.
+              return newManifest.computePackageHash();
+            } else {
+              // Update is not a zip (flat file), generate the packageHash over the
+              // entire file contents.
+              return hashUtils.hashFile(filePath);
+            }
+          })
+          .then((packageHash: string) => {
+            restPackage.packageHash = packageHash;
+            if (restPackage.packageHash === lastPackageHashWithSameAppVersion) {
+              throw errorUtils.restError(
+                errorUtils.ErrorCode.Conflict,
+                "The uploaded package was not released because it is identical to the contents of the specified deployment's current release."
+              );
+            }
+
+            return storage.addBlob(security.generateSecureKey(accountId), fs.createReadStream(filePath), stats.size);
+          })
+          .then((blobId: string) => storage.getBlobUrl(blobId))
+          .then((blobUrl: string) => {
+            restPackage.blobUrl = blobUrl;
+            restPackage.size = stats.size;
+
+            // If newManifest is null/undefined, then the package is not a valid ZIP file.
+            if (newManifest) {
+              const json: string = newManifest.serialize();
+              const readStream: stream.Readable = streamifier.createReadStream(json);
+
+              return storage.addBlob(security.generateSecureKey(accountId), readStream, json.length);
+            }
+
+            return q(<string>null);
+          })
+          .then((blobId?: string) => {
+            if (blobId) {
+              return storage.getBlobUrl(blobId);
+            }
+
+            return q(<string>null);
+          })
+          .then((manifestBlobUrl?: string) => {
+            storagePackage = converterUtils.toStoragePackage(restPackage);
+            if (manifestBlobUrl) {
+              storagePackage.manifestBlobUrl = manifestBlobUrl;
+            }
+
+            storagePackage.releaseMethod = storageTypes.ReleaseMethod.Upload;
+            storagePackage.uploadTime = new Date().getTime();
+            return storage.commitPackage(accountId, appId, deploymentToReleaseTo.id, storagePackage);
+          })
+          .then((committedPackage: storageTypes.Package): Promise<void> => {
+            storagePackage.label = committedPackage.label;
+            const restPackage: restTypes.Package = converterUtils.toRestPackage(committedPackage);
+
+            res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${deploymentName}`]));
+            res.status(201).send({ package: restPackage }); // Send response without blocking on cleanup
+
+            return invalidateCachedPackage(deploymentToReleaseTo.key);
+          })
+          .then(() => processDiff(accountId, appId, deploymentToReleaseTo.id, storagePackage))
+          .finally((): void => {
+            // Cleanup; any errors before this point will still pass to the catch() block
+            fs.unlink(filePath, (err: NodeJS.ErrnoException): void => {
+              if (err) {
+                errorUtils.sendUnknownError(res, err, next);
+              }
+            });
+          })
+          .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
+          .done();
+      });
+    }
+  );
 
   router.delete(
     "/apps/:appName/deployments/:deploymentName/history",
@@ -902,11 +1059,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const accountId: string = req.user.id;
       const appName: string = req.params.appName;
       const deploymentName: string = req.params.deploymentName;
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
       let appId: string;
       let deploymentToGetHistoryOf: storageTypes.Deployment;
 
       nameResolver
-        .resolveApp(accountId, appName)
+        .resolveApp(accountId, appName, tenantId)
         .then((app: storageTypes.App): Promise<storageTypes.Deployment> => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -924,7 +1082,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           }
         })
         .then(() => {
-          res.sendStatus(204);
+          res.sendStatus(201).send("Deployment History deleted successfully");
           return invalidateCachedPackage(deploymentToGetHistoryOf.key);
         })
         .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
@@ -936,10 +1094,11 @@ export function getManagementRouter(config: ManagementConfig): Router {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
+    const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
     let appId: string;
 
     nameResolver
-      .resolveApp(accountId, appName)
+      .resolveApp(accountId, appName, tenantId)
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -962,10 +1121,11 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const accountId: string = req.user.id;
       const appName: string = req.params.appName;
       const deploymentName: string = req.params.deploymentName;
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
       let appId: string;
 
       nameResolver
-        .resolveApp(accountId, appName)
+        .resolveApp(accountId, appName, tenantId)
         .then((app: storageTypes.App) => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -991,6 +1151,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const sourceDeploymentName: string = req.params.sourceDeploymentName;
       const destDeploymentName: string = req.params.destDeploymentName;
       const info: restTypes.PackageInfo = req.body.packageInfo || {};
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
       const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(info, /*allOptional*/ true);
       if (validationErrors.length) {
         errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
@@ -1002,7 +1163,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       let sourcePackage: storageTypes.Package;
 
       nameResolver
-        .resolveApp(accountId, appName)
+        .resolveApp(accountId, appName, tenantId)
         .then((app: storageTypes.App) => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -1089,13 +1250,14 @@ export function getManagementRouter(config: ManagementConfig): Router {
       const accountId: string = req.user.id;
       const appName: string = req.params.appName;
       const deploymentName: string = req.params.deploymentName;
+      const tenantId: string = Array.isArray(req.headers.tenant) ? req.headers.tenant[0] : req.headers.tenant;
       let appId: string;
       let deploymentToRollback: storageTypes.Deployment;
       const targetRelease: string = req.params.targetRelease;
       let destinationPackage: storageTypes.Package;
 
       nameResolver
-        .resolveApp(accountId, appName)
+        .resolveApp(accountId, appName, tenantId)
         .then((app: storageTypes.App) => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
@@ -1277,6 +1439,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       })
       .then(() => {
         if (updateHistory) {
+          //MARK: TODO This Method needs to be TESTed
           return storage.getDeployment(accountId, appId, deploymentId).then((deployment: storageTypes.Deployment) => {
             return invalidateCachedPackage(deployment.key);
           });

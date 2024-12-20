@@ -108,10 +108,17 @@ export interface CollaboratorMap {
 }
 
 /*inout*/
+export interface Organisation {
+  id?: string;
+  displayName? : string;
+}
+
+/*inout*/
 export interface App {
   /*generated*/ collaborators?: CollaboratorMap;
   /*key*/ name: string;
   /*generated*/ deployments?: string[];
+  organisation?: Organisation;
 }
 
 /*in*/

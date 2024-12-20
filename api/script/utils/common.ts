@@ -43,6 +43,22 @@ export async function streamToBuffer(readableStream: Readable): Promise<ArrayBuf
   });
 }
 
+export async function streamToBufferS3(readableStream: Readable): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    streamToArray(readableStream, (err: Error | null, arr: Array<Buffer | Uint8Array>) => {
+      if (err) {
+        reject(err);
+      } else {
+        // Ensure all chunks are Buffers
+        const buffers = arr.map((chunk) => (Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+        // Concatenate all chunks into a single Buffer
+        resolve(Buffer.concat(buffers));
+      }
+    });
+  });
+}
+
+
 export function hashWithSHA256(input: string): string {
   const hash = crypto.createHash("sha256");
   hash.update(input);

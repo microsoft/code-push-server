@@ -4,7 +4,8 @@
 import * as assert from "assert";
 import * as express from "express";
 import * as q from "q";
-import * as redis from "redis";
+// import * as redis from "redis";
+import { Cluster, Redis } from "ioredis"
 
 import Promise = q.Promise;
 
@@ -55,74 +56,107 @@ export module Utilities {
     return "deploymentKeyClients:" + deploymentKey;
   }
 }
-
 class PromisifiedRedisClient {
-  // An incomplete set of promisified versions of the original redis methods
-  public del: (...key: string[]) => Promise<number> = null;
-  public execBatch: (redisBatchClient: any) => Promise<any[]> = null;
-  public exists: (...key: string[]) => Promise<number> = null;
-  public expire: (key: string, seconds: number) => Promise<number> = null;
-  public hdel: (key: string, field: string) => Promise<number> = null;
-  public hget: (key: string, field: string) => Promise<string> = null;
-  public hgetall: (key: string) => Promise<any> = null;
-  public hincrby: (key: string, field: string, value: number) => Promise<number> = null;
-  public hset: (key: string, field: string, value: string) => Promise<number> = null;
-  public ping: (payload?: any) => Promise<any> = null;
-  public quit: () => Promise<void> = null;
-  public select: (databaseNumber: number) => Promise<void> = null;
-  public set: (key: string, value: string) => Promise<void> = null;
+  private client: Redis | Cluster;
 
-  constructor(redisClient: redis.RedisClient) {
-    this.execBatch = (redisBatchClient: any) => {
-      return q.ninvoke<any[]>(redisBatchClient, "exec");
-    };
+  constructor(client: Redis | Cluster) {
+    this.client = client;
+  }
 
-    for (const functionName in this) {
-      if (this.hasOwnProperty(functionName) && (<any>this)[functionName] === null) {
-        const originalFunction = (<any>redisClient)[functionName];
-        assert(!!originalFunction, "Binding a function that does not exist: " + functionName);
-        (<any>this)[functionName] = q.nbind(originalFunction, redisClient);
-      }
-    }
+  public set(key: string, value: string, expiry?: number): Promise<void> {
+    const args = expiry ? [key, value, "EX", expiry] : [key, value];
+    return q.ninvoke(this.client, "set", ...args);
+  }
+
+  public get(key: string): Promise<string | null> {
+    return q.ninvoke(this.client, "get", key);
+  }
+
+  public exists(...keys: string[]): Promise<number> {
+    return q.ninvoke(this.client, "exists", ...keys);
+  }
+
+  public hget(key: string, field: string): Promise<string | null> {
+    return q.ninvoke(this.client, "hget", key, field);
+  }
+
+  public hdel(key: string, field: string): Promise<string | null> {
+    return q.ninvoke(this.client, "hdel", key, field);
+  }
+
+  public hset(key: string, field: string, value: string): Promise<number> {
+    return q.ninvoke(this.client, "hset", key, field, value);
+  }
+
+  public del(key: string): Promise<number> {
+    return q.ninvoke(this.client, "del", key);
+  }
+
+  public ping(): Promise<string> {
+    return q.ninvoke(this.client, "ping");
+  }
+
+  public hgetall(key: string): Promise<any> {
+    return q.ninvoke(this.client, "hgetall", key);
+  }
+
+  // public execBatch(redisBatchClient: BatchC): Promise<any[]> {
+  //   new Redis().pipeline();
+  //   return q.ninvoke<any[]>(redisBatchClient, "exec");
+  // }
+
+  public expire(key: string, seconds: number): Promise<number> {
+    return q.ninvoke(this.client, "expire", key, seconds);
+  }
+
+  public hincrby(key: string, field: string, incrementBy: number): Promise<number> {
+    return q.ninvoke(this.client, "hincrby", key, field, incrementBy);
+  }
+
+  public quit(): Promise<void> {
+    return q.ninvoke(this.client, "quit");
   }
 }
 
 export class RedisManager {
   private static DEFAULT_EXPIRY: number = 3600; // one hour, specified in seconds
-  private static METRICS_DB: number = 1;
+  private _opsClient: Cluster | Redis = null;
+  private _promisifiedOpsClient: PromisifiedRedisClient | null = null;
 
-  private _opsClient: redis.RedisClient;
-  private _promisifiedOpsClient: PromisifiedRedisClient;
-  private _metricsClient: redis.RedisClient;
-  private _promisifiedMetricsClient: PromisifiedRedisClient;
-  private _setupMetricsClientPromise: Promise<void>;
+  private _metricsClient: Cluster | Redis = null;
+  private _promisifiedMetricsClient: PromisifiedRedisClient | null = null;
+
+  private _setupMetricsClientPromise: Promise<void> | null = null;
 
   constructor() {
     if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
+      console.log("port redis:", process.env.REDIS_PORT);
       const redisConfig = {
         host: process.env.REDIS_HOST,
-        port: process.env.REDIS_PORT,
-        auth_pass: process.env.REDIS_KEY,
-        tls: {
-          // Note: Node defaults CA's to those trusted by Mozilla
-          rejectUnauthorized: true,
-        },
+        port: parseInt(process.env.REDIS_PORT),
+        // auth_pass: process.env.REDIS_KEY,
+        // tls: {
+        //   // Note: Node defaults CA's to those trusted by Mozilla
+        //   rejectUnauthorized: true,
+        // },
       };
-      this._opsClient = redis.createClient(redisConfig);
-      this._metricsClient = redis.createClient(redisConfig);
+      console.log("Redis config:", redisConfig);
+      this._opsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster([redisConfig]) : new Redis(redisConfig);
+      this._metricsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster([redisConfig]) : new Redis(redisConfig);
       this._opsClient.on("error", (err: Error) => {
-        console.error(err);
+        console.error("Redis ops client error:", err);
       });
 
       this._metricsClient.on("error", (err: Error) => {
-        console.error(err);
+        console.error("Redis Metrics client error:", err);
       });
 
       this._promisifiedOpsClient = new PromisifiedRedisClient(this._opsClient);
       this._promisifiedMetricsClient = new PromisifiedRedisClient(this._metricsClient);
       this._setupMetricsClientPromise = this._promisifiedMetricsClient
-        .select(RedisManager.METRICS_DB)
-        .then(() => this._promisifiedMetricsClient.set("health", "health"));
+        .set("health", "healthy")
+        .then(() => {})
+        .catch((err) => console.error("Failed to set initial health status:", err));
     } else {
       console.warn("No REDIS_HOST or REDIS_PORT environment variable configured.");
     }
@@ -137,7 +171,19 @@ export class RedisManager {
       return q.reject<void>("Redis manager is not enabled");
     }
 
-    return q.all([this._promisifiedOpsClient.ping(), this._promisifiedMetricsClient.ping()]).spread<void>(() => {});
+    console.log("Starting Redis health check...");
+    return q
+      .all([
+        this._promisifiedOpsClient.ping().then(() => console.log("Ops Client Ping successful")),
+        this._promisifiedMetricsClient.ping().then(() => console.log("Metrics Client Ping successful")),
+      ])
+      .spread(() => {
+        console.log("Redis health check passed.");
+      })
+      .catch((err) => {
+        console.error("Redis health check failed:", err);
+        throw err;
+      });
   }
 
   /**
@@ -189,6 +235,13 @@ export class RedisManager {
       .then(() => {});
   }
 
+  public invalidateCache(expiryKey: string): Promise<void> {
+    
+    if (!this.isEnabled) return q(<void>null);
+
+    return this._promisifiedOpsClient.del(expiryKey).then(() => {});
+  }
+
   // Atomically increments the status field for the deployment by 1,
   // or 1 by default. If the field does not exist, it will be created with the value of 1.
   public incrementLabelStatusCount(deploymentKey: string, label: string, status: string): Promise<void> {
@@ -210,7 +263,10 @@ export class RedisManager {
     return this._setupMetricsClientPromise
       .then(() =>
         this._promisifiedMetricsClient.del(
-          Utilities.getDeploymentKeyLabelsHash(deploymentKey),
+          Utilities.getDeploymentKeyLabelsHash(deploymentKey)
+        )
+      ).then(() => 
+        this._promisifiedMetricsClient.del(
           Utilities.getDeploymentKeyClientsHash(deploymentKey)
         )
       )
@@ -247,7 +303,7 @@ export class RedisManager {
 
     return this._setupMetricsClientPromise
       .then(() => {
-        const batchClient: any = (<any>this._metricsClient).batch();
+        const batchClient: any = (<any>this._metricsClient).pipeline();
         const currentDeploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(currentDeploymentKey);
         const currentLabelActiveField: string = Utilities.getLabelActiveCountField(currentLabel);
         const currentLabelDeploymentSucceededField: string = Utilities.getLabelStatusField(currentLabel, DEPLOYMENT_SUCCEEDED);
@@ -260,7 +316,7 @@ export class RedisManager {
           batchClient.hincrby(previousDeploymentKeyLabelsHash, previousLabelActiveField, /* incrementBy */ -1);
         }
 
-        return this._promisifiedMetricsClient.execBatch(batchClient);
+        return batchClient.exec(batchClient);
       })
       .then(() => {});
   }
@@ -276,12 +332,6 @@ export class RedisManager {
         return this._promisifiedMetricsClient.hdel(deploymentKeyClientsHash, clientUniqueId);
       })
       .then(() => {});
-  }
-
-  public invalidateCache(expiryKey: string): Promise<void> {
-    if (!this.isEnabled) return q(<void>null);
-
-    return this._promisifiedOpsClient.del(expiryKey).then(() => {});
   }
 
   // For unit tests only
@@ -314,7 +364,7 @@ export class RedisManager {
 
     return this._setupMetricsClientPromise
       .then(() => {
-        const batchClient: any = (<any>this._metricsClient).batch();
+        const batchClient: any = (<any>this._metricsClient).pipeline();
         const deploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(deploymentKey);
         const deploymentKeyClientsHash: string = Utilities.getDeploymentKeyClientsHash(deploymentKey);
         const toLabelActiveField: string = Utilities.getLabelActiveCountField(toLabel);
@@ -326,8 +376,9 @@ export class RedisManager {
           batchClient.hincrby(deploymentKeyLabelsHash, fromLabelActiveField, /* incrementBy */ -1);
         }
 
-        return this._promisifiedMetricsClient.execBatch(batchClient);
+        return batchClient.exec(batchClient);
       })
       .then(() => {});
   }
 }
+

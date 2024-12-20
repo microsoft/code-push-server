@@ -6,6 +6,8 @@ import * as stream from "stream";
 import * as error from "../error";
 
 import Promise = q.Promise;
+import { AppCreationRequest } from "../types/rest-definitions";
+import { bool } from "aws-sdk/clients/signer";
 
 export enum ErrorCode {
   ConnectionFailed = 0,
@@ -61,14 +63,25 @@ export interface App {
   /*generated*/ createdTime: number;
   /*generated*/ id?: string;
   name: string;
+  tenantId?: string;
+  tenantName?: string;
+}
+
+export interface Organization {
+  /*generated*/ createdBy: string;
+  /*generated*/ createdTime: number;
+  /*generated*/ id?: string;
+  displayName: string;
+  role: string;
 }
 
 export interface Deployment {
-  /*generated*/ createdTime: number;
+  /*generated*/ createdTime?: number;
   /*generated*/ id?: string;
   name: string;
   key: string;
   package?: Package;
+  packageHistory?: Package[];
 }
 
 export interface DeploymentInfo {
@@ -102,6 +115,11 @@ export interface Package {
   rollout?: number;
   size: number;
   uploadTime: number;
+  active?: number;
+  downloaded?: number;
+  failed?: number;
+  installed?: number;
+  totalActive?: number;
 }
 
 export interface AccessKey {
@@ -113,6 +131,7 @@ export interface AccessKey {
   /*generated*/ id?: string;
   /*generated*/ isSession?: boolean;
   name: string;
+  scope?: string;
 }
 
 /**
@@ -134,6 +153,9 @@ export interface Storage {
   getAccountIdFromAccessKey(accessKey: string): Promise<string>;
   updateAccount(email: string, updates: Account): Promise<void>;
 
+  getTenants(accountId: string): Promise<Organization[]>;
+  removeTenant(accountId: string, tenantId: string): Promise<void>;
+
   addApp(accountId: string, app: App): Promise<App>;
   getApps(accountId: string): Promise<App[]>;
   getApp(accountId: string, appId: string): Promise<App>;
@@ -143,6 +165,7 @@ export interface Storage {
 
   addCollaborator(accountId: string, appId: string, email: string): Promise<void>;
   getCollaborators(accountId: string, appId: string): Promise<CollaboratorMap>;
+  updateCollaborators(accountId: string, appId: string, email: string, role: string): Promise<void>;
   removeCollaborator(accountId: string, appId: string, email: string): Promise<void>;
 
   addDeployment(accountId: string, appId: string, deployment: Deployment): Promise<string>;
@@ -167,6 +190,8 @@ export interface Storage {
   getAccessKeys(accountId: string): Promise<AccessKey[]>;
   removeAccessKey(accountId: string, accessKeyId: string): Promise<void>;
   updateAccessKey(accountId: string, accessKey: AccessKey): Promise<void>;
+  getUserFromAccessKey(accessKey: string): Promise<Account>;
+  getUserFromAccessToken(accessToken: string): Promise<Account>;
 
   dropAll(): Promise<void>;
 }
@@ -221,6 +246,7 @@ export class NameResolver {
   // Interface
   public static isDuplicate(items: App[], name: string): boolean;
   public static isDuplicate<T extends { name: string }>(items: T[], name: string): boolean;
+
   // Definition
   public static isDuplicate<T extends { name: string }>(items: T[], name: string): boolean {
     if (!items.length) return false;
@@ -238,6 +264,50 @@ export class NameResolver {
       return !!NameResolver.findByName(items, name);
     }
   }
+
+
+  // Interface
+  public static isDuplicateApp<T extends { name: string }>(items: T[], appRequest: AppCreationRequest): boolean;
+  // Definition
+  public static isDuplicateApp<T extends { name: string }>(items: T[], appRequest: AppCreationRequest): boolean {
+    if (!items.length) return false;
+
+    if ((<App>(<any>items[0])).collaborators) {
+      // Use 'app' overload
+      for (let i = 0; i < items.length; i++) {
+        const app = <App>(<any>items[i]);
+        if (app.name === appRequest.name && NameResolver.findByTentantId(app, appRequest) && isOwnedByCurrentUser(app)) return true;
+      }
+
+      return false;
+    } else {
+      // Use general overload
+      return !!NameResolver.findByName(items, appRequest.name);
+    }
+  }
+
+  public static findByTentantId(item: App, appRequest: AppCreationRequest): boolean {
+      if (!appRequest.organisation) {
+          return true; // No tenantId in request, so it's a personal app
+      }
+      if (!item.tenantId) {
+          return false; // No tenantId in app, so it's a personal app
+      }
+      // Check if the app's tenantId matches the requested organisation's tenantId
+      return item.tenantId === appRequest.organisation.orgId;
+  }
+
+  public static findAppByTenantId(apps: App[], tenantId: string, name: string): App {
+    if (!apps.length) return null;
+
+    for (let i = 0; i < apps.length; i++) {
+      if (apps[i].tenantId === tenantId && apps[i].name === name) {
+        return apps[i];
+      }
+    }
+    return null;
+  }
+
 
   // Interface
   public static findByName(items: App[], displayName: string): App;
@@ -324,13 +394,13 @@ export class NameResolver {
       .catch(NameResolver.errorMessageOverride(ErrorCode.NotFound, `Access key "${name}" does not exist.`));
   }
 
-  public resolveApp(accountId: string, name: string, permission?: string): Promise<App> {
+  public resolveApp(accountId: string, name: string, tenantId?: string, permission?: string): Promise<App> {
     return this._storage
       .getApps(accountId)
       .then((apps: App[]): App => {
-        const app: App = NameResolver.findByName(apps, name);
+        //check this logic
+        const app: App = tenantId ? NameResolver.findAppByTenantId(apps, tenantId, name) : NameResolver.findByName(apps, name);
         if (!app) throw storageError(ErrorCode.NotFound);
-
         return app;
       })
       .catch(NameResolver.errorMessageOverride(ErrorCode.NotFound, `App "${name}" does not exist.`));

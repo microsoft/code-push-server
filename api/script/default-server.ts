@@ -2,19 +2,29 @@
 // Licensed under the MIT License.
 
 import * as api from "./api";
+import { S3 } from "aws-sdk"; // Amazon S3
+import { SecretsManager } from "aws-sdk";
+import * as awsRDS from "aws-sdk/clients/rds";
 import { AzureStorage } from "./storage/azure-storage";
 import { fileUploadMiddleware } from "./file-upload-manager";
 import { JsonStorage } from "./storage/json-storage";
 import { RedisManager } from "./redis-manager";
 import { Storage } from "./storage/storage";
 import { Response } from "express";
-const { DefaultAzureCredential } = require("@azure/identity");
-const { SecretClient } = require("@azure/keyvault-secrets");
+import rateLimit from "express-rate-limit";
+const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || "<your-s3-bucket-name>";
+const RDS_DB_INSTANCE_IDENTIFIER = process.env.RDS_DB_INSTANCE_IDENTIFIER || "<your-rds-instance>";
+const SECRETS_MANAGER_SECRET_ID = process.env.SECRETS_MANAGER_SECRET_ID || "<your-secret-id>";
+
+const s3 = new S3(); // Create an S3 instance
+const secretsManager = new SecretsManager(); // Secrets Manager instance for fetching credentials
 
 import * as bodyParser from "body-parser";
 const domain = require("express-domain-middleware");
 import * as express from "express";
+const csrf = require('lusca').csrf;
 import * as q from "q";
+import { S3Storage } from "./storage/aws-storage";
 
 interface Secret {
   id: string;
@@ -34,34 +44,23 @@ function bodyParserErrorHandler(err: any, req: express.Request, res: express.Res
   }
 }
 
-export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void, useJsonStorage?: boolean): void {
+export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void, useJsonStorage: boolean=false): void {
   let storage: Storage;
-  let isKeyVaultConfigured: boolean;
-  let keyvaultClient: any;
+  let isSecretsManagerConfigured: boolean;
+  let secretValue: any;
 
   q<void>(null)
     .then(async () => {
-      if (useJsonStorage) {
-        storage = new JsonStorage();
-      } else if (!process.env.AZURE_KEYVAULT_ACCOUNT) {
-        storage = new AzureStorage();
+      if (!useJsonStorage) {
+        //storage = new JsonStorage();
+        storage = new S3Storage();
       } else {
-        isKeyVaultConfigured = true;
-
-        const credential = new DefaultAzureCredential();
-
-        const vaultName = process.env.AZURE_KEYVAULT_ACCOUNT;
-        const url = `https://${vaultName}.vault.azure.net`;
-
-        const keyvaultClient = new SecretClient(url, credential);
-        const secret = await keyvaultClient.getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`);
-        storage = new AzureStorage(process.env.AZURE_STORAGE_ACCOUNT, secret);
+        storage = new JsonStorage();
       }
     })
     .then(() => {
       const app = express();
       const auth = api.auth({ storage: storage });
-      const appInsights = api.appInsights();
       const redisManager = new RedisManager();
 
       // First, to wrap all requests and catch all exceptions.
@@ -71,6 +70,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use((req: express.Request, res: express.Response, next: (err?: any) => void): any => {
         const originalSend = res.send;
         const originalSetHeader = res.setHeader;
+        // req.user = {
+        //   id: "default",
+        // }
         res.setHeader = (name: string, value: string | number | readonly string[]): Response => {
           if (!res.headersSent) {
             originalSetHeader.apply(res, [name, value]);
@@ -104,6 +106,8 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       // Before other middleware which may use request data that this middleware modifies.
       app.use(api.inputSanitizer());
 
+      //app.use(csrf());
+
       // body-parser must be before the Application Insights router.
       app.use(bodyParser.urlencoded({ extended: true }));
       const jsonOptions: any = { limit: "10kb", strict: true };
@@ -121,7 +125,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use(bodyParserErrorHandler);
 
       // Before all other middleware to ensure all requests are tracked.
-      app.use(appInsights.router());
+      // app.use(appInsights.router());
 
       app.get("/", (req: express.Request, res: express.Response, next: (err?: Error) => void): any => {
         res.send("Welcome to the CodePush REST API!");
@@ -133,6 +137,14 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use("/auth/images/", express.static(__dirname + "/views/images"));
       app.use(api.headers({ origin: process.env.CORS_ORIGIN || "http://localhost:4000" }));
       app.use(api.health({ storage: storage, redisManager: redisManager }));
+
+      const limiter = rateLimit({
+        windowMs: 15 * 60 * 1000, // 15 minutes
+        max: 100, // limit each IP to 100 requests per windowMs
+        validate: { xForwardedForHeader: false }
+      });
+
+      app.use(limiter);
 
       if (process.env.DISABLE_ACQUISITION !== "true") {
         app.use(api.acquisition({ storage: storage, redisManager: redisManager }));
@@ -159,26 +171,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
         }
         app.use(auth.authenticate, fileUploadMiddleware, api.management({ storage: storage, redisManager: redisManager }));
       } else {
-        app.use(auth.legacyRouter());
-      }
-
-      // Error handler needs to be the last middleware so that it can catch all unhandled exceptions
-      app.use(appInsights.errorHandler);
-
-      if (isKeyVaultConfigured) {
-        // Refresh credentials from the vault regularly as the key is rotated
-        setInterval(() => {
-          keyvaultClient
-            .getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`)
-            .then((secret: any) => {
-              return (<AzureStorage>storage).reinitialize(process.env.AZURE_STORAGE_ACCOUNT, secret);
-            })
-            .catch((error: Error) => {
-              console.error("Failed to reinitialize storage from Key Vault credentials");
-              appInsights.errorHandler(error);
-            })
-            .done();
-        }, Number(process.env.REFRESH_CREDENTIALS_INTERVAL) || 24 * 60 * 60 * 1000 /*daily*/);
+        app.use(auth.router());
       }
 
       done(null, app, storage);

@@ -8,7 +8,10 @@
     "build": "tsc",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
-    "lint:fix": "npx eslint ./script/**/*.ts --fix"
+    "lint:fix": "npx eslint ./script/**/*.ts --fix",
+    "debug": "node --inspect-brk ./bin/script/cli.js",
+    "exec:clean" : "npm install && npm run build  && npm install -g",
+    "exec" : "npm run build && npm run build && npm install -g"
   },
   "bin": {
     "code-push-standalone": "./bin/script/cli.js"

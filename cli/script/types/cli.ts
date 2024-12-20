@@ -8,6 +8,7 @@ export enum CommandType {
   accessKeyPatch,
   accessKeyList,
   accessKeyRemove,
+  orgList,
   appAdd,
   appList,
   appRemove,
@@ -42,6 +43,19 @@ export interface ICommand {
   type: CommandType;
 }
 
+
+
+export function parseAppName(appName: string): { ownerName: string | null, appName: string } {
+  const [ownerName, app] = appName.includes('/')
+    ? appName.split('/')
+    : [null, appName];
+  return { ownerName, appName: app };
+}
+
+export interface IAppCommand extends ICommand {
+  appName: string;
+}
+
 export interface IAccessKeyAddCommand extends ICommand {
   name: string;
   ttl?: number;
@@ -61,18 +75,22 @@ export interface IAccessKeyRemoveCommand extends ICommand {
   accessKey: string;
 }
 
-export interface IAppAddCommand extends ICommand {
-  appName: string;
+export interface IOrgListCommand extends ICommand {
+  format: string;
+}
+
+export interface IAppAddCommand extends IAppCommand {
   os: string;
   platform: string;
 }
 
 export interface IAppListCommand extends ICommand {
   format: string;
+  org? : string;
 }
 
-export interface IAppRemoveCommand extends ICommand {
-  appName: string;
+export interface IAppRemoveCommand extends IAppCommand {
+  
 }
 
 export interface IAppRenameCommand extends ICommand {
@@ -80,23 +98,19 @@ export interface IAppRenameCommand extends ICommand {
   newAppName: string;
 }
 
-export interface IAppTransferCommand extends ICommand {
-  appName: string;
+export interface IAppTransferCommand extends IAppCommand {
   email: string;
 }
 
-export interface ICollaboratorAddCommand extends ICommand {
-  appName: string;
+export interface ICollaboratorAddCommand extends IAppCommand {
   email: string;
 }
 
-export interface ICollaboratorListCommand extends ICommand {
-  appName: string;
+export interface ICollaboratorListCommand extends IAppCommand {
   format: string;
 }
 
-export interface ICollaboratorRemoveCommand extends ICommand {
-  appName: string;
+export interface ICollaboratorRemoveCommand extends IAppCommand {
   email: string;
 }
 
@@ -104,19 +118,16 @@ export interface IDebugCommand extends ICommand {
   platform: string;
 }
 
-export interface IDeploymentAddCommand extends ICommand {
-  appName: string;
+export interface IDeploymentAddCommand extends IAppCommand {
   deploymentName: string;
   default: boolean;
 }
 
-export interface IDeploymentHistoryClearCommand extends ICommand {
-  appName: string;
+export interface IDeploymentHistoryClearCommand extends IAppCommand {
   deploymentName: string;
 }
 
-export interface IDeploymentHistoryCommand extends ICommand {
-  appName: string;
+export interface IDeploymentHistoryCommand extends IAppCommand {
   deploymentName: string;
   format: string;
   displayAuthor: boolean;

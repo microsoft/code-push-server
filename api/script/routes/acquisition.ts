@@ -118,7 +118,7 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
 
-  router.get("/health", (req: express.Request, res: express.Response, next: (err?: any) => void): any => {
+  router.get("/healthcheck", (req: express.Request, res: express.Response, next: (err?: any) => void): any => {
     storage
       .checkHealth()
       .then(() => {

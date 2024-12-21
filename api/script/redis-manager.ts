@@ -158,6 +158,7 @@ export class RedisManager {
           connectTimeout: 15000, // Timeout for initial connection (in ms)
           maxRetriesPerRequest: 5, // Max retries for a failed request
         },
+        scaleReads: "all", // All reads go to master
         clusterRetryStrategy: clusterRetryStrategy,
       };
 

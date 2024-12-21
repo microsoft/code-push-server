@@ -5,9 +5,11 @@ import * as assert from "assert";
 import * as express from "express";
 import * as q from "q";
 // import * as redis from "redis";
-import { Cluster, Redis } from "ioredis"
+import { Cluster, ClusterOptions, Redis, ClusterNode } from "ioredis"
 
 import Promise = q.Promise;
+import { ClusterConfig } from "aws-sdk/clients/opensearch";
+import { type } from "os";
 
 export const DEPLOYMENT_SUCCEEDED = "DeploymentSucceeded";
 export const DEPLOYMENT_FAILED = "DeploymentFailed";
@@ -97,6 +99,7 @@ class PromisifiedRedisClient {
   }
 
   public hgetall(key: string): Promise<any> {
+    console.log("hgetall key:", key);
     return q.ninvoke(this.client, "hgetall", key);
   }
 
@@ -140,9 +143,48 @@ export class RedisManager {
         //   rejectUnauthorized: true,
         // },
       };
-      console.log("Redis config:", redisConfig);
-      this._opsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster([redisConfig]) : new Redis(redisConfig);
-      this._metricsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster([redisConfig]) : new Redis(redisConfig);
+
+
+      const clusterRetryStrategy = (times) => {
+        // Customize retry logic; return null to stop retrying
+        if (times > 5) {
+          console.error("Too many retries. Giving up.");
+          return null;
+        }
+        return Math.min(times * 100, 3000); // Incremental delay
+      };
+
+      const options : ClusterOptions = {   
+        redisOptions: {
+          connectTimeout: 15000, // Timeout for initial connection (in ms)
+          maxRetriesPerRequest: 5, // Max retries for a failed request
+        },
+        scaleReads: "all", // All reads go to master
+        clusterRetryStrategy: clusterRetryStrategy,
+      };
+
+      const startUpNodes: ClusterNode[] = [
+          {
+            host: process.env.REDIS_HOST,
+            port: parseInt(process.env.REDIS_PORT),
+          },
+      ]
+
+
+      console.log("value ",process.env.REDIS_CLUSTER_ENABLED)
+      console.log("typeof ", typeof process.env.REDIS_CLUSTER_ENABLED)
+      const clusterEnabledWithDoubleEqual = process.env.REDIS_CLUSTER_ENABLED == "true";
+      const clusterEnabledWithTrippleEqual = process.env.REDIS_CLUSTER_ENABLED === "true";
+      console.log("clusterEnabledWithDoubleEqual", clusterEnabledWithDoubleEqual);
+      console.log("clusterEnabledWithTrippleEqual", clusterEnabledWithTrippleEqual);
+
+      if (process.env.REDIS_CLUSTER_ENABLED == "true") {
+        console.log("startUpNodes, options", startUpNodes, options);
+      } else {
+        console.log("Redis config since no cluster enabled:", redisConfig);
+      }
+      this._opsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster(startUpNodes, options) : new Redis(redisConfig);
+      this._metricsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster(startUpNodes, options) : new Redis(redisConfig);
       this._opsClient.on("error", (err: Error) => {
         console.error("Redis ops client error:", err);
       });

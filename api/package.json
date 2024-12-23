@@ -10,7 +10,8 @@
     "build": "tsc && shx cp -r ./script/views ./bin/script",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
-    "lint:fix": "npx eslint ./script/**/*.ts --fix"
+    "lint:fix": "npx eslint ./script/**/*.ts --fix",
+    "test:mocha": "mocha -r ts-node/register 'test/**/*.ts'"
   },
   "repository": {
     "type": "git",
@@ -57,7 +58,7 @@
   "devDependencies": {
     "@types/express": "^4.17.17",
     "@types/jest": "^29.5.1",
-    "@types/mocha": "^10.0.1",
+    "@types/mocha": "^10.0.10",
     "@types/multer": "^1.4.7",
     "@types/node": "^20.1.4",
     "@types/q": "^1.5.5",
@@ -65,10 +66,12 @@
     "@typescript-eslint/parser": "^6.0.0",
     "dotenv": "^16.0.3",
     "eslint": "^8.45.0",
+    "mocha": "^11.0.1",
     "prettier": "^2.8.8",
     "rimraf": "^5.0.1",
     "shx": "^0.3.4",
     "supertest": "^6.3.3",
+    "ts-node": "^10.9.2",
     "typescript": "^5.0.4"
   }
 }

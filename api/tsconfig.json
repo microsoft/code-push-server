@@ -9,5 +9,8 @@
   "exclude": [
     "./bin",
     "./node_modules"
-  ]
+  ],
+  "ts-node": {
+    "files": true
+  }
 }

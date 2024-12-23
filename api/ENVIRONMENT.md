@@ -59,8 +59,8 @@ To perform the unit tests against Azure storage:
 
 To perform the unit tests against an Azure server:
 
-- `AZURE_MANAGEMENT_URL`: (For unit tests) Set to a Azure url to run management tests against that server. If the server has authentication enabled, also set the TEST_AZURE_STORAGE and AZURE_STORAGE_ACCESS_KEY to the Azure storage used by the server so that the tests can pass authentication.
-- `AZURE_ACQUISITION_URL`: (For unit tests) Set to a Azure url to run acquisition tests against that server. If the server has authentication enabled, also set the TEST_AZURE_STORAGE and AZURE_STORAGE_ACCESS_KEY to the Azure storage used by the server so that the tests can pass authentication.
+- `AZURE_MANAGEMENT_URL`: (For unit tests) Set to an Azure url to run management tests against that server. If the server has authentication enabled, also set the TEST_AZURE_STORAGE and AZURE_STORAGE_ACCESS_KEY to the Azure storage used by the server so that the tests can pass authentication.
+- `AZURE_ACQUISITION_URL`: (For unit tests) Set to an Azure url to run acquisition tests against that server. If the server has authentication enabled, also set the TEST_AZURE_STORAGE and AZURE_STORAGE_ACCESS_KEY to the Azure storage used by the server so that the tests can pass authentication.
 
 ### Other
 

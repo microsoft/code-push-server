@@ -772,3 +772,60 @@ code-push-standalone deployment clear <appName> <deploymentName>
 ```
 
 After running this command, client devices configured to receive updates using its associated deployment key will no longer receive the updates that have been cleared. This command is irreversible, and therefore should not be used in a production deployment.
+
+## Code Signing for CodePush
+
+Code Signing ensures that updates deployed via CodePush are secure and verified. Follow these steps to set up Code Signing:
+
+### 1. Generate a Signing Key
+
+**Create private and public keys using OpenSSL:**
+
+```shell
+# generate private RSA key and write it to private.pem file
+openssl genrsa -out private.pem
+
+# export public key from private.pem into public.pem
+openssl rsa -pubout -in private.pem -out public.pem
+```
+
+### 2. Configure CodePush CLI
+
+**Specify the path to your private key when releasing updates:**
+
+```shell
+code-push-standalone release-react <appName> <platform> --privateKeyPath private.pem
+```
+
+### 3. Configure Your App
+
+#### iOS
+
+**Add the public key to your `Info.plist`:**
+
+- Open your `Info.plist` file.
+- Add a new entry:
+
+    ```xml
+    <key>CodePushPublicKey</key>
+    <string>-----BEGIN PUBLIC KEY-----
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+    -----END PUBLIC KEY-----</string>
+    ```
+
+Replace the placeholder with the actual contents of your `public.pem` file.
+
+#### Android
+
+**Add the public key to your `strings.xml`:**
+
+- Open `res/values/strings.xml`.
+- Add the following entry:
+
+    ```xml
+    <string name="CodePushPublicKey">-----BEGIN PUBLIC KEY-----
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+    -----END PUBLIC KEY-----</string>
+    ```
+
+Replace the placeholder with the actual contents of your `public.pem` file.

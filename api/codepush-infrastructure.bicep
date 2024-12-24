@@ -18,19 +18,19 @@ var serverUrl = 'https://codepush-${project_suffix}.azurewebsites.net'
 
 targetScope = 'resourceGroup'
 
-resource servicePlan 'Microsoft.Web/serverfarms@2022-03-01' = {
+resource servicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: servicePlanName
   location: az_location
   properties: {
     reserved: true
   }
   sku: {
-    name: 'S1'
+    name: 'B1'
     tier: 'Standard'
   }
 }
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
   location: az_location
   properties: {
@@ -44,7 +44,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   kind: 'StorageV2'
 }
 
-resource webApp 'Microsoft.Web/sites@2022-03-01' = {
+resource webApp 'Microsoft.Web/sites@2023-01-01' = {
   name: webAppName
   location: az_location
   properties: {
@@ -71,7 +71,7 @@ resource webApp 'Microsoft.Web/sites@2022-03-01' = {
   }
 }
 
-resource scmBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2022-03-01' = {
+resource scmBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2023-01-01' = {
   name: 'scm'
   parent: webApp
   properties: {

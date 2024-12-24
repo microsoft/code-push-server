@@ -118,6 +118,23 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
 
+  /**
+   * @openapi
+   * /health:
+   *   get:
+   *     summary: Health check endpoint
+   *     description: Returns the health status of the service.
+   *     responses:
+   *       200:
+   *         description: Service is healthy
+   *         content:
+   *           text/plain:
+   *             schema:
+   *               type: string
+   *               example: Healthy
+   *       500:
+   *         description: Internal server error
+   */
   router.get("/health", (req: express.Request, res: express.Response, next: (err?: any) => void): any => {
     storage
       .checkHealth()
@@ -290,13 +307,319 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
       .done();
   };
 
+  /**
+     * @openapi
+     * /updateCheck:
+     *   get:
+     *     summary: Update check endpoint
+     *     description: Checks for updates for the specified deployment key and app version.
+     *     parameters:
+     *       - name: deploymentKey
+     *         in: query
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The deployment key for the app.
+   *       - name: clientUniqueId
+     *         in: query
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The unique client Identifier.
+     *       - name: appVersion
+     *         in: query
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The version of the app.
+     *       - name: packageHash
+     *         in: query
+     *         required: false
+     *         schema:
+     *           type: string
+     *         description: The hash of the package.
+     *       - name: isCompanion
+     *         in: query
+     *         required: false
+     *         schema:
+     *           type: boolean
+     *         description: Indicates if the request is from a companion app.
+     *       - name: label
+     *         in: query
+     *         required: false
+     *         schema:
+     *           type: string
+     *         description: The label of the package.
+     *     responses:
+     *       200:
+     *         description: Update information
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 updateInfo:
+     *                   type: object
+     *                   properties:
+     *                     appVersion:
+     *                       type: string
+     *                     description:
+     *                       type: string
+     *                     isDisabled:
+     *                       type: boolean
+     *                     isMandatory:
+     *                       type: boolean
+     *                     label:
+     *                       type: string
+     *                     packageHash:
+     *                       type: string
+     *                     rollout:
+     *                       type: number
+     *                     target_binary_range:
+     *                       type: string
+     *                     downloadURL:
+     *                       type: string
+     *                     isAvailable:
+     *                       type: boolean
+     *                     packageSize:
+     *                       type: number
+     *                     shouldRunBinaryVersion:
+     *                       type: boolean
+     *                     updateAppVersion:
+     *                       type: boolean
+     *       400:
+     *         description: Invalid request parameters
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/updateCheck", updateCheck(false));
+  /**
+     * @openapi
+     * /v0.1/public/codepush/update_check:
+     *   get:
+     *     summary: Update check endpoint
+     *     description: Checks for updates for the specified deployment key and app version.
+     *     parameters:
+     *       - name: deploymentKey
+     *         in: query
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The deployment key for the app.
+     *       - name: clientUniqueId
+     *         in: query
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The unique client Identifier.
+     *       - name: appVersion
+     *         in: query
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The version of the app.
+     *       - name: packageHash
+     *         in: query
+     *         required: false
+     *         schema:
+     *           type: string
+     *         description: The hash of the package.
+     *       - name: isCompanion
+     *         in: query
+     *         required: false
+     *         schema:
+     *           type: boolean
+     *         description: Indicates if the request is from a companion app.
+     *       - name: label
+     *         in: query
+     *         required: false
+     *         schema:
+     *           type: string
+     *         description: The label of the package.
+     *     responses:
+     *       200:
+     *         description: Update information
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 updateInfo:
+     *                   type: object
+     *                   properties:
+     *                     appVersion:
+     *                       type: string
+     *                     description:
+     *                       type: string
+     *                     isDisabled:
+     *                       type: boolean
+     *                     isMandatory:
+     *                       type: boolean
+     *                     label:
+     *                       type: string
+     *                     packageHash:
+     *                       type: string
+     *                     rollout:
+     *                       type: number
+     *                     target_binary_range:
+     *                       type: string
+     *                     downloadURL:
+     *                       type: string
+     *                     isAvailable:
+     *                       type: boolean
+     *                     packageSize:
+     *                       type: number
+     *                     shouldRunBinaryVersion:
+     *                       type: boolean
+     *                     updateAppVersion:
+     *                       type: boolean
+     *       400:
+     *         description: Invalid request parameters
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/v0.1/public/codepush/update_check", updateCheck(true));
-
+  /**
+     * @openapi
+     * /reportStatus/deploy:
+     *   post:
+     *     summary: Report deployment status
+     *     description: Reports the status of a deployment for the specified deployment key and app version.
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               deploymentKey:
+     *                 type: string
+     *                 description: The deployment key for the app.
+     *               appVersion:
+     *                 type: string
+     *                 description: The version of the app.
+     *               previousDeploymentKey:
+     *                 type: string
+     *                 description: The previous deployment key.
+     *               previousLabelOrAppVersion:
+     *                 type: string
+     *                 description: The previous label or app version.
+     *               clientUniqueId:
+     *                 type: string
+     *                 description: The unique client identifier.
+     *               label:
+     *                 type: string
+     *                 description: The label of the package.
+     *               status:
+     *                 type: string
+     *                 description: The status of the deployment.
+     *     responses:
+     *       200:
+     *         description: Deployment status reported successfully
+     *       400:
+     *         description: Invalid request parameters
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/reportStatus/deploy", reportStatusDeploy);
+  /**
+     * @openapi
+     * /v0.1/public/codepush/report_status/deploy:
+     *   post:
+     *     summary: Report deployment status
+     *     description: Reports the status of a deployment for the specified deployment key and app version.
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               deploymentKey:
+     *                 type: string
+     *                 description: The deployment key for the app.
+     *               appVersion:
+     *                 type: string
+     *                 description: The version of the app.
+     *               previousDeploymentKey:
+     *                 type: string
+     *                 description: The previous deployment key.
+     *               previousLabelOrAppVersion:
+     *                 type: string
+     *                 description: The previous label or app version.
+     *               clientUniqueId:
+     *                 type: string
+     *                 description: The unique client identifier.
+     *               label:
+     *                 type: string
+     *                 description: The label of the package.
+     *               status:
+     *                 type: string
+     *                 description: The status of the deployment.
+     *     responses:
+     *       200:
+     *         description: Deployment status reported successfully
+     *       400:
+     *         description: Invalid request parameters
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/v0.1/public/codepush/report_status/deploy", reportStatusDeploy);
-
+  /**
+     * @openapi
+     * /reportStatus/download:
+     *   post:
+     *     summary: Report download status
+     *     description: Reports the download status for the specified deployment key and package label.
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               deploymentKey:
+     *                 type: string
+     *                 description: The deployment key for the app.
+     *               label:
+     *                 type: string
+     *                 description: The label of the package.
+     *     responses:
+     *       200:
+     *         description: Download status reported successfully
+     *       400:
+     *         description: Invalid request parameters
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/reportStatus/download", reportStatusDownload);
+  /**
+     * @openapi
+     * /v0.1/public/codepush/report_status/download:
+     *   post:
+     *     summary: Report download status
+     *     description: Reports the download status for the specified deployment key and package label.
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               deploymentKey:
+     *                 type: string
+     *                 description: The deployment key for the app.
+     *               label:
+     *                 type: string
+     *                 description: The label of the package.
+     *     responses:
+     *       200:
+     *         description: Download status reported successfully
+     *       400:
+     *         description: Invalid request parameters
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/v0.1/public/codepush/report_status/download", reportStatusDownload);
 
   return router;

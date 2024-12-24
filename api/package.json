@@ -6,12 +6,14 @@
   "scripts": {
     "start": "node ./bin/script/server.js",
     "start:env": "node -r dotenv/config ./bin/script/server.js dotenv_config_path=.env dotenv_config_silent=true",
+    "start:dev": "nodemon -r dotenv/config ./script/server.ts dotenv_config_path=.env dotenv_config_silent=true",
     "clean": "rimraf bin",
     "build": "tsc && shx cp -r ./script/views ./bin/script",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
     "lint:fix": "npx eslint ./script/**/*.ts --fix",
-    "test:mocha": "mocha -r ts-node/register 'test/**/*.ts'"
+    "test:mocha": "mocha -r ts-node/register 'test/**/*.ts'",
+    "openapispec": "npx swagger-jsdoc -d ./swagger/swaggerDefinition.json ./script/routes/*.ts -o ./swagger/codepush-openapi.yaml"
   },
   "repository": {
     "type": "git",
@@ -62,6 +64,7 @@
     "@types/multer": "^1.4.7",
     "@types/node": "^20.1.4",
     "@types/q": "^1.5.5",
+    "@types/swagger-jsdoc": "^6.0.4",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "dotenv": "^16.0.3",
@@ -71,6 +74,8 @@
     "rimraf": "^5.0.1",
     "shx": "^0.3.4",
     "supertest": "^6.3.3",
+    "swagger-jsdoc": "^6.2.8",
+    "nodemon": "^3.1.9",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.4"
   }

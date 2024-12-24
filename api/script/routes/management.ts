@@ -56,7 +56,36 @@ export function getManagementRouter(config: ManagementConfig): Router {
   const packageDiffing = new PackageDiffer(storage, parseInt(process.env.DIFF_PACKAGE_COUNT) || 5);
   const router: Router = Router();
   const nameResolver: NameResolver = new NameResolver(config.storage);
-
+  /**
+     * @openapi
+     * /account:
+     *   get:
+     *     summary: Retrieve account information
+     *     description: Retrieves the account information for the authenticated user.
+     *     responses:
+     *       200:
+     *         description: Account information retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 account:
+     *                   type: object
+     *                   properties:
+     *                     email:
+     *                       type: string
+     *                     name:
+     *                       type: string
+     *                     linkedProviders:
+     *                       type: array
+     *                       items:
+     *                         type: string
+     *       401:
+     *         description: Unauthorized access
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/account", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     storage
@@ -69,6 +98,48 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /accessKeys:
+     *   get:
+     *     summary: Retrieve access keys
+     *     description: Retrieves the access keys for the authenticated user.
+     *     responses:
+     *       200:
+     *         description: Access keys retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 accessKeys:
+     *                   type: array
+     *                   items:
+     *                     type: object
+     *                     properties:
+     *                       createdBy:
+     *                         type: string
+     *                       createdTime:
+     *                         type: integer
+     *                         format: int64
+     *                       expires:
+     *                         type: integer
+     *                         format: int64
+     *                       description:
+     *                         type: string
+     *                       friendlyName:
+     *                         type: string
+     *                       id:
+     *                         type: string
+     *                       isSession:
+     *                         type: boolean
+     *                       name:
+     *                         type: string
+     *       401:
+     *         description: Unauthorized access
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/accessKeys", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
 
@@ -92,6 +163,68 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /accessKeys:
+     *   post:
+     *     summary: Create a new access key
+     *     description: Creates a new access key for the authenticated user.
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               name:
+     *                 type: string
+     *               friendlyName:
+     *                 type: string
+     *               description:
+     *                 type: string
+     *               createdBy:
+     *                 type: string
+     *               ttl:
+     *                 type: integer
+     *                 format: int64
+     *     responses:
+     *       201:
+     *         description: Access keys retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 accessKeys:
+     *                   type: array
+     *                   items:
+     *                     type: object
+     *                     properties:
+     *                       createdBy:
+     *                         type: string
+     *                       description:
+     *                         type: string
+     *                       friendlyName:
+     *                         type: string
+     *                       name:
+     *                         type: string
+     *                       createdTime:
+     *                         type: integer
+     *                         format: int64
+     *                       expires:
+     *                         type: integer
+     *                         format: int64
+     *                       isSession:
+     *                         type: boolean
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized access
+     *       409:
+     *         description: Conflict - Access key already exists
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/accessKeys", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyRequest: restTypes.AccessKeyRequest = converterUtils.accessKeyRequestFromBody(req.body);
@@ -140,6 +273,53 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /accessKeys/{accessKeyName}:
+     *   get:
+     *     summary: Retrieve a specific access key
+     *     description: Retrieves the details of a specific access key for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: accessKeyName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the access key to retrieve
+     *     responses:
+     *       200:
+     *         description: Access key retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 accessKey:
+     *                   type: object
+     *                   properties:
+     *                     createdBy:
+     *                       type: string
+     *                     createdTime:
+     *                       type: integer
+     *                       format: int64
+     *                     expires:
+     *                       type: integer
+     *                       format: int64
+     *                     description:
+     *                       type: string
+     *                     friendlyName:
+     *                       type: string
+     *                     id:
+     *                       type: string
+     *                     isSession:
+     *                       type: boolean
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Access key not found
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accessKeyName: string = req.params.accessKeyName;
     const accountId: string = req.user.id;
@@ -153,7 +333,53 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
   });
-
+  /**
+     * @openapi
+     * /accessKeys/{accessKeyName}:
+     *   get:
+     *     summary: Retrieve a specific access key
+     *     description: Retrieves the details of a specific access key for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: accessKeyName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the access key to retrieve
+     *     responses:
+     *       200:
+     *         description: Access key retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 accessKey:
+     *                   type: object
+     *                   properties:
+     *                     createdBy:
+     *                       type: string
+     *                     createdTime:
+     *                       type: integer
+     *                       format: int64
+     *                     expires:
+     *                       type: integer
+     *                       format: int64
+     *                     description:
+     *                       type: string
+     *                     friendlyName:
+     *                       type: string
+     *                     id:
+     *                       type: string
+     *                     isSession:
+     *                       type: boolean
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Access key not found
+     *       500:
+     *         description: Internal server error
+     */
   router.patch("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyName: string = req.params.accessKeyName;
@@ -202,7 +428,29 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
   });
-
+  /**
+     * @openapi
+     * /accessKeys/{accessKeyName}:
+     *   delete:
+     *     summary: Delete a specific access key
+     *     description: Deletes a specific access key for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: accessKeyName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the access key to delete
+     *     responses:
+     *       204:
+     *         description: Access key deleted successfully
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Access key not found
+     *       500:
+     *         description: Internal server error
+     */
   router.delete("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyName: string = req.params.accessKeyName;
@@ -218,7 +466,29 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
   });
-
+  /**
+     * @openapi
+     * /sessions/{createdBy}:
+     *   delete:
+     *     summary: Delete sessions created by a specific user
+     *     description: Deletes all sessions created by a specific user for the authenticated account.
+     *     parameters:
+     *       - in: path
+     *         name: createdBy
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The identifier of the user who created the sessions
+     *     responses:
+     *       204:
+     *         description: Sessions deleted successfully
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Sessions not found
+     *       500:
+     *         description: Internal server error
+     */
   router.delete("/sessions/:createdBy", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const createdBy: string = req.params.createdBy;
@@ -246,6 +516,45 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps:
+     *   get:
+     *     summary: Retrieve all apps
+     *     description: Retrieves all apps for the authenticated user.
+     *     responses:
+     *       200:
+     *         description: Apps retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 apps:
+     *                   type: array
+     *                   items:
+     *                     type: object
+     *                     properties:
+     *                       name:
+     *                         type: string
+     *                       collaborators:
+     *                         type: object
+     *                         additionalProperties:
+     *                           type: object
+     *                           properties:
+     *                             isCurrentAccount:
+     *                               type: boolean
+     *                             permission:
+     *                               type: string
+     *                       deployments:
+     *                         type: array
+     *                         items:
+     *                           type: string
+     *       401:
+     *         description: Unauthorized access
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     storage
@@ -267,6 +576,67 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps:
+     *   post:
+     *     summary: Create a new app
+     *     description: Creates a new app for the authenticated user.
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               name:
+     *                 type: string
+     *               collaborators:
+     *                 type: object
+     *                 additionalProperties:
+     *                   type: object
+     *                   properties:
+     *                     isCurrentAccount:
+     *                       type: boolean
+     *                     permission:
+     *                       type: string
+     *               manuallyProvisionDeployments:
+     *                 type: boolean
+     *     responses:
+     *       201:
+     *         description: App created successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 app:
+     *                   type: object
+     *                   properties:
+     *                     name:
+     *                       type: string
+     *                     collaborators:
+     *                       type: object
+     *                       additionalProperties:
+     *                         type: object
+     *                         properties:
+     *                           isCurrentAccount:
+     *                             type: boolean
+     *                           permission:
+     *                             type: string
+     *                     deployments:
+     *                       type: array
+     *                       items:
+     *                         type: string
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized access
+     *       409:
+     *         description: Conflict - App already exists
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appRequest: restTypes.AppCreationRequest = converterUtils.appCreationRequestFromBody(req.body);
@@ -316,6 +686,52 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}:
+     *   get:
+     *     summary: Retrieve a specific app
+     *     description: Retrieves the details of a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to retrieve
+     *     responses:
+     *       200:
+     *         description: App retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 app:
+     *                   type: object
+     *                   properties:
+     *                     name:
+     *                       type: string
+     *                     collaborators:
+     *                       type: object
+     *                       additionalProperties:
+     *                         type: object
+     *                         properties:
+     *                           isCurrentAccount:
+     *                             type: boolean
+     *                           permission:
+     *                             type: string
+     *                     deployments:
+     *                       type: array
+     *                       items:
+     *                         type: string
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: App not found
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -334,6 +750,29 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}:
+     *   delete:
+     *     summary: Delete a specific app
+     *     description: Deletes a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to delete
+     *     responses:
+     *       204:
+     *         description: App deleted successfully
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: App not found
+     *       500:
+     *         description: Internal server error
+     */
   router.delete("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -367,6 +806,65 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}:
+     *   patch:
+     *     summary: Update a specific app
+     *     description: Updates the details of a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to update
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               name:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: App updated successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 app:
+     *                   type: object
+     *                   properties:
+     *                     name:
+     *                       type: string
+     *                     collaborators:
+     *                       type: object
+     *                       additionalProperties:
+     *                         type: object
+     *                         properties:
+     *                           isCurrentAccount:
+     *                             type: boolean
+     *                           permission:
+     *                             type: string
+     *                     deployments:
+     *                       type: array
+     *                       items:
+     *                         type: string
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: App not found
+     *       409:
+     *         description: Conflict - App name already exists
+     *       500:
+     *         description: Internal server error
+     */
   router.patch("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -414,6 +912,37 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/transfer/{email}:
+     *   post:
+     *     summary: Transfer app ownership
+     *     description: Transfers the ownership of a specific app to another user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to transfer
+     *       - in: path
+     *         name: email
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The email of the user to transfer the app to
+     *     responses:
+     *       201:
+     *         description: App ownership transferred successfully
+     *       400:
+     *         description: Invalid email parameter
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: App not found
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/apps/:appName/transfer/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -436,6 +965,37 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/collaborators/{email}:
+     *   post:
+     *     summary: Add a collaborator to an app
+     *     description: Adds a collaborator to a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to add the collaborator to
+     *       - in: path
+     *         name: email
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The email of the collaborator to add
+     *     responses:
+     *       201:
+     *         description: Collaborator added successfully
+     *       400:
+     *         description: Invalid email parameter
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: App not found
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/apps/:appName/collaborators/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -458,6 +1018,43 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/collaborators:
+     *   get:
+     *     summary: Retrieve collaborators of a specific app
+     *     description: Retrieves the list of collaborators for a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to retrieve collaborators for
+     *     responses:
+     *       200:
+     *         description: Collaborators retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 collaborators:
+     *                   type: object
+     *                   additionalProperties:
+     *                     type: object
+     *                     properties:
+     *                       isCurrentAccount:
+     *                         type: boolean
+     *                       permission:
+     *                         type: string
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: App not found
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/apps/:appName/collaborators", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -475,6 +1072,37 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/collaborators/{email}:
+     *   delete:
+     *     summary: Remove a collaborator from an app
+     *     description: Removes a collaborator from a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to remove the collaborator from
+     *       - in: path
+     *         name: email
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The email of the collaborator to remove
+     *     responses:
+     *       204:
+     *         description: Collaborator removed successfully
+     *       400:
+     *         description: Invalid email parameter
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: App or collaborator not found
+     *       500:
+     *         description: Internal server error
+     */
   router.delete("/apps/:appName/collaborators/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -502,6 +1130,79 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}:
+     *   get:
+     *     summary: Retrieve a specific deployment of an app
+     *     description: Retrieves the details of a specific deployment for a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to retrieve the deployment for
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment to retrieve
+     *     responses:
+     *       200:
+     *         description: Deployment retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 name:
+     *                   type: string
+     *                 key:
+     *                   type: string
+     *                 id:
+     *                   type: string
+     *                 package:
+     *                   type: object
+     *                   properties:
+     *                     description:
+     *                       type: string
+     *                     isDisabled:
+     *                       type: boolean
+     *                     isMandatory:
+     *                       type: boolean
+     *                     rollout:
+     *                       type: integer
+     *                     appVersion:
+     *                       type: string
+     *                     packageHash:
+     *                       type: string
+     *                     blobUrl:
+     *                       type: string
+     *                     size:
+     *                       type: integer
+     *                     manifestBlobUrl:
+     *                       type: string
+     *                     releaseMethod:
+     *                       type: string
+     *                     uploadTime:
+     *                       type: integer
+     *                     label:
+     *                       type: string
+     *                     releasedBy:
+     *                       type: string
+     *                     diffPackageMap:
+     *                       type: object
+     *                       additionalProperties:
+     *                         type: string
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment not found
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -525,6 +1226,56 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments:
+     *   post:
+     *     summary: Create a new deployment for an app
+     *     description: Creates a new deployment for a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to create the deployment for
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               name:
+     *                 type: string
+     *                 description: The name of the deployment
+     *               key:
+     *                 type: string
+     *                 description: The key of the deployment
+     *     responses:
+     *       201:
+     *         description: Deployment created successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 deployment:
+     *                   type: object
+     *                   properties:
+     *                     key:
+     *                       type: string
+     *                     name:
+     *                       type: string
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized access
+     *       409:
+     *         description: Conflict - Deployment already exists
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -564,6 +1315,78 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}:
+     *   get:
+     *     summary: Retrieve a specific deployment of an app
+     *     description: Retrieves the details of a specific deployment for a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to retrieve the deployment for
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment to retrieve
+     *     responses:
+     *       200:
+     *         description: Deployment retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 deployment:
+     *                   type: object
+     *                   properties:
+     *                     name:
+     *                       type: string
+     *                     key:
+     *                       type: string
+     *                     package:
+     *                       type: object
+     *                       properties:
+     *                         description:
+     *                           type: string
+     *                         isDisabled:
+     *                           type: boolean
+     *                         isMandatory:
+     *                           type: boolean
+     *                         rollout:
+     *                           type: integer
+     *                         appVersion:
+     *                           type: string
+     *                         packageHash:
+     *                           type: string
+     *                         blobUrl:
+     *                           type: string
+     *                         size:
+     *                           type: integer
+     *                         releaseMethod:
+     *                           type: string
+     *                         uploadTime:
+     *                           type: integer
+     *                         label:
+     *                           type: string
+     *                         releasedBy:
+     *                           type: string
+     *                         diffPackageMap:
+     *                           type: object
+     *                           additionalProperties:
+     *                             type: string
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment not found
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -585,6 +1408,35 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}:
+     *   delete:
+     *     summary: Delete a specific deployment of an app
+     *     description: Deletes a specific deployment for a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to delete the deployment from
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment to delete
+     *     responses:
+     *       204:
+     *         description: Deployment deleted successfully
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment not found
+     *       500:
+     *         description: Internal server error
+     */
   router.delete("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -613,6 +1465,93 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}:
+     *   patch:
+     *     summary: Update a specific deployment of an app
+     *     description: Updates the details of a specific deployment for a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app to update the deployment for
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment to update
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               name:
+     *                 type: string
+     *                 description: The new name of the deployment
+     *               key:
+     *                 type: string
+     *                 description: The new key of the deployment
+     *     responses:
+     *       200:
+     *         description: Deployment updated successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 deployment:
+     *                   type: object
+     *                   properties:
+     *                     name:
+     *                       type: string
+     *                     key:
+     *                       type: string
+     *                     package:
+     *                       type: object
+     *                       properties:
+     *                         description:
+     *                           type: string
+     *                         isDisabled:
+     *                           type: boolean
+     *                         isMandatory:
+     *                           type: boolean
+     *                         rollout:
+     *                           type: integer
+     *                         appVersion:
+     *                           type: string
+     *                         packageHash:
+     *                           type: string
+     *                         blobUrl:
+     *                           type: string
+     *                         size:
+     *                           type: integer
+     *                         releaseMethod:
+     *                           type: string
+     *                         uploadTime:
+     *                           type: integer
+     *                         label:
+     *                           type: string
+     *                         releasedBy:
+     *                           type: string
+     *                         diffPackageMap:
+     *                           type: object
+     *                           additionalProperties:
+     *                             type: string
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment not found
+     *       500:
+     *         description: Internal server error
+     */
   router.patch("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -760,6 +1699,88 @@ export function getManagementRouter(config: ManagementConfig): Router {
     max: 100, // limit each IP to 100 requests per windowMs
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}/release:
+     *   post:
+     *     summary: Release a new deployment package
+     *     description: Releases a new deployment package for a specific deployment of a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         multipart/form-data:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               package:
+     *                 type: string
+     *                 format: binary
+     *                 description: The deployment package file
+     *               packageInfo:
+     *                 type: string
+     *                 description: JSON string containing package information
+     *     responses:
+     *       201:
+     *         description: Deployment package released successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 package:
+     *                   type: object
+     *                   properties:
+     *                     description:
+     *                       type: string
+     *                     isDisabled:
+     *                       type: boolean
+     *                     isMandatory:
+     *                       type: boolean
+     *                     rollout:
+     *                       type: integer
+     *                     appVersion:
+     *                       type: string
+     *                     packageHash:
+     *                       type: string
+     *                     blobUrl:
+     *                       type: string
+     *                     size:
+     *                       type: integer
+     *                     releaseMethod:
+     *                       type: string
+     *                     uploadTime:
+     *                       type: integer
+     *                       format: int64
+     *                     label:
+     *                       type: string
+     *                     releasedBy:
+     *                       type: string
+     *                     diffPackageMap:
+     *                       type: object
+     *                       additionalProperties:
+     *                         type: string
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized access
+     *       409:
+     *         description: Conflict - Identical package already exists
+     *       500:
+     *         description: Internal server error
+     */
   router.post("/apps/:appName/deployments/:deploymentName/release", releaseRateLimiter, (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -896,6 +1917,35 @@ export function getManagementRouter(config: ManagementConfig): Router {
     });
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}/history:
+     *   delete:
+     *     summary: Delete deployment history
+     *     description: Deletes the history of a specific deployment for a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment
+     *     responses:
+     *       204:
+     *         description: Deployment history deleted successfully
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment not found
+     *       500:
+     *         description: Internal server error
+     */
   router.delete(
     "/apps/:appName/deployments/:deploymentName/history",
     (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -932,6 +1982,76 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   );
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}/history:
+     *   get:
+     *     summary: Retrieve deployment history
+     *     description: Retrieves the history of a specific deployment for a specific app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment
+     *     responses:
+     *       200:
+     *         description: Deployment history retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 history:
+     *                   type: array
+     *                   items:
+     *                     type: object
+     *                     properties:
+     *                       description:
+     *                         type: string
+     *                       isDisabled:
+     *                         type: boolean
+     *                       isMandatory:
+     *                         type: boolean
+     *                       rollout:
+     *                         type: integer
+     *                         nullable: true
+     *                       appVersion:
+     *                         type: string
+     *                       packageHash:
+     *                         type: string
+     *                       blobUrl:
+     *                         type: string
+     *                       size:
+     *                         type: integer
+     *                       manifestBlobUrl:
+     *                         type: string
+     *                       releaseMethod:
+     *                         type: string
+     *                       uploadTime:
+     *                         type: integer
+     *                         format: int64
+     *                       label:
+     *                         type: string
+     *                       releasedBy:
+     *                         type: string
+     *                       diffPackageMap:
+     *                         type: object
+     *                         nullable: true
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment not found
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/apps/:appName/deployments/:deploymentName/history", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -955,6 +2075,53 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}/metrics:
+     *   get:
+     *     summary: Retrieve deployment metrics
+     *     description: Retrieves the metrics for a specific deployment of an app for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment
+     *     responses:
+     *       200:
+     *         description: Metrics retrieved successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 metrics:
+     *                   type: object
+     *                   additionalProperties:
+     *                     type: object
+     *                     properties:
+     *                       active:
+     *                         type: integer
+     *                       downloaded:
+     *                         type: integer
+     *                       failed:
+     *                         type: integer
+     *                       installed:
+     *                         type: integer
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment not found
+     *       500:
+     *         description: Internal server error
+     */
   router.get("/apps/:appName/deployments/:deploymentName/metrics", (req: Request, res: Response, next: (err?: any) => void): any => {
     if (!redisManager.isEnabled) {
       res.send({ metrics: {} });
@@ -983,6 +2150,113 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   });
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{sourceDeploymentName}/promote/{destDeploymentName}:
+     *   post:
+     *     summary: Promote a package from one deployment to another
+     *     description: Promotes a package from the source deployment to the destination deployment for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app
+     *       - in: path
+     *         name: sourceDeploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the source deployment
+     *       - in: path
+     *         name: destDeploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the destination deployment
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               packageInfo:
+     *                 type: object
+     *                 properties:
+     *                   appVersion:
+     *                     type: string
+     *                   blobUrl:
+     *                     type: string
+     *                   description:
+     *                     type: string
+     *                   isDisabled:
+     *                     type: boolean
+     *                   isMandatory:
+     *                     type: boolean
+     *                   packageHash:
+     *                     type: string
+     *                   rollout:
+     *                     type: integer
+     *                   size:
+     *                     type: integer
+     *                   uploadTime:
+     *                     type: integer
+     *                     format: int64
+     *                   releaseMethod:
+     *                     type: string
+     *                   originalLabel:
+     *                     type: string
+     *                   originalDeployment:
+     *                     type: string
+     *     responses:
+     *       201:
+     *         description: Package promoted successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 package:
+     *                   type: object
+     *                   properties:
+     *                     appVersion:
+     *                       type: string
+     *                     blobUrl:
+     *                       type: string
+     *                     description:
+     *                       type: string
+     *                     isDisabled:
+     *                       type: boolean
+     *                     isMandatory:
+     *                       type: boolean
+     *                     packageHash:
+     *                       type: string
+     *                     rollout:
+     *                       type: integer
+     *                     size:
+     *                       type: integer
+     *                     uploadTime:
+     *                       type: integer
+     *                       format: int64
+     *                     releaseMethod:
+     *                       type: string
+     *                     originalLabel:
+     *                       type: string
+     *                     originalDeployment:
+     *                       type: string
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment not found
+     *       409:
+     *         description: Conflict - Cannot promote to an unfinished rollout release unless it is already disabled
+     *       500:
+     *         description: Internal server error
+     */
   router.post(
     "/apps/:appName/deployments/:sourceDeploymentName/promote/:destDeploymentName",
     (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -1083,6 +2357,76 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   );
 
+  /**
+     * @openapi
+     * /apps/{appName}/deployments/{deploymentName}/rollback/{targetRelease}:
+     *   post:
+     *     summary: Rollback a deployment to a previous release
+     *     description: Rolls back a specific deployment of an app to a previous release for the authenticated user.
+     *     parameters:
+     *       - in: path
+     *         name: appName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the app
+     *       - in: path
+     *         name: deploymentName
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The name of the deployment
+     *       - in: path
+     *         name: targetRelease
+     *         required: false
+     *         schema:
+     *           type: string
+     *         description: The label of the target release to rollback to
+     *     responses:
+     *       200:
+     *         description: Rollback performed successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 package:
+     *                   type: object
+     *                   properties:
+     *                     appVersion:
+     *                       type: string
+     *                     blobUrl:
+     *                       type: string
+     *                     description:
+     *                       type: string
+     *                     isDisabled:
+     *                       type: boolean
+     *                     isMandatory:
+     *                       type: boolean
+     *                     packageHash:
+     *                       type: string
+     *                     size:
+     *                       type: integer
+     *                     uploadTime:
+     *                       type: integer
+     *                       format: int64
+     *                     releaseMethod:
+     *                       type: string
+     *                     originalLabel:
+     *                       type: string
+     *                     rollout:
+     *                       type: integer
+     *       400:
+     *         description: Bad request
+     *       401:
+     *         description: Unauthorized access
+     *       404:
+     *         description: Deployment or target release not found
+     *       409:
+     *         description: Conflict - Cannot rollback to a different app version or the target release is already the latest release
+     *       500:
+     *         description: Internal server error
+     */
   router.post(
     "/apps/:appName/deployments/:deploymentName/rollback/:targetRelease?",
     (req: Request, res: Response, next: (err?: any) => void): any => {

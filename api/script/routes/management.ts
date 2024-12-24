@@ -2378,7 +2378,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
      *         description: The name of the deployment
      *       - in: path
      *         name: targetRelease
-     *         required: false
+     *         required: true
      *         schema:
      *           type: string
      *         description: The label of the target release to rollback to

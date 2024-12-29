@@ -1518,4 +1518,142 @@ paths:
             release is already the latest release
         "500":
           description: Internal server error
+  /app/authenticated:
+    get:
+      summary: Check if the user is authenticated
+      description: Returns a boolean indicating if the user is authenticated.
+      responses:
+        "200":
+          description: User is authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+                    example: true
+        "401":
+          description: Unauthorized access
+        "429":
+          description: Too many requests
+        "500":
+          description: Internal server error
+  /app/auth/logout:
+    get:
+      summary: Logout the user
+      description: Logs out the user by invalidating the access key and clearing the
+        session.
+      parameters:
+        - in: query
+          name: accessKeyId
+          required: false
+          schema:
+            type: string
+          description: The access key ID to be invalidated
+      responses:
+        "200":
+          description: Successfully logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    example: success
+        "401":
+          description: Unauthorized access
+        "500":
+          description: Internal server error
+  /app/auth/login/github:
+    get:
+      summary: Initiate login with HitHub
+      description: Initiates the login process with GitHub provider.
+      responses:
+        "200":
+          description: Login initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location:
+                    type: string
+                    description: The URL to redirect the user to for authentication
+                  statusCode:
+                    type: integer
+                    description: The HTTP status code
+                  action:
+                    type: string
+                    description: The action being performed ("login")
+        "401":
+          description: Unauthorized access
+        "429":
+          description: Too many requests
+        "500":
+          description: Internal server error
+  /app/auth/register/github:
+    get:
+      summary: Initiate register with the GitHub
+      description: Initiates the register process with GitHub provider.
+      responses:
+        "200":
+          description: Redgister initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location:
+                    type: string
+                    description: The URL to redirect the user to for authentication
+                  statusCode:
+                    type: integer
+                    description: The HTTP status code
+                  action:
+                    type: string
+                    description: The action being performed
+        "401":
+          description: Unauthorized access
+        "429":
+          description: Too many requests
+        "500":
+          description: Internal server error
+  /app/auth/callback/github:
+    get:
+      summary: Handle OAuth callback
+      description: Issue app token for the authenticated user.
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+          description: The authorization code received from the OAuth provider
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+          description: The state parameter to prevent CSRF attacks
+      responses:
+        "200":
+          description: Callback handled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessKey:
+                    type: string
+                    description: The access key for the authenticated user
+        "401":
+          description: Unauthorized access
+        "403":
+          description: Forbidden access
+        "429":
+          description: Too many requests
+        "500":
+          description: Internal server error
 tags: []

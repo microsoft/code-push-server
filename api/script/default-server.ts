@@ -156,6 +156,8 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
           });
         } else {
           app.use(auth.router());
+          // to support auth via browser app
+          app.use('/app', auth.appRouter());
         }
         app.use(auth.authenticate, fileUploadMiddleware, api.management({ storage: storage, redisManager: redisManager }));
       } else {

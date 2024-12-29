@@ -2,24 +2,25 @@
 // Licensed under the MIT License.
 
 import * as cookieSession from "cookie-session";
-import { Request, Response, Router, RequestHandler } from "express";
+import { Request, RequestHandler, Response, Router } from "express";
 import * as passport from "passport";
-const passportActiveDirectory = require("passport-azure-ad");
 import * as passportBearer from "passport-http-bearer";
 import * as passportGitHub from "passport-github2";
 import * as passportWindowsLive from "passport-windowslive";
 import * as q from "q";
-import * as superagent from "superagent"
 import rateLimit from "express-rate-limit";
 
-import * as converterUtils from "../utils/converter";
 import * as restErrorUtils from "../utils/rest-error-handling";
 import * as restHeaders from "../utils/rest-headers";
 import * as security from "../utils/security";
 import * as storage from "../storage/storage";
 import * as validationUtils from "../utils/validation";
+import { ServerResponse } from "http";
 
+const passportActiveDirectory = require("passport-azure-ad");
 import Promise = q.Promise;
+import * as storageTypes from "../storage/storage";
+import * as errorUtils from "../utils/rest-error-handling";
 
 export interface AuthenticationConfig {
   storage: storage.Storage;
@@ -45,10 +46,12 @@ export class PassportAuthentication {
 
   private _cookieSessionMiddleware: RequestHandler;
   private _serverUrl: string;
+  private _appServerUrl: string;
   private _storageInstance: storage.Storage;
 
   constructor(config: AuthenticationConfig) {
     this._serverUrl = process.env["SERVER_URL"];
+    this._appServerUrl = process.env["APP_SERVER_URL"];
 
     // This session is neither encrypted nor signed beyond what is provided by SSL
     // By default, the 'secure' flag will be set if the node process is using SSL
@@ -68,7 +71,6 @@ export class PassportAuthentication {
           done(/*err*/ null, /*user*/ false);
           return;
         }
-
         this._storageInstance
           .getAccountIdFromAccessKey(accessKey)
           .then((accountId: string) => {
@@ -167,18 +169,74 @@ export class PassportAuthentication {
 
     router.get("/auth/login", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["hostname"] = req.query.hostname;
-      res.render("authenticate", { action: "login", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
+      res.render("authenticate", {
+        action: "login",
+        isGitHubAuthenticationEnabled,
+        isMicrosoftAuthenticationEnabled,
+      });
     });
 
     router.get("/auth/link", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["authorization"] = req.query.access_token;
-      res.render("authenticate", { action: "link", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
+      res.render("authenticate", {
+        action: "link",
+        isGitHubAuthenticationEnabled,
+        isMicrosoftAuthenticationEnabled,
+      });
     });
 
     router.get("/auth/register", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["hostname"] = req.query.hostname;
-      res.render("authenticate", { action: "register", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
+      res.render("authenticate", {
+        action: "register",
+        isGitHubAuthenticationEnabled,
+        isMicrosoftAuthenticationEnabled,
+      });
     });
+
+    return router;
+  }
+
+  public getAppRouter(): Router {
+    const router: Router = Router();
+
+    router.use(passport.initialize());
+
+    /**
+     * @openapi
+     * /app/authenticated:
+     *   get:
+     *     summary: Check if the user is authenticated
+     *     description: Returns a boolean indicating if the user is authenticated.
+     *     responses:
+     *       200:
+     *         description: User is authenticated
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 authenticated:
+     *                   type: boolean
+     *                   example: true
+     *       401:
+     *         description: Unauthorized access
+     *       429:
+     *         description: Too many requests
+     *       500:
+     *         description: Internal server error
+     */
+    router.get("/authenticated", limiter, this.authenticate, (req: Request, res: Response): any => {
+      res.send({ authenticated: true });
+    });
+
+    const appGitHubClientId: string = process.env["APP_GITHUB_CLIENT_ID"];
+    const appGitHubClientSecret: string = process.env["APP_GITHUB_CLIENT_SECRET"];
+    const isAppGitHubAuthenticationEnabled: boolean = !!this._appServerUrl && !!appGitHubClientId && !!appGitHubClientSecret;
+
+    if (isAppGitHubAuthenticationEnabled) {
+      this.setupAppGitHubRoutes(router, appGitHubClientId, appGitHubClientSecret);
+    }
 
     return router;
   }
@@ -247,6 +305,367 @@ export class PassportAuthentication {
     }
   }
 
+  private setupAppCommonRoutes(router: Router, providerName: string, strategyName: string): void {
+
+    /**
+       * @openapi
+       * /app/auth/logout:
+       *   get:
+       *     summary: Logout the user
+       *     description: Logs out the user by invalidating the access key and clearing the session.
+       *     parameters:
+       *       - in: query
+       *         name: accessKeyId
+       *         required: false
+       *         schema:
+       *           type: string
+       *         description: The access key ID to be invalidated
+       *     responses:
+       *       200:
+       *         description: Successfully logged out
+       *         content:
+       *           application/json:
+       *             schema:
+       *               type: object
+       *               properties:
+       *                 result:
+       *                   type: string
+       *                   example: success
+       *       401:
+       *         description: Unauthorized access
+       *       500:
+       *         description: Internal server error
+       */
+    router.get("/auth/logout", this._cookieSessionMiddleware, (req: Request, res: Response, next: (err?: any) => void): any => {
+      passport.authenticate("bearer", { session: false }, (err: any, user: any) => {
+        if (err || !user) {
+          restErrorUtils.sendRestUnknownError(res, new Error(`something went wrong`), next);
+        } else {
+          const { id: accountId } = user;
+          const accessKeyId = req.session.accessKeyId || req.query.accessKeyId;
+
+          this._storageInstance
+            .removeAccessKey(accountId, accessKeyId)
+            .then(() => {
+              req.session = null;
+              res.send({ result: "success" });
+            })
+            .catch((error) => {
+              req.session = null;
+              errorUtils.restErrorHandler(res, error, next);
+            })
+            .done();
+        }
+      })(req, res, next);
+    });
+
+    /**
+     * @openapi
+     * /app/auth/login/github:
+     *   get:
+     *     summary: Initiate login with HitHub
+     *     description: Initiates the login process with GitHub provider.
+     *     responses:
+     *       200:
+     *         description: Login initiated successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 location:
+     *                   type: string
+     *                   description: The URL to redirect the user to for authentication
+     *                 statusCode:
+     *                   type: integer
+     *                   description: The HTTP status code
+     *                 action:
+     *                   type: string
+     *                   description: The action being performed ("login")
+     *       401:
+     *         description: Unauthorized access
+     *       429:
+     *         description: Too many requests
+     *       500:
+     *         description: Internal server error
+     */
+    router.get(
+      "/auth/login/" + providerName,
+      limiter,
+      // TODO add CORS to allow ro call from the app only
+      // https://expressjs.com/en/resources/middleware/cors.html`
+      this._cookieSessionMiddleware,
+      (req: Request, res: Response, next: (err?: any) => void): any => {
+        req.session["action"] = "login";
+        //https://stackoverflow.com/questions/68785664/prevent-automatic-redirect-and-get-redirect-url-of-passportjs-authenticate-met
+        const wrappedResponse = new ServerResponse(req);
+        passport.authenticate(strategyName, { session: false })(req, wrappedResponse, next);
+
+        res.send({
+          location: wrappedResponse.getHeader("Location"),
+          statusCode: wrappedResponse.statusCode,
+          action: "login",
+        });
+      }
+    );
+
+    /**
+     * @openapi
+     * /app/auth/register/github:
+     *   get:
+     *     summary: Initiate register with the GitHub
+     *     description: Initiates the register process with GitHub provider.
+     *     responses:
+     *       200:
+     *         description: Redgister initiated successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 location:
+     *                   type: string
+     *                   description: The URL to redirect the user to for authentication
+     *                 statusCode:
+     *                   type: integer
+     *                   description: The HTTP status code
+     *                 action:
+     *                   type: string
+     *                   description: The action being performed
+     *       401:
+     *         description: Unauthorized access
+     *       429:
+     *         description: Too many requests
+     *       500:
+     *         description: Internal server error
+     */
+    router.get(
+      "/auth/register/" + providerName,
+      limiter,
+      this._cookieSessionMiddleware,
+      // TODO add CORS to allow to call from the app only
+      // https://expressjs.com/en/resources/middleware/cors.html
+      (req: Request, res: Response, next: (err?: any) => void): any => {
+        //TODO
+        /*        if (!PassportAuthentication.isAccountRegistrationEnabled()) {
+                                                                                                                                                                                                                                                                                                                                                  restErrorUtils.sendForbiddenError(res);
+                                                                                                                                                                                                                                                                                                                                                  return;
+                                                                                                                                                                                                                                                                                                                                                }*/
+
+        req.session["action"] = "register";
+
+        //https://stackoverflow.com/questions/68785664/prevent-automatic-redirect-and-get-redirect-url-of-passportjs-authenticate-met
+        const wrappedResponse = new ServerResponse(req);
+        passport.authenticate(strategyName, { session: false })(req, wrappedResponse, next);
+
+        res.send({
+          location: wrappedResponse.getHeader("Location"),
+          statusCode: wrappedResponse.statusCode,
+          action: "register",
+        });
+      }
+    );
+
+    router.get(
+      "/auth/link/" + providerName,
+      limiter,
+      this._cookieSessionMiddleware,
+      (req: Request, res: Response, next: (err?: any) => void): any => {
+        req.session["action"] = "link";
+
+        //https://stackoverflow.com/questions/68785664/prevent-automatic-redirect-and-get-redirect-url-of-passportjs-authenticate-met
+        const wrappedResponse = new ServerResponse(req);
+        passport.authenticate(strategyName, { session: false })(req, wrappedResponse, next);
+
+        res.send({
+          location: wrappedResponse.getHeader("Location"),
+          statusCode: wrappedResponse.statusCode,
+          action: "link",
+        });
+      }
+    );
+
+    /**
+     * @openapi
+     * /app/auth/callback/github:
+     *   get:
+     *     summary: Handle OAuth callback
+     *     description: Issue app token for the authenticated user.
+     *     parameters:
+     *       - in: query
+     *         name: code
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The authorization code received from the OAuth provider
+     *       - in: query
+     *         name: state
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: The state parameter to prevent CSRF attacks
+     *     responses:
+     *       200:
+     *         description: Callback handled successfully
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 accessKey:
+     *                   type: string
+     *                   description: The access key for the authenticated user
+     *       401:
+     *         description: Unauthorized access
+     *       403:
+     *         description: Forbidden access
+     *       429:
+     *         description: Too many requests
+     *       500:
+     *         description: Internal server error
+     */
+    router.get(
+      "/auth/callback/" + providerName,
+      limiter,
+      this._cookieSessionMiddleware,
+      (req: Request, res: Response, next: (err?: any) => void): any => {
+        const auth = passport.authenticate(strategyName, {
+          // TODO play with this redirect. It should be the app url?
+          failureRedirect: "/auth/login/" + providerName,
+          session: false,
+        });
+
+        auth(req, res, next);
+      },
+      (req: Request, res: Response, next: (err?: any) => void): any => {
+        const action: string = req.session["action"];
+        const hostname: string = req.session["hostname"];
+        const user: passport.Profile = req.user;
+
+        //TODO think about disabled registration on the app.
+        /*        if (action === "register" && !PassportAuthentication.isAccountRegistrationEnabled()) {
+                                                                                                                                                                                                                                                                                  restErrorUtils.sendForbiddenError(res);
+                                                                                                                                                                                                                                                                                  return;
+                                                                                                                                                                                                                                                                                }*/
+
+        const emailAddress: string = PassportAuthentication.getEmailAddress(user);
+        if (!emailAddress && providerName === PassportAuthentication.MICROSOFT_PROVIDER_NAME) {
+          const message: string =
+            "You've successfully signed in your Microsoft account, but we couldn't get an email address from it." +
+            "<br/>Please fill the basic information (i.e. First/Last name, Email address) for your Microsoft account in case of absence, then try to run 'code-push-standalone login' again.";
+          restErrorUtils.sendRestForbiddenError(res, message);
+          return;
+        } else if (!emailAddress) {
+          restErrorUtils.sendRestUnknownError(
+            res,
+            new Error(`Couldn't get an email address from the ${providerName} OAuth provider for user ${JSON.stringify(user)}`),
+            next
+          );
+          return;
+        }
+
+        // TODO: do not
+        const issueAccessKey = (accountId: string): Promise<void> => {
+          const now: number = new Date().getTime();
+          const friendlyName: string = `Login-${now}`;
+          const accessKey: storage.AccessKey = {
+            name: security.generateSecureKey(accountId),
+            createdTime: now,
+            createdBy: hostname || restHeaders.getIpAddress(req),
+            description: friendlyName,
+            expires: now + DEFAULT_SESSION_EXPIRY,
+            friendlyName: friendlyName,
+            isSession: true,
+          };
+
+          return this._storageInstance.addAccessKey(accountId, accessKey).then((accessKeyId: string): void => {
+            req.session.accessKeyId = accessKeyId;
+            res.send({ accessKey: accessKey.name, accessKeyId: accessKeyId });
+          });
+        };
+
+        this._storageInstance
+          .getAccountByEmail(emailAddress)
+          .then(
+            (account: storage.Account): void | Promise<void> => {
+              const existingProviderId: string = PassportAuthentication.getProviderId(account, providerName);
+              const isProviderValid: boolean = existingProviderId === user.id;
+              switch (action) {
+                case "register":
+                  const message: string = isProviderValid
+                    ? "You are already registered with the service using this authentication provider.<br/>Please cancel the registration process (Ctrl-C) on the CLI and login with your account."
+                    : "You are already registered with the service using a different authentication provider." +
+                      "<br/>Please cancel the registration process (Ctrl-C) on the CLI and login with your registered account." +
+                      "<br/>Once logged in, you can optionally link this provider to your account.";
+                  restErrorUtils.sendRestAlreadyExistsError(res, message);
+                  return;
+                case "link":
+                  if (existingProviderId) {
+                    restErrorUtils.sendRestAlreadyExistsError(res, "You are already registered with the service using this provider.");
+                    return;
+                  }
+
+                  PassportAuthentication.setProviderId(account, providerName, user.id);
+                  return this._storageInstance.updateAccount(account.email, account).then(() => {
+                    const message =
+                      "You have successfully linked your account!<br/>You will now be able to use this provider to authenticate in the future.<br/>Please return to the CLI to continue.";
+                    res.send({ message: message });
+                  });
+                case "login":
+                  if (!isProviderValid) {
+                    restErrorUtils.sendRestForbiddenError(res, "You are not registered with the service using this provider account.");
+                    return;
+                  }
+
+                  return issueAccessKey(account.id);
+                default:
+                  restErrorUtils.sendRestUnknownError(res, new Error(`Unrecognized action (${action})`), next);
+                  return;
+              }
+            },
+            (error: storage.StorageError): void | Promise<void> => {
+              if (error.code !== storage.ErrorCode.NotFound) throw error;
+
+              switch (action) {
+                case "login":
+                  const message: string = PassportAuthentication.isAccountRegistrationEnabled()
+                    ? "Account not found.<br/>Have you registered with the CLI?<br/>If you are registered but your email address has changed, please contact us."
+                    : "Account not found.<br/>Please <a href='http://microsoft.github.io/code-push/'>sign up for the beta</a>, and we will contact you when your account has been created!</a>";
+                  restErrorUtils.sendRestForbiddenError(res, message);
+                  return;
+                case "link":
+                  restErrorUtils.sendRestForbiddenError(
+                    res,
+                    "We weren't able to link your account, because the primary email address registered with your provider does not match the one on your CodePush account." +
+                      "<br/>Please use a matching email address, or contact us if you'd like to change the email address on your CodePush account."
+                  );
+                  return;
+                case "register":
+                  const newUser: storage.Account = {
+                    createdTime: new Date().getTime(),
+                    email: emailAddress,
+                    name: user.displayName,
+                  };
+                  PassportAuthentication.setProviderId(newUser, providerName, user.id);
+
+                  return this._storageInstance
+                    .addAccount(newUser)
+                    .then((accountId: string): Promise<void> => issueAccessKey(accountId));
+                default:
+                  restErrorUtils.sendRestUnknownError(res, new Error(`Unrecognized action (${action})`), next);
+                  return;
+              }
+            }
+          )
+          .catch((error: storage.StorageError): void => {
+            error.message = `Unexpected failure with action ${action}, provider ${providerName}, email ${emailAddress}, and message: ${error.message}`;
+            restErrorUtils.sendRestUnknownError(res, error, next);
+          })
+          .done();
+      }
+    );
+  }
+
   private setupCommonRoutes(router: Router, providerName: string, strategyName: string): void {
     router.get(
       "/auth/login/" + providerName,
@@ -260,7 +679,7 @@ export class PassportAuthentication {
     );
 
     router.get(
-      "/auth/register/" + providerName, 
+      "/auth/register/" + providerName,
       limiter,
       this._cookieSessionMiddleware,
       (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -350,8 +769,8 @@ export class PassportAuthentication {
                   const message: string = isProviderValid
                     ? "You are already registered with the service using this authentication provider.<br/>Please cancel the registration process (Ctrl-C) on the CLI and login with your account."
                     : "You are already registered with the service using a different authentication provider." +
-                    "<br/>Please cancel the registration process (Ctrl-C) on the CLI and login with your registered account." +
-                    "<br/>Once logged in, you can optionally link this provider to your account.";
+                      "<br/>Please cancel the registration process (Ctrl-C) on the CLI and login with your registered account." +
+                      "<br/>Once logged in, you can optionally link this provider to your account.";
                   restErrorUtils.sendAlreadyExistsPage(res, message);
                   return;
                 case "link":
@@ -393,7 +812,7 @@ export class PassportAuthentication {
                   restErrorUtils.sendForbiddenPage(
                     res,
                     "We weren't able to link your account, because the primary email address registered with your provider does not match the one on your CodePush account." +
-                    "<br/>Please use a matching email address, or contact us if you'd like to change the email address on your CodePush account."
+                      "<br/>Please use a matching email address, or contact us if you'd like to change the email address on your CodePush account."
                   );
                   return;
                 case "register":
@@ -435,10 +854,34 @@ export class PassportAuthentication {
     return `${this._serverUrl}/auth/callback/${providerName}`;
   }
 
+  private setupAppGitHubRoutes(router: Router, gitHubClientId: string, gitHubClientSecret: string): void {
+    const providerName = PassportAuthentication.GITHUB_PROVIDER_NAME;
+    const strategyName = "appgithub";
+    const options: passportGitHub.StrategyOptions = {
+      clientID: gitHubClientId,
+      clientSecret: gitHubClientSecret,
+      callbackURL: `${this._appServerUrl}/auth/callback/${providerName}`,
+      scope: ["user:email"],
+      state: true, // to apply the state parameter in URI. In newer verso of pasport string value is accepted ("state" ??).
+    };
+
+    passport.use(
+      strategyName,
+      new passportGitHub.Strategy(
+        options,
+        (accessToken: string, refreshToken: string, profile: passportGitHub.Profile, done: (err?: any, user?: any) => void): void => {
+          done(/*err*/ null, profile);
+        }
+      )
+    );
+
+    this.setupAppCommonRoutes(router, providerName, strategyName);
+  }
+
   private setupGitHubRoutes(router: Router, gitHubClientId: string, gitHubClientSecret: string): void {
     const providerName = PassportAuthentication.GITHUB_PROVIDER_NAME;
     const strategyName = "github";
-    const options: passportGitHub.IStrategyOptions = {
+    const options: passportGitHub.StrategyOptions = {
       clientID: gitHubClientId,
       clientSecret: gitHubClientSecret,
       callbackURL: this.getCallbackUrl(providerName),

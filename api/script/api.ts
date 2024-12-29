@@ -31,6 +31,7 @@ export function auth(config: AuthenticationConfig): any {
   const passportAuthentication = new PassportAuthentication(config);
   return {
     router: passportAuthentication.getRouter.bind(passportAuthentication),
+    appRouter: passportAuthentication.getAppRouter.bind(passportAuthentication),
     legacyRouter: passportAuthentication.getLegacyRouter.bind(passportAuthentication),
     authenticate: passportAuthentication.authenticate,
   };

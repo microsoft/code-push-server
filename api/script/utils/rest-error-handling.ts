@@ -77,6 +77,10 @@ export function sendForbiddenPage(res: express.Response, message: string): void 
   res.status(403).render("message", { message: message });
 }
 
+export function sendRestForbiddenError(res: express.Response, message: string): void {
+  res.status(403).send({ message: message });
+}
+
 export function sendNotFoundError(res: express.Response, message?: string): void {
   if (message) {
     res.status(404).send(sanitizeHtml(message));
@@ -106,6 +110,10 @@ export function sendConflictError(res: express.Response, message?: string): void
 
 export function sendAlreadyExistsPage(res: express.Response, message: string): void {
   res.status(409).render("message", { message: message });
+}
+
+export function sendRestAlreadyExistsError(res: express.Response, message: string): void {
+  res.status(409).send({ message: message });
 }
 
 export function sendResourceGoneError(res: express.Response, message: string): void {
@@ -138,6 +146,18 @@ export function sendUnknownError(res: express.Response, error: any, next: Functi
   } else {
     res.sendStatus(500);
   }
+}
+
+export function sendRestUnknownError(res: express.Response, error: any, next: Function): void {
+  error = error || new Error("Unknown error");
+
+  if (typeof error["stack"] === "string") {
+    console.log(error["stack"]);
+  } else {
+    console.log(error);
+  }
+
+  res.status(500).send({ message: error.message });
 }
 
 function storageErrorHandler(res: express.Response, error: storageTypes.StorageError, next: Function): void {

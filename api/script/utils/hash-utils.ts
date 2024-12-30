@@ -28,6 +28,8 @@ try {
 import Promise = q.Promise;
 const HASH_ALGORITHM = "sha256";
 
+const CODEPUSH_METADATA = '.codepushrelease';
+
 export function generatePackageHashFromDirectory(directoryPath: string, basePath: string): Promise<string> {
   if (!fs.lstatSync(directoryPath).isDirectory()) {
     throw new Error("Not a directory. Please either create a directory, or use hashFile().");
@@ -187,7 +189,14 @@ export class PackageManifest {
   public computePackageHash(): Promise<string> {
     let entries: string[] = [];
     this._map.forEach((hash: string, name: string): void => {
-      entries.push(name + ":" + hash);
+      // .codepushrelease (relates to code signing feature) file
+      // should not be skipped in isIgnored() method.
+      // But to be equal with hashes computed in SDKs and CLI this file
+      // should be skipped when computing whole package hash
+
+      if (name !== CODEPUSH_METADATA && !endsWith(name, '/' + CODEPUSH_METADATA)) {
+        entries.push(name + ':' + hash);
+      }
     });
 
     // Make sure this list is alphabetically ordered so that other clients

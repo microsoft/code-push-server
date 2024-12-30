@@ -204,6 +204,12 @@ If having a staging and production version of your app is enough to meet your ne
 code-push-standalone deployment add <appName> <deploymentName>
 ```
 
+If you want to re-use an existing deployment key, you can do this with:
+
+```
+code-push-standalone deployment add <appName> <deploymentName> -k <existing-deployment-key>
+```
+
 Just like with apps, you can remove and rename deployments as well, using the following commands respectively:
 
 ```

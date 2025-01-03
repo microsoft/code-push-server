@@ -1,10 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as assert from "assert";
-import * as express from "express";
 import * as q from "q";
-import * as redis from "@redis/client";
 
 import Promise = q.Promise;
 import { createClient, RedisClientType } from "redis";
@@ -184,7 +181,7 @@ export class RedisManager {
         password: process.env.REDIS_KEY,
         // TODO add values from RedisSocketCommonOptions to handle connect timeout and reconnect settings
       };
-      this._opsClient = redis.createClient(redisConfig);
+      this._opsClient = createClient(redisConfig);
       this._metricsClient = createClient(redisConfig);
 
       this._metricsClient.multi();

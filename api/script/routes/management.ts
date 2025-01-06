@@ -870,12 +870,18 @@ export function getManagementRouter(config: ManagementConfig): Router {
           updateRelease = true;
         }
 
+        const newAppVersion: string = info.appVersion;
+        if (newAppVersion && packageToUpdate.appVersion !== newAppVersion) {
+          packageToUpdate.appVersion = newAppVersion;
+          updateRelease = true;
+        }
+
         const newRolloutValue: number = info.rollout;
-        if (validationUtils.isDefined(newRolloutValue) && newRolloutValue !== 100) {
+        if (validationUtils.isDefined(newRolloutValue)) {
           let errorMessage: string;
-          if (!isUnfinishedRollout(packageToUpdate.rollout)) {
+          if (!isUnfinishedRollout(packageToUpdate.rollout) && !updateRelease) {
             errorMessage = "Cannot update rollout value for a completed rollout release.";
-          } else if (packageToUpdate.rollout >= newRolloutValue) {
+          } else if (packageToUpdate.rollout > newRolloutValue && newRolloutValue !== 100) {
             errorMessage = `Rollout value must be greater than "${packageToUpdate.rollout}", the existing value.`;
           }
 
@@ -884,12 +890,6 @@ export function getManagementRouter(config: ManagementConfig): Router {
           }
 
           packageToUpdate.rollout = newRolloutValue === 100 ? 100 : newRolloutValue;
-          updateRelease = true;
-        }
-
-        const newAppVersion: string = info.appVersion;
-        if (newAppVersion && packageToUpdate.appVersion !== newAppVersion) {
-          packageToUpdate.appVersion = newAppVersion;
           updateRelease = true;
         }
 

@@ -16,11 +16,26 @@ Additionally, you need to specify [EMULATED](ENVIRONMENT.md#emulated) flag equal
 
 #### Steps
 To run the CodePush Server locally, follow these steps:
-1. Clone the CodePush Service repository.
-1. Create a `.env` file and configure the mandatory variables as outlined in the `ENVIRONMENT.md` file.
-1. Install dependencies by running `npm install`.
-1. Build the server by running `npm run build`.
-1. Start the server by running `npm run start:env`.
+
+1. Clone the CodePush Service repository to your local machine.
+
+2. Copy the `.env.example` file to a new file named `.env` in the root directory:
+   ````bash
+   cp .env.example .env
+   ````
+   Fill in the values for each environment variable in the `.env` file according to your development or production setup.
+3. Install all necessary dependencies:
+   ````bash
+   npm install
+   ````
+4. Compile the server code:
+   ````bash
+   npm run build
+   ````
+5. Launch the server with the environment-specific start command:
+   ````bash
+   npm run start:env
+   ````
 
 By default, local CodePush server runs on HTTP. To run CodePush Server on HTTPS:
 
@@ -102,7 +117,7 @@ Both work and personal accounts use the same application for authentication. The
 1. Register an Azure Registered Application following [official guideline](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app#register-an-application)
 1. For option `Supported account types`:
    1. If you want to support both Personal and Work accounts, select `Accounts in any organizational directory (Any Microsoft Entra ID tenant - Multitenant) and personal Microsoft accounts (e.g. Skype, Xbox)`
-   1. If you want to only support Work accounts, choose either `Accounts in this organizational directory only (<your directory> - Single tenant)` or `Accounts in any organizational directory (Any Microsoft Entra ID tenant - Multitenant)` depending if you want to support Single or Multitenant authorization
+   1. If you want to only support Work accounts, choose either `Accounts in this organizational directory only (<your directory> - Single tenant)` or `Accounts in any organizational directory (Any Microsoft Entra ID tenant - Multitenant)` depending if you want to support Single or Multitenant authorization. Make sure to set `MICROSOFT_TENANT_ID` envrionment variable in case of using single tenant application.
    1. If you want to only support Personal accounts, select `Personal Microsoft accounts only`
 1. Set up Redirect URI(s) depending on the choice you made for `Supported account types`. If you choose both Personal and Work accounts, you need to add both redirect URIs, otherwise just one of the ones:
    1. Personal account: `https://codepush-<project-suffix>.azurewebsites.net/auth/callback/microsoft` (for local development it will be either http://localhost:3000/auth/callback/microsoft or https://localhost:8443/auth/callback/microsoft)
@@ -115,3 +130,15 @@ Both work and personal accounts use the same application for authentication. The
 
 1. Only letters are allowed.
 1. Maximum 15 characters.
+
+## Metrics
+
+Installation metrics allow monitoring release activity via the CLI. For detailed usage instructions, please refer to the [CLI documentation](../cli/README.md#development-parameter).
+
+Redis is required for Metrics to work.
+
+### Steps
+
+1. Install Redis by following [official installation guide](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/).
+1. TLS is required. Follow [official Redis TLS run guide](https://redis.io/docs/latest/operate/oss_and_stack/management/security/encryption/#running-manually).
+1. Set the necessary environment variables for [Redis](./ENVIRONMENT.md#redis).

@@ -120,6 +120,7 @@ export interface IDebugCommand extends ICommand {
 
 export interface IDeploymentAddCommand extends IAppCommand {
   deploymentName: string;
+  key?: string;
   default: boolean;
 }
 
@@ -209,6 +210,12 @@ export interface IReleaseReactCommand extends IReleaseBaseCommand {
   sourcemapOutput?: string;
   outputDir?: string;
   config?: string;
+  useHermes?: boolean;
+  extraHermesFlags?: string[];
+  podFile?: string;
+  xcodeProjectFile?: string;
+  xcodeTargetName?: string;
+  buildConfigurationName?: string;
 }
 
 export interface IRollbackCommand extends ICommand {

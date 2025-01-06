@@ -204,6 +204,12 @@ If having a staging and production version of your app is enough to meet your ne
 code-push-standalone deployment add <appName> <deploymentName>
 ```
 
+If you want to re-use an existing deployment key, you can do this with:
+
+```
+code-push-standalone deployment add <appName> <deploymentName> -k <existing-deployment-key>
+```
+
 Just like with apps, you can remove and rename deployments as well, using the following commands respectively:
 
 ```
@@ -392,6 +398,13 @@ code-push-standalone release-react <appName> <platform>
 [--sourcemapOutput <sourcemapOutput>]
 [--targetBinaryVersion <targetBinaryVersion>]
 [--rollout <rolloutPercentage>]
+[--useHermes <useHermes>]
+[--podFile <podFile>]
+[--extraHermesFlags <extraHermesFlags>]
+[--privateKeyPath <privateKeyPath>]
+[--xcodeProjectFile <xcodeProjectFile>]
+[--xcodeTargetName <xcodeTargetName>]
+[--buildConfigurationName <buildConfigurationName>]
 ```
 
 The `release-react` command is a React Native-specific version of the "vanilla" [`release`](#releasing-app-updates) command, which supports all of the same parameters (e.g. `--mandatory`, `--description`), yet simplifies the process of releasing updates by performing the following additional behavior:
@@ -520,6 +533,48 @@ _NOTE: This parameter can be set using either --sourcemapOutput or -s_
 This specifies the relative path to where the assets, JS bundle and sourcemap files should be written. If left unspecified, the assets, JS bundle and sourcemap will be copied to the `/tmp/CodePush` folder.
 
 _NOTE: This parameter can be set using either --outputDir or -o_
+
+#### Use Hermes parameter
+
+This parameter enforces the use of the Hermes compiler. If not specified, the automatic checks will be performed, inspecting the `build.gradle` and `Podfile` for the Hermes flag.
+
+_NOTE: This parameter can be set using either --hermesEnabled or -h_
+
+#### Podfile parameter (iOS only)
+
+The Podfile path will be used for Hermes automatic check. Not used if `--useHermes` is specified.
+
+_NOTE: This parameter can be set using either --podfile or -pod_
+
+#### Extra hermes flags parameter
+
+Hermes flags which will be passed to Hermes compiler.
+
+_NOTE: This parameter can be set using either --extraHermesFlags or -hf_
+
+#### Private key path parameter
+
+Private key path which is used for code signing.
+
+_NOTE: This parameter can be set using either --privateKeyPath or -k_
+
+#### Xcode project file parameter
+
+Path to the Xcode project or project.pbxproj file.
+
+_NOTE: This parameter can be set using either --xcodeProjectFile or -xp_
+
+#### Xcode target name parameter
+
+Name of target (PBXNativeTarget) which specifies the binary version you want to target this release at (iOS only).
+
+_NOTE: This parameter can be set using either --xcodeTargetName or -xt_
+
+#### Build configuration name parameter
+
+Name of build configuration which specifies the binary version you want to target this release at. For example, 'Debug' or 'Release' (iOS only).
+
+_NOTE: This parameter can be set using either --buildConfigurationName or -c_
 
 ## Debugging CodePush Integration
 
@@ -723,3 +778,60 @@ code-push-standalone deployment clear <appName> <deploymentName>
 ```
 
 After running this command, client devices configured to receive updates using its associated deployment key will no longer receive the updates that have been cleared. This command is irreversible, and therefore should not be used in a production deployment.
+
+## Code Signing for CodePush
+
+Code Signing ensures that updates deployed via CodePush are secure and verified. Follow these steps to set up Code Signing:
+
+### 1. Generate a Signing Key
+
+**Create private and public keys using OpenSSL:**
+
+```shell
+# generate private RSA key and write it to private.pem file
+openssl genrsa -out private.pem
+
+# export public key from private.pem into public.pem
+openssl rsa -pubout -in private.pem -out public.pem
+```
+
+### 2. Configure CodePush CLI
+
+**Specify the path to your private key when releasing updates:**
+
+```shell
+code-push-standalone release-react <appName> <platform> --privateKeyPath private.pem
+```
+
+### 3. Configure Your App
+
+#### iOS
+
+**Add the public key to your `Info.plist`:**
+
+- Open your `Info.plist` file.
+- Add a new entry:
+
+    ```xml
+    <key>CodePushPublicKey</key>
+    <string>-----BEGIN PUBLIC KEY-----
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+    -----END PUBLIC KEY-----</string>
+    ```
+
+Replace the placeholder with the actual contents of your `public.pem` file.
+
+#### Android
+
+**Add the public key to your `strings.xml`:**
+
+- Open `res/values/strings.xml`.
+- Add the following entry:
+
+    ```xml
+    <string name="CodePushPublicKey">-----BEGIN PUBLIC KEY-----
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+    -----END PUBLIC KEY-----</string>
+    ```
+
+Replace the placeholder with the actual contents of your `public.pem` file.

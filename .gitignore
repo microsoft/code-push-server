@@ -45,3 +45,8 @@ JsonStorage.json
 *.pem
 *.key
 *.cnf
+
+# Azurite local storage files
+__azurite_db_*
+__blobstorage__
+__queuestorage__

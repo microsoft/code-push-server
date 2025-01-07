@@ -360,6 +360,7 @@ yargs
       .command("list", "Lists the apps associated with your/passed org account", (yargs: yargs.Argv) => appList("list", yargs))
       .command("ls", "Lists the apps associated with your/passed org account", (yargs: yargs.Argv) => appList("ls", yargs))
       .command("transfer", "Transfer the ownership of an app to another account", (yargs: yargs.Argv) => {
+        isValidCommand = true;
         yargs
           .usage(USAGE_PREFIX + " app transfer <ownerName>/<appName> <email>")
           .demand(/*count*/ 2, /*max*/ 2) // Require exactly two non-option arguments
@@ -414,7 +415,15 @@ yargs
         yargs
           .usage(USAGE_PREFIX + " deployment add <ownerName>/<appName> <deploymentName>")
           .demand(/*count*/ 2, /*max*/ 2) // Require exactly two non-option arguments
-          .example("deployment add OrgName/MyApp MyDeployment", 'Adds deployment "MyDeployment" to app "MyApp"');
+          .example("deployment add OrgName/MyApp MyDeployment", 'Adds deployment "MyDeployment" to app "MyApp"')
+          .example("deployment add MyApp MyDeployment", 'Adds deployment "MyDeployment" to app "MyApp"')
+          .example("deployment add MyApp MyDeployment -k abc123", 'Adds deployment key "abc123"')
+          .option("key", {
+            alias: "k",
+            demand: false,
+            description: "Specify deployment key",
+            type: "string",
+          });
 
         addCommonConfiguration(yargs);
       })
@@ -813,6 +822,56 @@ yargs
           "Path to where the bundle and sourcemap should be written. If omitted, a bundle and sourcemap will not be written.",
         type: "string",
       })
+      .option("useHermes", {
+        alias: "h",
+        default: false,
+        demand: false,
+        description: "Enable hermes and bypass automatic checks",
+        type: "boolean",
+      })
+      .option("podFile", {
+        alias: "pod",
+        default: null,
+        demand: false,
+        description:  "Path to the cocopods config file (iOS only).",
+        type: "string",
+      })
+      .option("extraHermesFlags", {
+        alias: "hf",
+        default: [],
+        demand: false,
+        description:
+          "Flags that get passed to Hermes, JavaScript to bytecode compiler. Can be specified multiple times.",
+        type: "array",
+      })
+      .option("privateKeyPath", {
+        alias: "k",
+        default: null,
+        demand: false,
+        description: "Path to private key used for code signing.",
+        type: "string",
+      })
+      .option("xcodeProjectFile", {
+        alias: "xp",
+        default: null,
+        demand: false,
+        description: "Path to the Xcode project or project.pbxproj file",
+        type: "string",
+      })
+      .option("xcodeTargetName", {
+        alias: "xt",
+        default: undefined,
+        demand: false,
+        description: "Name of target (PBXNativeTarget) which specifies the binary version you want to target this release at (iOS only)",
+        type: "string",
+      })
+      .option("buildConfigurationName", {
+        alias: "c",
+        default: undefined,
+        demand: false,
+        description: "Name of build configuration which specifies the binary version you want to target this release at. For example, 'Debug' or 'Release' (iOS only)",
+        type: "string",
+      })
       .check((argv: any, aliases: { [aliases: string]: string }): any => {
         return checkValidReleaseOptions(argv);
       });
@@ -1052,6 +1111,10 @@ export function createCommand(): cli.ICommand {
 
               deploymentAddCommand.appName = arg2;
               deploymentAddCommand.deploymentName = arg3;
+              if(argv["key"]){
+                deploymentAddCommand.key = argv["key"] as any;
+              }
+
             }
             break;
 
@@ -1228,6 +1291,13 @@ export function createCommand(): cli.ICommand {
           releaseReactCommand.rollout = getRolloutValue(argv["rollout"] as any);
           releaseReactCommand.sourcemapOutput = argv["sourcemapOutput"] as any;
           releaseReactCommand.outputDir = argv["outputDir"] as any;
+          releaseReactCommand.useHermes = argv["useHermes"] as any;
+          releaseReactCommand.extraHermesFlags = argv["extraHermesFlags"] as any;
+          releaseReactCommand.podFile = argv["podFile"] as any;
+          releaseReactCommand.privateKeyPath = argv["privateKeyPath"] as any;
+          releaseReactCommand.xcodeProjectFile = argv["xcodeProjectFile"] as any;
+          releaseReactCommand.xcodeTargetName = argv["xcodeTargetName"] as any;
+          releaseReactCommand.buildConfigurationName = argv["buildConfigurationName"] as any;
         }
         break;
 

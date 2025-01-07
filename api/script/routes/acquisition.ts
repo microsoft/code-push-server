@@ -18,6 +18,7 @@ import * as q from "q";
 import * as queryString from "querystring";
 import * as URL from "url";
 import Promise = q.Promise;
+import { sendErrorToDatadog } from "../utils/tracer";
 
 const METRICS_BREAKING_VERSION = "1.5.2-beta";
 
@@ -193,6 +194,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         })
         .then(() => {
           if (redisError) {
+            sendErrorToDatadog(redisError);
             throw redisError;
           }
         })

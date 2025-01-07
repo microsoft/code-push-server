@@ -7,6 +7,7 @@ import * as errorModule from "../error";
 import * as storageTypes from "../storage/storage";
 import * as passportAuthentication from "../routes/passport-authentication";
 import { AppInsights } from "../routes/app-insights";
+import { sendErrorToDatadog } from "./tracer";
 
 const sanitizeHtml = require("sanitize-html");
 
@@ -58,6 +59,7 @@ export function restErrorHandler(res: express.Response, error: errorModule.CodeP
 }
 
 export function sendMalformedRequestError(res: express.Response, message: string): void {
+  sendErrorToDatadog(new Error("400: Malformed Request error " + message));
   if (message) {
     res.status(400).send(sanitizeHtml(message));
   } else {
@@ -66,6 +68,7 @@ export function sendMalformedRequestError(res: express.Response, message: string
 }
 
 export function sendForbiddenError(res: express.Response, message?: string): void {
+  sendErrorToDatadog(new Error("403: Forbidden error " + message));
   if (message) {
     res.status(403).send(sanitizeHtml(message));
   } else {
@@ -74,24 +77,29 @@ export function sendForbiddenError(res: express.Response, message?: string): voi
 }
 
 export function sendForbiddenPage(res: express.Response, message: string): void {
+  sendErrorToDatadog(new Error("403: Forbidden Page error " + message));
   res.status(403).render("message", { message: message });
 }
 
 export function sendNotFoundError(res: express.Response, message?: string): void {
   if (message) {
+    sendErrorToDatadog(new Error("404: Not found error " + sanitizeHtml(message)));
     res.status(404).send(sanitizeHtml(message));
   } else {
+    sendErrorToDatadog(new Error("404: Not found error"));
     res.sendStatus(404);
   }
 }
 
 export function sendNotRegisteredError(res: express.Response): void {
   if (passportAuthentication.PassportAuthentication.isAccountRegistrationEnabled()) {
+    sendErrorToDatadog(new Error("403: Account not found"));
     res.status(403).render("message", {
       message:
         "Account not found.<br/>Have you registered with the CLI?<br/>If you are registered but your email address has changed, please contact us.",
     });
   } else {
+    sendErrorToDatadog(new Error("403: Account not found"));
     res.status(403).render("message", {
       message:
         "Account not found.<br/>Please <a href='http://microsoft.github.io/code-push/'>sign up for the beta</a>, and we will contact you when your account has been created!</a>",
@@ -101,26 +109,32 @@ export function sendNotRegisteredError(res: express.Response): void {
 
 export function sendConflictError(res: express.Response, message?: string): void {
   message = message ? sanitizeHtml(message) : "The provided resource already exists";
+  sendErrorToDatadog(new Error("409: Conflict error " + message));
   res.status(409).send(message);
 }
 
 export function sendAlreadyExistsPage(res: express.Response, message: string): void {
+  sendErrorToDatadog(new Error("409: Already Exists error " + message));
   res.status(409).render("message", { message: message });
 }
 
 export function sendResourceGoneError(res: express.Response, message: string): void {
+  sendErrorToDatadog(new Error("410: Resource Gone error " + message));
   res.status(410).send(sanitizeHtml(message));
 }
 
 export function sendResourceGonePage(res: express.Response, message: string): void {
+  sendErrorToDatadog(new Error("410: Resource Gone error " + message));
   res.status(410).render("message", { message: message });
 }
 
 export function sendTooLargeError(res: express.Response): void {
+  sendErrorToDatadog(new Error("413: The provided resource is too large"));
   res.status(413).send("The provided resource is too large");
 }
 
 export function sendConnectionFailedError(res: express.Response): void {
+  sendErrorToDatadog(new Error("503: Connection failed"));
   res.status(503).send("The CodePush server temporarily timed out. Please try again.");
 }
 
@@ -129,9 +143,12 @@ export function sendUnknownError(res: express.Response, error: any, next: Functi
 
   if (typeof error["stack"] === "string") {
     console.log(error["stack"]);
+    sendErrorToDatadog(new Error("500: Unknown error " + error["stack"]));
   } else {
     console.log(error);
+    sendErrorToDatadog(new Error("500: Unknown error " + error));
   }
+  
 
   if (AppInsights.isAppInsightsInstrumented()) {
     next(error); // Log error with AppInsights.

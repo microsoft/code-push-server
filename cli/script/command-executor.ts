@@ -1506,7 +1506,7 @@ function serializeConnectionInfo(accessKey: string, preserveAccessKeyOnLogout: b
 
   log(
     `\r\nSuccessfully logged-in. Your session file was written to ${chalk.cyan(configFilePath)}. You can run the ${chalk.cyan(
-      "code-push logout"
+      "code-push-standalone logout"
     )} command at any time to delete this file and terminate your session.\r\n`
   );
 }

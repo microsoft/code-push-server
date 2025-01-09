@@ -454,6 +454,13 @@ yargs
     yargs
       .usage(USAGE_PREFIX + " logout")
       .demand(/*count*/ 0, /*max*/ 0)
+      .option("force", {
+        alias: "f",
+        default: null,
+        demand: false,
+        description: "Force logout, even if server is unreachable.",
+        type: "boolean",
+      })
       .example("logout", "Logs out and ends your current session");
     addCommonConfiguration(yargs);
   })
@@ -1146,6 +1153,9 @@ export function createCommand(): cli.ICommand {
 
       case "logout":
         cmd = { type: cli.CommandType.logout };
+
+        const logoutCommand = <cli.ILogoutCommand>cmd;
+        logoutCommand.force = argv["force"] as boolean;
         break;
 
       case "patch":

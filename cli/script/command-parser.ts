@@ -6,6 +6,7 @@ import * as cli from "../script/types/cli";
 import * as chalk from "chalk";
 import backslash = require("backslash");
 import parseDuration = require("parse-duration");
+import AccountManager = require("./management-sdk");
 
 const packageJson = require("../../package.json");
 const ROLLOUT_PERCENTAGE_REGEX: RegExp = /^(100|[1-9][0-9]|[1-9])%?$/;
@@ -428,10 +429,13 @@ yargs
     isValidCommandCategory = true;
     isValidCommand = true;
     yargs
-      .usage(USAGE_PREFIX + " login [options]")
-      .demand(/*count*/ 0, /*max*/ 1) //set 'max' to one to allow usage of serverUrl undocument parameter for testing
-      .example("login", "Logs in to the CodePush server")
-      .example("login --accessKey mykey", 'Logs in on behalf of the user who owns and created the access key "mykey"')
+      .usage(USAGE_PREFIX + " login <serverUrl> [options]")
+      .demand(/*count*/ 0, /*max*/ 1) //set 'max' to one to allow usage of serverUrl
+      .example("login", `Logs in to the CodePush server on default serverUrl ${AccountManager.SERVER_URL}`)
+      .example(
+        "login https://codepush.example.com  --accessKey mykey",
+        'Logs in on behalf of the user who owns and created the access key "mykey", on the server running at https://codepush.example.com'
+      )
       .option("accessKey", {
         alias: "key",
         default: null,

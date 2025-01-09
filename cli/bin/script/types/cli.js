@@ -1,0 +1,40 @@
+"use strict";
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CommandType = void 0;
+var CommandType;
+(function (CommandType) {
+    CommandType[CommandType["accessKeyAdd"] = 0] = "accessKeyAdd";
+    CommandType[CommandType["accessKeyPatch"] = 1] = "accessKeyPatch";
+    CommandType[CommandType["accessKeyList"] = 2] = "accessKeyList";
+    CommandType[CommandType["accessKeyRemove"] = 3] = "accessKeyRemove";
+    CommandType[CommandType["appAdd"] = 4] = "appAdd";
+    CommandType[CommandType["appList"] = 5] = "appList";
+    CommandType[CommandType["appRemove"] = 6] = "appRemove";
+    CommandType[CommandType["appRename"] = 7] = "appRename";
+    CommandType[CommandType["appTransfer"] = 8] = "appTransfer";
+    CommandType[CommandType["collaboratorAdd"] = 9] = "collaboratorAdd";
+    CommandType[CommandType["collaboratorList"] = 10] = "collaboratorList";
+    CommandType[CommandType["collaboratorRemove"] = 11] = "collaboratorRemove";
+    CommandType[CommandType["debug"] = 12] = "debug";
+    CommandType[CommandType["deploymentAdd"] = 13] = "deploymentAdd";
+    CommandType[CommandType["deploymentHistory"] = 14] = "deploymentHistory";
+    CommandType[CommandType["deploymentHistoryClear"] = 15] = "deploymentHistoryClear";
+    CommandType[CommandType["deploymentList"] = 16] = "deploymentList";
+    CommandType[CommandType["deploymentMetrics"] = 17] = "deploymentMetrics";
+    CommandType[CommandType["deploymentRemove"] = 18] = "deploymentRemove";
+    CommandType[CommandType["deploymentRename"] = 19] = "deploymentRename";
+    CommandType[CommandType["link"] = 20] = "link";
+    CommandType[CommandType["login"] = 21] = "login";
+    CommandType[CommandType["logout"] = 22] = "logout";
+    CommandType[CommandType["patch"] = 23] = "patch";
+    CommandType[CommandType["promote"] = 24] = "promote";
+    CommandType[CommandType["register"] = 25] = "register";
+    CommandType[CommandType["release"] = 26] = "release";
+    CommandType[CommandType["releaseReact"] = 27] = "releaseReact";
+    CommandType[CommandType["rollback"] = 28] = "rollback";
+    CommandType[CommandType["sessionList"] = 29] = "sessionList";
+    CommandType[CommandType["sessionRemove"] = 30] = "sessionRemove";
+    CommandType[CommandType["whoami"] = 31] = "whoami";
+})(CommandType || (exports.CommandType = CommandType = {}));

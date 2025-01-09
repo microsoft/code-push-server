@@ -2,7 +2,7 @@
 
 The CodePush CLI is a Node.js application that allows users to interact with CodePush Server.
 
-## Installation
+## Installation - global
 
 To run the CodePush CLI, follow these steps:
 
@@ -10,6 +10,32 @@ To run the CodePush CLI, follow these steps:
 1. Install the necessary dependencies by running `npm install`.
 1. Build the CLI by running `npm run build`.
 1. Install CLI globally by running `npm install -g`.
+
+## Installation - as dev dependency in app project
+
+In case of calling the CLI from custom scripts in `package.json`, i.e. when making CI jobs or streamlining setup procedures for new developers, it can be convenient to install this module as a dev dependency, so the command `code-push-standalone` will be available to any scripts in the project, without installing global packages.
+
+1. Install the package as a dev dependency by running this command which will install the latest commit from the `main` branch.
+   
+   `yarn add -D 'code-push-standalone@https://gitpkg.vercel.app/api/pkg.tgz?url=microsoft/code-push-server/cli&commit=main'`
+1. Add any needed scripts in your `package.json`.
+
+   Example:
+   ```json
+   {
+    // ...
+     "scripts": {
+       "codepush:login": "code-push-standalone login",
+       "codepush:ios": "code-push-standalone release-react MyApp-iOS ios",
+       "codepush:android": "code-push-standalone release-react MyApp-Android android",
+       // ....
+     },
+     // ...
+   }
+   ```
+1. Log in with `yarn codepush:login`, and release updates updates with `yarn codepush:ios` etc.
+
+
 
 ## Getting started
 
@@ -21,7 +47,7 @@ To run the CodePush CLI, follow these steps:
 
 ## Usage
 
-After installing CodePush CLI globally, it will be available under `code-push-standalone`.
+After installing CodePush CLI globally or as a dev dependency, it will be available under `code-push-standalone`.
 
 ## Account Management
 

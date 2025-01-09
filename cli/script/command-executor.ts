@@ -527,7 +527,7 @@ export function execute(command: cli.ICommand) {
         return login(<cli.ILoginCommand>command);
 
       case cli.CommandType.logout:
-        return logout(command);
+        return logout(<cli.ILogoutCommand>command);
 
       case cli.CommandType.patch:
         return patch(<cli.IPatchCommand>command);
@@ -626,7 +626,7 @@ function loginWithExternalAuthentication(action: string, serverUrl?: string): Pr
   });
 }
 
-function logout(command: cli.ICommand): Promise<void> {
+function logout(command: cli.ILogoutCommand): Promise<void> {
   return Q(<void>null)
     .then((): Promise<void> => {
       if (!connectionInfo.preserveAccessKeyOnLogout) {
@@ -642,6 +642,15 @@ function logout(command: cli.ICommand): Promise<void> {
     .then((): void => {
       sdk = null;
       deleteConnectionInfoCache();
+    })
+    .catch((error: any) => {
+      if (command.force) {
+        log(chalk.redBright("\nThere was an issue logging out from the server. Forcing logout by deleting local connection info.\n"));
+        deleteConnectionInfoCache();
+        log(chalk.yellowBright("Notice: Local session file was deleted, but the session ID might still exist on the server.\n"));
+      } else {
+        throw error;
+      }
     });
 }
 

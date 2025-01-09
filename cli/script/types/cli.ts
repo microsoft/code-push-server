@@ -149,6 +149,10 @@ export interface ILoginCommand extends ICommand {
   accessKey: string;
 }
 
+export interface ILogoutCommand extends ICommand {
+  force: boolean
+}
+
 export interface IPackageInfo {
   description?: string;
   label?: string;

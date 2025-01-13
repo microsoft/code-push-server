@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_KEY=${REDIS_KEY}
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

@@ -1,0 +1,200 @@
+version: 2.1
+orbs:
+  aws-cli: circleci/aws-cli@4.1.3
+  aws-ecr: circleci/aws-ecr@9.1.0
+  node: circleci/node@5.2.0
+  slack: circleci/slack@4.13.3
+jobs:
+  build-and-push-image:
+    parameters:
+      tag:
+        type: string
+    machine:
+      image: ubuntu-2204:current
+    steps:
+      - checkout
+      - persist_to_workspace:
+          root: .
+          paths:
+            - rushowl-helm
+      - run:
+          name: Generate SSH Key
+          command: |
+            echo $GIT_ACCESS_KEY | base64 -d > ~/.ssh/id_rsa
+            chmod 400 ~/.ssh/id_rsa
+      - run:
+          name: Add SSH Key to SSH Agent
+          command: |
+            eval $(ssh-agent -s)
+            ssh-add ~/.ssh/id_rsa
+      - run:
+          name: Setup git config
+          command: |
+            echo $GIT_CONFIG | base64 -d > ~/.gitconfig
+      - node/install:
+          node-version: v18.18.0
+      - run:
+          name: Build
+          command: |
+            npm install
+            npm run build
+      - aws-ecr/build_and_push_image:
+          account_id: "$AWS_ACCOUNT_ID"
+          auth:
+            - aws-cli/setup:
+                aws_access_key_id: AWS_ACCESS_KEY
+                aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+                region: "$AWS_REGION"
+          create_repo: true
+          checkout: false
+          dockerfile: ./api/Dockerfile
+          public_registry: false
+          push_image: true
+          region: "$AWS_REGION"
+          repo: $CIRCLE_PROJECT_REPONAME
+          tag: "<< parameters.tag >>"
+      - run:
+          name: Cleanup
+          command: |
+            rm -f ~/.ssh/id_rsa
+            rm -f ~/.gitconfig
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
+      - slack/notify:
+          event: pass
+          template: basic_success_1
+  kube-deploy:
+    parameters:
+      namespace:
+        type: string
+      valuePath:
+        type: string
+      tag:
+        type: string
+      kube_context:
+        type: string
+    docker:
+      - image: reynandaptr/alpine:0.0.3
+    resource_class: sznnwvosn2in82bxrhcsj6/kube-eks-rushtrail-prod-sg
+    steps:
+      - run:
+          name: Install kubeconfig
+          command: |
+            if [ -n "${KUBECONFIG_FILE}" ]; then
+              mkdir -p $HOME/.kube
+              echo -n "${KUBECONFIG_FILE}" | base64 -d > $HOME/.kube/config
+            fi
+      - run:
+          name: Fix kubeconfig file permissions
+          command: |
+            chmod 600 $HOME/.kube/config
+      - attach_workspace:
+          at: .
+      - run:
+          name: Helm Install or Upgrade
+          command: |
+            CIRCLE_PROJECT_REPONAME=$CIRCLE_PROJECT_REPONAME
+            NAMESPACE="<< parameters.namespace >>"
+            VALUES_FILE="<< parameters.valuePath >>"
+            IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$CIRCLE_PROJECT_REPONAME"
+            IMAGE_TAG="<< parameters.tag >>"
+            KUBE_CONTEXT="<< parameters.kube_context >>"
+
+            if helm status $CIRCLE_PROJECT_REPONAME --namespace $NAMESPACE --kube-context $KUBE_CONTEXT > /dev/null 2>&1; then
+              echo "Release $CIRCLE_PROJECT_REPONAME exists. Upgrading..."
+              helm upgrade $CIRCLE_PROJECT_REPONAME rushowl-helm --set image.uri=$IMAGE_URI --set image.tag=$IMAGE_TAG --values $VALUES_FILE --namespace $NAMESPACE --kube-context $KUBE_CONTEXT
+            else
+              echo "Release $CIRCLE_PROJECT_REPONAME does not exist. Installing..."
+              helm install $CIRCLE_PROJECT_REPONAME rushowl-helm --set image.uri=$IMAGE_URI --set image.tag=$IMAGE_TAG --values $VALUES_FILE --namespace $NAMESPACE --kube-context $KUBE_CONTEXT
+            fi
+      - run:
+          name: Cleanup
+          command: |
+            rm -f $HOME/.kube/config
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
+      - slack/notify:
+          event: pass
+          template: basic_success_1
+workflows:
+  cicd:
+    jobs:
+      - build-and-push-image:
+          context:
+            - production-github-git-access
+            - production-aws-ecr-read-write
+            - slack
+          name: build-and-push-image-test
+          tag: "${CIRCLE_BRANCH}-${CIRCLE_SHA1}"
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only:
+                - develop
+      - build-and-push-image:
+          context:
+            - production-github-git-access
+            - production-aws-ecr-read-write
+            - slack
+          name: build-and-push-image-production
+          tag: "$CIRCLE_TAG"
+          filters:
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
+            branches:
+              ignore: /.*/
+      - kube-deploy:
+          context:
+            - kubeconfig
+            - production-aws-ecr-read-write
+            - slack
+          name: kube-deploy-non-prod
+          namespace: "sg-test-rushtrail"
+          valuePath: "rushowl-helm/values-test.yaml"
+          tag: "${CIRCLE_BRANCH}-${CIRCLE_SHA1}"
+          kube_context: "rushtrail-non-prod-common"
+          filters:
+            tags:
+              ignore: /.*/
+            branches:
+              only:
+                - develop
+          requires:
+            - build-and-push-image-test
+      - kube-deploy:
+          context:
+            - kubeconfig
+            - production-aws-ecr-read-write
+            - slack
+          name: kube-deploy-prod-sg
+          namespace: "default"
+          valuePath: "rushowl-helm/values-prod-sg.yaml"
+          tag: "$CIRCLE_TAG"
+          kube_context: "rushtrail-prod-sg"
+          filters:
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
+            branches:
+              ignore: /.*/
+          requires:
+            - build-and-push-image-production
+      - kube-deploy:
+          context:
+            - kubeconfig
+            - production-aws-ecr-read-write
+            - slack
+          name: kube-deploy-prod-in
+          namespace: "default"
+          valuePath: "rushowl-helm/values-prod-in.yaml"
+          tag: "$CIRCLE_TAG"
+          kube_context: "rushtrail-prod-in"
+          filters:
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
+            branches:
+              ignore: /.*/
+          requires:
+            - build-and-push-image-production

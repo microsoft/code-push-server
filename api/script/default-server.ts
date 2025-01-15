@@ -140,7 +140,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
 
       const limiter = rateLimit({
         windowMs: 1000, // 1 minute
-        max: 50000, // limit each IP to 100 requests per windowMs
+        max: 90000, // limit each IP to 100 requests per windowMs
         validate: { xForwardedForHeader: false }
       });
 

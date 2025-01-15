@@ -139,8 +139,8 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use(api.health({ storage: storage, redisManager: redisManager }));
 
       const limiter = rateLimit({
-        windowMs: 15 * 60 * 1000, // 15 minutes
-        max: 1000, // limit each IP to 100 requests per windowMs
+        windowMs: 1000, // 1 minute
+        max: 50000, // limit each IP to 100 requests per windowMs
         validate: { xForwardedForHeader: false }
       });
 

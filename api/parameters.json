@@ -1,22 +1,21 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-      "project_sufix": {
-        "value": "your_project_suffix"
-      },
-      "az_location": {
-        "value": "your_azure_location"
-      },
-      "github_client_id": {
-        "value": "your_github_client_id"
-      },
-      "github_client_secret": {
-        "value": "your_github_client_secret"
-      },
-      "logging": {
-        "value": true
-      }
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "project_sufix": {
+      "value": "web-app-codepush-dev"
+    },
+    "az_location": {
+      "value": "eastus2"
+    },
+    "github_client_id": {
+      "value": "Ov23liPBndb5ulPyCa33"
+    },
+    "github_client_secret": {
+      "value": "938a48c8341e557e9692b655f18dad0ee092b0ba"
+    },
+    "logging": {
+      "value": true
     }
   }
-  
+}

@@ -25,6 +25,7 @@ jobs:
           registry-url: "https://npm.pkg.github.com/"
           scope: "@angel-studios"
           cache: "yarn"
+        working-directory: cli
       - name: Install
         run: yarn install --immutable
         working-directory: cli

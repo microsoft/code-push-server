@@ -8,8 +8,7 @@
     "build": "tsc",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
-    "lint:fix": "npx eslint ./script/**/*.ts --fix",
-    "check-exports": "npx attw --pack --profile node16 ."
+    "lint:fix": "npx eslint ./script/**/*.ts --fix"
   },
   "bin": {
     "code-push-standalone": "./bin/script/cli.js"

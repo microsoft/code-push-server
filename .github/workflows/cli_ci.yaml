@@ -43,10 +43,10 @@ jobs:
           BRANCH_TAG=$(echo "$BRANCH_NAME" | tr '[:upper:]/_' '[:lower:]-')
 
           if [[ "$BRANCH_NAME" == "main" ]]; then
-            npm publish
+            npm publish --registry https://npm.pkg.github.com
           else
             echo "Publishing alpha build with tag: $BRANCH_TAG"
-            npm publish --tag "$BRANCH_TAG"
+            npm publish --tag "$BRANCH_TAG" --registry https://npm.pkg.github.com
           fi
         working-directory: cli
         env:

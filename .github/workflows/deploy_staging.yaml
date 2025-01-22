@@ -1,0 +1,112 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy_staging
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ secrets.SHARED_AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.SHARED_AWS_ACCOUNT_ID }}
+  ENV_TAG: stg
+  INFRA_REPO: Angel-Studios/infra-codepush
+
+jobs:
+  build:
+    name: Build and Push Docker Image
+    runs-on: arm-runners
+
+    strategy:
+      fail-fast: false
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Start Stage Deploy
+        run: echo "Deploying stage for codepush"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Docker Context
+        run: 'docker context create app'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
+          endpoint: app
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@master
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/github-actions-${{ github.repository_owner }}-${{ github.event.repository.name }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta_client
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/codepush
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha,format=long
+
+      - name: Build and push
+        id: docker_build_admin
+        uses: docker/build-push-action@v5
+        with:
+          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/codepush:cache
+          cache-to: mode=max,image-manifest=true,oci-mediatypes=true,type=registry,ref=${{ steps.login-ecr.outputs.registry }}/codepush:cache
+          context: ./api
+          file: ./Dockerfile
+          push: true
+          labels: ${{ steps.meta_client.outputs.labels }}
+          tags: ${{ steps.meta_client.outputs.tags }}
+          secrets: |
+            "NODE_GITHUB_PACKAGES_READER_TOKEN=${{ secrets.NODE_GITHUB_PACKAGES_READER_TOKEN }}"
+  deploy:
+    name: Commit deployment values
+    needs: build
+    runs-on: arm-runners
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout the other repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.INFRA_REPO }}
+          token: ${{ secrets.OPS_CICD_PAT }}
+          path: 'infra'
+          ref: 'main'
+
+      - name: Update Image Tag
+        working-directory: 'infra'
+        run: |
+          git config user.email "devops@angel.com"
+          git config user.name "Github Actions"
+
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.27.2/yq_linux_arm64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+          yq eval '(.images[] | select(.name == "codepush")).newTag = "sha-${{ github.sha }}"' -i 'k8s/overlays/${{ env.ENV_TAG }}/kustomization.yaml'
+
+          git add .
+          git commit -m "Github Actions: Update ${{ env.ENV_TAG }} tag to ${{ github.sha }}"
+          git push origin HEAD:main -f

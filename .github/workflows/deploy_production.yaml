@@ -1,0 +1,43 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.SHARED_AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.SHARED_AWS_ACCOUNT_ID }}
+  ENV_TAG: prod
+  INFRA_REPO: Angel-Studios/infra-codepush
+
+jobs:
+  deploy:
+    name: Commit deployment values
+    runs-on: arm-runners
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout the other repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.INFRA_REPO }}
+          token: ${{ secrets.OPS_CICD_PAT }}
+          path: 'infra'
+          ref: 'main'
+
+      - name: Update Image Tag
+        working-directory: 'infra'
+        run: |
+          git config user.email "devops@angel.com"
+          git config user.name "Github Actions"
+
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.27.2/yq_linux_arm64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+          yq eval '(.images[] | select(.name == "codepush")).newTag = "sha-${{ github.sha }}"' -i 'k8s/overlays/${{ env.ENV_TAG }}/kustomization.yaml'
+
+          git add .
+          git commit -m "Github Actions: Update ${{ env.ENV_TAG }} tag to ${{ github.sha }}"
+          git push origin HEAD:main -f

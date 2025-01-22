@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      NODE_GITHUB_PACKAGES_READER_TOKEN: ${{ secrets.NODE_GITHUB_PACKAGES_READER_TOKEN }}
+    steps:
+      - name: Calculate Branch Name
+        id: calculate_branch
+        run: echo "branchName=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node & Yarn
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://npm.pkg.github.com/"
+          scope: "@angel-studios"
+          cache: "yarn"
+      - name: Install
+        run: yarn install --immutable
+        working-directory: cli
+      - name: CI
+        run: yarn build
+        working-directory: cli
+      - name: Update Versions
+        run: bash ./scripts/update_versions.sh
+        working-directory: cli
+        env:
+          BRANCH_NAME: ${{ steps.calculate_branch.outputs.branchName }}
+          GITHUB_SHA: ${{ github.sha }}
+      - name: Check Exports
+        run: yarn check-exports
+      - name: Publish Packages
+        run: |
+          BRANCH_TAG=$(echo "$BRANCH_NAME" | tr '[:upper:]/_' '[:lower:]-')
+
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            npm publish
+          else
+            echo "Publishing alpha build with tag: $BRANCH_TAG"
+            npm publish --tag "$BRANCH_TAG"
+          fi
+        working-directory: cli
+        env:
+          BRANCH_NAME: ${{ steps.calculate_branch.outputs.branchName }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

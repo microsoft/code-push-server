@@ -19,13 +19,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       - name: Setup Node & Yarn
-        working-directory: cli
         uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: "https://npm.pkg.github.com/"
           scope: "@angel-studios"
           cache: "yarn"
+          cache-dependency-path: "cli/yarn.lock"
       - name: Install
         run: yarn install --immutable
         working-directory: cli
@@ -40,6 +40,7 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
       - name: Check Exports
         run: yarn check-exports
+        working-directory: cli
       - name: Publish Packages
         run: |
           BRANCH_TAG=$(echo "$BRANCH_NAME" | tr '[:upper:]/_' '[:lower:]-')

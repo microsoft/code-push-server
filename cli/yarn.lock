@@ -911,7 +911,7 @@ __metadata:
     yargs: "npm:17.7.2"
     yazl: "npm:3.3.0"
   bin:
-    code-push-standalone: ./bin/script/cli.js
+    code-push-standalone: bin/script/cli.js
   languageName: unknown
   linkType: soft
 

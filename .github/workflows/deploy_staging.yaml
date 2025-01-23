@@ -21,9 +21,6 @@ jobs:
     name: Build and Push Docker Image
     runs-on: arm-runners
 
-    strategy:
-      fail-fast: false
-
     permissions:
       id-token: write
       contents: read

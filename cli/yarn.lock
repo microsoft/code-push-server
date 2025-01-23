@@ -5,6 +5,58 @@ __metadata:
   version: 8
   cacheKey: 10
 
+"@angel-studios/code-push-cli@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@angel-studios/code-push-cli@workspace:."
+  dependencies:
+    "@types/express": "npm:4.17.17"
+    "@types/jest": "npm:29.5.2"
+    "@types/mocha": "npm:10.0.1"
+    "@types/node": "npm:20.3.1"
+    "@types/q": "npm:1.5.5"
+    "@types/sinon": "npm:17.0.3"
+    "@typescript-eslint/eslint-plugin": "npm:8.15.0"
+    "@typescript-eslint/parser": "npm:8.15.0"
+    backslash: "npm:0.2.0"
+    chalk: "npm:4.1.2"
+    cli-table: "npm:0.3.11"
+    cross-fetch: "npm:4.0.0"
+    email-validator: "npm:2.0.4"
+    eslint: "npm:9.15.0"
+    express: "npm:4.21.1"
+    gradle-to-js: "npm:2.0.1"
+    jsonwebtoken: "npm:9.0.2"
+    mkdirp: "npm:3.0.1"
+    moment: "npm:2.30.1"
+    opener: "npm:1.5.2"
+    parse-duration: "npm:1.1.0"
+    plist: "npm:3.1.0"
+    prettier: "npm:3.3.3"
+    progress: "npm:2.0.3"
+    prompt: "npm:1.3.0"
+    properties: "npm:1.2.1"
+    q: "npm:1.5.1"
+    recursive-fs: "npm:2.1.0"
+    rimraf: "npm:2.5.1"
+    semver: "npm:7.6.3"
+    simctl: "npm:2.0.3"
+    sinon: "npm:19.0.2"
+    slash: "npm:3.0.0"
+    superagent: "npm:10.1.1"
+    superagent-mock: "npm:5.0.1"
+    temp: "npm:0.9.4"
+    typescript: "npm:5.6.3"
+    which: "npm:5.0.0"
+    wordwrap: "npm:1.0.0"
+    xcode: "npm:3.0.1"
+    xml2js: "npm:0.6.2"
+    yargs: "npm:17.7.2"
+    yazl: "npm:3.3.0"
+  bin:
+    code-push-standalone: bin/script/cli.js
+  languageName: unknown
+  linkType: soft
+
 "@babel/code-frame@npm:^7.12.13":
   version: 7.26.2
   resolution: "@babel/code-frame@npm:7.26.2"
@@ -862,58 +914,6 @@ __metadata:
   checksum: 10/eaa5561aeb3135c2cddf7a3b3f562fc4238ff3b3fc666869ef2adf264be0f372136702f16add9299087fb1907c2e4ec5dbfe83bd24bce815c70a80c6c1a2e950
   languageName: node
   linkType: hard
-
-"code-push-cli@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "code-push-cli@workspace:."
-  dependencies:
-    "@types/express": "npm:4.17.17"
-    "@types/jest": "npm:29.5.2"
-    "@types/mocha": "npm:10.0.1"
-    "@types/node": "npm:20.3.1"
-    "@types/q": "npm:1.5.5"
-    "@types/sinon": "npm:17.0.3"
-    "@typescript-eslint/eslint-plugin": "npm:8.15.0"
-    "@typescript-eslint/parser": "npm:8.15.0"
-    backslash: "npm:0.2.0"
-    chalk: "npm:4.1.2"
-    cli-table: "npm:0.3.11"
-    cross-fetch: "npm:4.0.0"
-    email-validator: "npm:2.0.4"
-    eslint: "npm:9.15.0"
-    express: "npm:4.21.1"
-    gradle-to-js: "npm:2.0.1"
-    jsonwebtoken: "npm:9.0.2"
-    mkdirp: "npm:3.0.1"
-    moment: "npm:2.30.1"
-    opener: "npm:1.5.2"
-    parse-duration: "npm:1.1.0"
-    plist: "npm:3.1.0"
-    prettier: "npm:3.3.3"
-    progress: "npm:2.0.3"
-    prompt: "npm:1.3.0"
-    properties: "npm:1.2.1"
-    q: "npm:1.5.1"
-    recursive-fs: "npm:2.1.0"
-    rimraf: "npm:2.5.1"
-    semver: "npm:7.6.3"
-    simctl: "npm:2.0.3"
-    sinon: "npm:19.0.2"
-    slash: "npm:3.0.0"
-    superagent: "npm:10.1.1"
-    superagent-mock: "npm:5.0.1"
-    temp: "npm:0.9.4"
-    typescript: "npm:5.6.3"
-    which: "npm:5.0.0"
-    wordwrap: "npm:1.0.0"
-    xcode: "npm:3.0.1"
-    xml2js: "npm:0.6.2"
-    yargs: "npm:17.7.2"
-    yazl: "npm:3.3.0"
-  bin:
-    code-push-standalone: bin/script/cli.js
-  languageName: unknown
-  linkType: soft
 
 "color-convert@npm:^2.0.1":
   version: 2.0.1

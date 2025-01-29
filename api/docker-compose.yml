@@ -2,10 +2,11 @@ version: '3.8'
 services:
   db:
     image: mysql:5.7
+    platform: linux/amd64
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: codepushdb
-      MYSQL_USER: root
+      MYSQL_USER: ashishd11
       MYSQL_PASSWORD: root
     ports:
       - "3306:3306"  # MySQL running on localhost:3306

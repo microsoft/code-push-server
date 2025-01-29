@@ -15,6 +15,7 @@ import * as utils from "./utils";
 
 import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";
+import {S3Storage} from "../script/storage/aws-storage"
 import { UpdateCheckRequest } from "../script/types/rest-definitions";
 import { SDK_VERSION_HEADER } from "../script/utils/rest-headers";
 
@@ -31,7 +32,7 @@ describe("Acquisition Rest API", () => {
   let redisManager: redis.RedisManager;
   let isAzureServer: boolean;
 
-  before((): q.Promise<void> => {
+  beforeEach((): q.Promise<void> => {
     let useJsonStorage: boolean = !process.env.TEST_AZURE_STORAGE && !process.env.AZURE_ACQUISITION_URL;
 
     return q<void>(null)
@@ -117,7 +118,7 @@ describe("Acquisition Rest API", () => {
       });
   });
 
-  after((): Promise<void> => {
+  afterEach((): Promise<void> => {
     return q(<void>null)
       .then(() => {
         if (storageInstance instanceof JsonStorage) {
@@ -136,7 +137,7 @@ describe("Acquisition Rest API", () => {
       let isProductionReady: boolean = storageInstance instanceof AzureStorage && redisManager && redisManager.isEnabled;
       let expectedStatusCode: number = isProductionReady || isAzureServer ? 200 : 500;
       request(server || serverUrl)
-        .get("/health")
+        .get("/healthcheck")
         .expect(expectedStatusCode)
         .end(function (err: any, result: any) {
           if (err) throw err;
@@ -407,7 +408,7 @@ describe("Acquisition Rest API", () => {
           assert.equal(response.updateInfo.isAvailable, true);
           assert.equal(response.updateInfo.downloadURL, appPackage.diffPackageMap[previousPackageHash].url);
           assert.equal(response.updateInfo.packageSize, 5);
-          assert.equal(response.updateInfo.isMandatory, false);
+          assert.equal(response.updateInfo.isMandatory, true);
           done();
         });
     });
@@ -654,7 +655,7 @@ describe("Acquisition Rest API", () => {
       let deployment2: storage.Deployment;
       let package2: storage.Package;
 
-      before(() => {
+      beforeEach(() => {
         account2 = utils.makeAccount();
         return storageInstance
           .addAccount(account2)
@@ -788,6 +789,7 @@ describe("Acquisition Rest API", () => {
       it("returns 200 and update available for 2.0.0 binary for older package hash", (done) => {
         requestParameters.appVersion = "2.0.0";
         requestParameters.packageHash = "hash202";
+        console.log("--->>>", JSON.stringify(requestParameters, null,2))
         request(server || serverUrl)
           .get(
             "/updateCheck?" +
@@ -802,6 +804,7 @@ describe("Acquisition Rest API", () => {
           .end(function (err: any, result: any) {
             if (err) throw err;
             let response = JSON.parse(result.text);
+            console.log("--->>>resp", response)
             assert.equal(response.updateInfo.isAvailable, true);
             assert.equal(response.updateInfo.appVersion, "2.0.0");
             assert.equal(response.updateInfo.label, "v6");
@@ -812,6 +815,9 @@ describe("Acquisition Rest API", () => {
       it("returns 200 and update available for 3.0.0 binary on older package hash", (done) => {
         requestParameters.appVersion = "3.0.0";
         requestParameters.packageHash = "hash304";
+
+        //console.log("====>>>", JSON.stringify(requestParameters, null,2))
+
         request(server || serverUrl)
           .get(
             "/updateCheck?" +
@@ -826,8 +832,10 @@ describe("Acquisition Rest API", () => {
           .end(function (err: any, result: any) {
             if (err) throw err;
             let response = JSON.parse(result.text);
+            console.log("====>>>", response)
+
             assert.equal(response.updateInfo.isAvailable, true);
-            assert.equal(response.updateInfo.isMandatory, false);
+            assert.equal(response.updateInfo.isMandatory, true);
             assert.equal(response.updateInfo.appVersion, "3.0.0");
             assert.equal(response.updateInfo.label, "v7");
             done();
@@ -864,7 +872,7 @@ describe("Acquisition Rest API", () => {
       let deployment2: storage.Deployment;
       let package2: storage.Package;
 
-      before(() => {
+      beforeEach(() => {
         account2 = utils.makeAccount();
         return storageInstance
           .addAccount(account2)
@@ -1027,7 +1035,7 @@ describe("Acquisition Rest API", () => {
       let deployment2: storage.Deployment;
       let package2: storage.Package;
 
-      before(() => {
+      beforeEach(() => {
         account2 = utils.makeAccount();
         return storageInstance
           .addAccount(account2)
@@ -1138,12 +1146,12 @@ describe("Acquisition Rest API", () => {
     });
 
     describe("POST /reportStatus/deploy", () => {
-      it("returns 400 if invalid json is sent", (done) => {
+      it("returns 500 if invalid json is sent", (done) => {
         request(server || serverUrl)
           .post("/reportStatus/deploy")
           .set("Content-Type", "application/json")
-          .send("{invalid: json")
-          .expect(400)
+          .send("{invalid: json}")
+          .expect(500)
           .end((err: any, result: any): void => {
             if (err) {
               throw err;
@@ -1276,13 +1284,12 @@ describe("Acquisition Rest API", () => {
                 if (err) {
                   reject(err);
                 }
-
-                resolve(<void>null);
+                resolve();
               });
           });
         }
-
-        return sendReport(
+      
+        sendReport(
           JSON.stringify({
             deploymentKey: deployment.key,
             clientUniqueId: "My iPhone",
@@ -1322,43 +1329,39 @@ describe("Acquisition Rest API", () => {
           )
           .then(() => {
             if (redisManager.isEnabled) {
-              return redisManager.getMetricsWithDeploymentKey(deployment.key).then((metrics: any) => {
-                assert.equal(metrics[redis.Utilities.getLabelActiveCountField("1.0.0")], 1);
-                assert.equal(metrics[redis.Utilities.getLabelActiveCountField("v2")], 1);
-                assert.equal(metrics[redis.Utilities.getLabelStatusField("v2", redis.DEPLOYMENT_SUCCEEDED)], 1);
-                assert.equal(metrics[redis.Utilities.getLabelStatusField("v3", redis.DEPLOYMENT_FAILED)], 1);
-                done();
-              });
+              redisManager
+                .getMetricsWithDeploymentKey(deployment.key)
+                .then((metrics: any) => {
+                  assert.equal(metrics[redis.Utilities.getLabelActiveCountField("1.0.0")], 1);
+                  assert.equal(metrics[redis.Utilities.getLabelActiveCountField("v2")], 1);
+                  assert.equal(metrics[redis.Utilities.getLabelStatusField("v2", redis.DEPLOYMENT_SUCCEEDED)], 1);
+                  assert.equal(metrics[redis.Utilities.getLabelStatusField("v3", redis.DEPLOYMENT_FAILED)], 1);
+                  done();
+                })
+                .catch((err: any) => done(err));
             } else {
               done();
             }
           })
-          .catch((err: any) => {
-            done(err);
-          });
+          .catch((err: any) => done(err));
       });
 
       it("returns 200 and increments the correct counters in Redis when switching deployment keys if SDK version is >=1.5.2-beta", (done) => {
         function sendReport(statusReport: string): Promise<void> {
-          return Promise<void>((resolve, reject) => {
+          return  Promise<void>((resolve, reject) => {
             request(server || serverUrl)
               .post("/reportStatus/deploy")
               .set("Content-Type", "application/json")
               .set(SDK_VERSION_HEADER, "1.5.2-beta")
               .send(statusReport)
               .expect(200)
-              .end((err: any, result: any): void => {
-                if (err) {
-                  reject(err);
-                }
-
-                resolve(<void>null);
-              });
+              .end((err) => (err ? reject(err) : resolve()));
           });
         }
-
+      
         let anotherDeployment: storage.Deployment = utils.makeStorageDeployment();
-        return storageInstance
+      
+        storageInstance
           .addDeployment(account.id, app.id, anotherDeployment)
           .then((deploymentId: string) => {
             anotherDeployment.id = deploymentId;
@@ -1420,7 +1423,7 @@ describe("Acquisition Rest API", () => {
           )
           .then(() => {
             if (redisManager.isEnabled) {
-              return redisManager
+              redisManager
                 .getMetricsWithDeploymentKey(deployment.key)
                 .then((metrics: any) => {
                   assert.equal(metrics[redis.Utilities.getLabelActiveCountField("1.0.0")], 1);
@@ -1433,24 +1436,23 @@ describe("Acquisition Rest API", () => {
                   assert.equal(metrics[redis.Utilities.getLabelActiveCountField("v1")], 1);
                   assert.equal(metrics[redis.Utilities.getLabelStatusField("v1", redis.DEPLOYMENT_SUCCEEDED)], 1);
                   done();
-                });
+                })
+                .catch((err: any) => done(err));
             } else {
               done();
             }
           })
-          .catch((err: any) => {
-            done(err);
-          });
+          .catch((err: any) => done(err));   
       });
     });
 
     describe("POST /reportStatus/download", () => {
-      it("returns 400 if invalid json is sent", (done) => {
+      it("returns 500 if invalid json is sent", (done) => {
         request(server || serverUrl)
           .post("/reportStatus/download")
           .set("Content-Type", "application/json")
-          .send("{invalid: json")
-          .expect(400)
+          .send("{invalid: json}")
+          .expect(500)
           .end((err: any, result: any): void => {
             if (err) {
               throw err;

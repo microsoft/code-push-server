@@ -417,10 +417,23 @@ export class RedisManager {
         batchClient.hincrby(deploymentKeyLabelsHash, toLabelActiveField, /* incrementBy */ 1);
         if (fromLabel) {
           const fromLabelActiveField: string = Utilities.getLabelActiveCountField(fromLabel);
-          batchClient.hincrby(deploymentKeyLabelsHash, fromLabelActiveField, /* incrementBy */ -1);
+  
+          // First, check the current value before decrementing
+          return this._metricsClient.hget(deploymentKeyLabelsHash, fromLabelActiveField)
+            .then((currentValue: string | null) => {
+              const currentCount = currentValue ? parseInt(currentValue, 10) : 0;
+  
+              if (currentCount > 0) {
+                batchClient.hincrby(deploymentKeyLabelsHash, fromLabelActiveField, -1);
+              } else {
+                console.warn(`Attempted to decrement ${fromLabelActiveField}, but it is already 0.`);
+              }
+  
+              return batchClient.exec();
+            });
+        } else {
+          return batchClient.exec();
         }
-
-        return batchClient.exec(batchClient);
       })
       .then(() => {});
   }

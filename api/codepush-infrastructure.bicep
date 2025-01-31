@@ -6,9 +6,7 @@ param az_location string = 'eastus'
 param github_client_id string
 @secure()
 param github_client_secret string
-param microsoft_client_id string
 @secure()
-param microsoft_client_secret string
 param logging bool = true
 param webAppName string
 param storageAccountName string

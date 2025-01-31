@@ -17,11 +17,11 @@
       "logging": {
         "value": true
       },
-      "webAppName":{
-        "value": "ftr-codepush-server-app"
+      "microsoft_client_id":{
+        "value": ""
       },
-      "storageAccountName":{
-        "value": "ftrcodepushstorage"
+      "microsoft_client_secret":{
+        "value": ""
       }
     }
   }

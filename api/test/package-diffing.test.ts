@@ -15,7 +15,7 @@ import * as q from "q";
 import * as shortid from "shortid";
 import * as storage from "../script/storage/storage";
 import * as stream from "stream";
-import * as utils from "./utils";
+import * as utils from "./utils.test";
 import * as yauzl from "yauzl";
 import clone = storage.clone;
 import PackageDiffer = packageDiffing.PackageDiffer;
@@ -56,7 +56,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
 
   // Spin up a server to serve the blob.
   var server: http.Server;
-  before(() => {
+  beforeEach(() => {
     storage = new StorageType();
     packageDiffingUtils = new PackageDiffer(storage, /*maxPackagesToDiff*/ 5);
     var app = express();
@@ -67,7 +67,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
   });
 
   // Kill the server.
-  after(() => {
+  afterEach(() => {
     server.close();
   });
 

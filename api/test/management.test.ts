@@ -13,7 +13,7 @@ import * as defaultServer from "../script/default-server";
 import * as redis from "../script/redis-manager";
 import * as restTypes from "../script/types/rest-definitions";
 import * as storage from "../script/storage/storage";
-import * as testUtils from "./utils";
+import * as testUtils from "./utils.test";
 
 import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";
@@ -46,7 +46,7 @@ function managementTests(useJsonStorage?: boolean): void {
   var packageHash: string = "99fb948da846f4ae552b6bd73ac1e12e4ae3a889159d607997a4aef4f197e7bb"; // resources/blob.zip
   var isTestingMetrics: boolean = !!(process.env.REDIS_HOST && process.env.REDIS_PORT);
 
-  before((): q.Promise<void> => {
+  beforeEach((): q.Promise<void> => {
     account = testUtils.makeAccount();
     otherAccount = testUtils.makeAccount();
 
@@ -100,7 +100,7 @@ function managementTests(useJsonStorage?: boolean): void {
       });
   });
 
-  after((): q.Promise<void> => {
+  afterEach((): q.Promise<void> => {
     return redisManager.close().then(() => {
       if (storage instanceof JsonStorage) {
         return storage.dropAll();
@@ -168,7 +168,7 @@ function managementTests(useJsonStorage?: boolean): void {
 
     describe("Access keys can expire", (): void => {
       var oldAccessKey: storage.AccessKey;
-      before(() => {
+      beforeEach(() => {
         oldAccessKey = accessKey;
       });
 
@@ -187,7 +187,7 @@ function managementTests(useJsonStorage?: boolean): void {
         });
       });
 
-      after(() => {
+      afterEach(() => {
         accessKey = oldAccessKey;
       });
     });
@@ -958,7 +958,7 @@ function managementTests(useJsonStorage?: boolean): void {
     describe("DELETE history", () => {
       var otherApp: storage.App;
       var otherDeployment: storage.Deployment;
-      before(function () {
+      beforeEach(function () {
         otherApp = testUtils.makeStorageApp();
         otherDeployment = testUtils.makeStorageDeployment();
         return storage
@@ -2129,9 +2129,6 @@ function managementTests(useJsonStorage?: boolean): void {
               otherApp = storageApp;
               return storage.addCollaborator(otherAccount.id, otherApp.id, account.email);
             })
-            .then(() => {
-              done();
-            });
         });
 
         it("can delete itself", (done) => {

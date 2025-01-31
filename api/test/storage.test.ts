@@ -8,7 +8,7 @@ import * as q from "q";
 import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";
 import * as storageTypes from "../script/storage/storage";
-import * as utils from "./utils";
+import * as utils from "./utils.test";
 
 import Promise = q.Promise;
 

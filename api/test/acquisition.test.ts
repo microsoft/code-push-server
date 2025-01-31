@@ -11,7 +11,7 @@ import Promise = q.Promise;
 import * as defaultServer from "../script/default-server";
 import * as storage from "../script/storage/storage";
 import * as redis from "../script/redis-manager";
-import * as utils from "./utils";
+import * as utils from "./utils.test";
 
 import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";

@@ -10,7 +10,7 @@ import * as request from "supertest";
 import * as defaultServer from "../script/default-server";
 import * as redis from "../script/redis-manager";
 import * as storage from "../script/storage/storage";
-import * as testUtils from "./utils";
+import * as testUtils from "./utils.test";
 
 import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";

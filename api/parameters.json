@@ -21,7 +21,7 @@
         "value": "ftr-codepush-server-app"
       },
       "storageAccountName":{
-        "value": "ftrCodepushStorage"
+        "value": "ftrcodepushstorage"
       }
     }
   }

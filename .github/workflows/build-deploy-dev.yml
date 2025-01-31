@@ -22,7 +22,7 @@ jobs:
       run: |
        cd api
        az group create --name rg-appservice-codepush-server-dev --location centralus
-       az deployment group create --resource-group rg-appservice-codepush-server-dev --template-file codepush-infrastructure.bicep --parameters '{ \"location\": { \"value\": \"centralus\" }}'  
+       az deployment group create --resource-group rg-appservice-codepush-server-dev --template-file codepush-infrastructure.bicep --parameters parameters.json
     # - name: Setup Node 
     #   uses: actions/setup-node@v3
     #   with:

@@ -10,10 +10,11 @@ param microsoft_client_id string
 @secure()
 param microsoft_client_secret string
 param logging bool = true
+param webAppName string
+param storageAccountName string
+
 
 var servicePlanName = 'codepush-asp-${project_suffix}'
-var storageAccountName = 'codepushstorage${project_suffix}'
-var webAppName = 'codepush-${project_suffix}'
 var serverUrl = 'https://codepush-${project_suffix}.azurewebsites.net'
 
 targetScope = 'resourceGroup'

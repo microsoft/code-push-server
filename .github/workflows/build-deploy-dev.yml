@@ -22,7 +22,7 @@ jobs:
       run: |
        cd api
        az group create --name rg-appservice-codepush-server-dev --location centralus
-       az deployment group create --resource-group rg-appservice-codepush-server-dev --template-file codepush-infrastructure.bicep --parameters project_suffix=frontierdev github_client_id= "${{ secrets.OATH_CLIENT_ID }}" github_client_secret= "${{ secrets.OATH_CLIENT_SECRET }}" microsoft_client_id= "" microsoft_client_secret= ""
+       az deployment group create --resource-group rg-appservice-codepush-server-dev --template-file codepush-infrastructure.bicep --parameters project_suffix=frontierdev github_client_id= "" github_client_secret= "" microsoft_client_id= "" microsoft_client_secret= ""
     # - name: Setup Node 
     #   uses: actions/setup-node@v3
     #   with:

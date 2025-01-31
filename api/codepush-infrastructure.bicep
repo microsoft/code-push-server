@@ -3,13 +3,14 @@
 
 param project_suffix string
 param az_location string = 'eastus'
-@secure
+@secure()
 param github_client_id string
 param github_client_secret string
-param logging bool = true
 @secure()
 param microsoft_client_id string
 param microsoft_client_secret string
+param logging bool = true
+
 
 
 var storageAccountName = 'codepushstorage${project_suffix}'

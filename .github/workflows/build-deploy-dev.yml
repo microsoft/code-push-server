@@ -35,7 +35,7 @@ jobs:
         npm run build
     - name: Deploy Code to infrastructure   
       run : | 
-       az webapp deploy --resource-group rg-appservice-codepush-server-dev --name codepush-ftrdev --src-path ./api 
+       az webapp deploy --resource-group rg-appservice-codepush-server-dev --name codepush-ftrdev --src-path api 
 
 
     

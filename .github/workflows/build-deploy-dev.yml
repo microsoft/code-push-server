@@ -34,8 +34,6 @@ jobs:
         npm i
         npm run clean
         npm run build
-        rm -rf /home/site/wwwroot/*
-        cp -r  /home/site/wwwroot/api/* /home/site/wwwroot/
     - name: Deploy to Azure WebApp
       uses: azure/CLI@v1
       with:

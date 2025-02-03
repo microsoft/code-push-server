@@ -34,7 +34,7 @@ jobs:
         npm i
         npm run clean
         npm run build
-        cd ls
+        ls
     - name: Deploy to Azure WebApp
       uses: azure/CLI@v1
       with:

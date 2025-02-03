@@ -33,15 +33,21 @@ jobs:
         cd api
         npm i
         npm run clean
-        npm run build
+        npm run build 
         ls
     - name: Deploy to Azure WebApp
-      uses: azure/CLI@v1
+      uses: azure/webapps-deploy@v2
       with:
-        azcliversion: 2.30.0
-        inlineScript: |
-          zip -r api.zip api/bin
-          az webapp deployment source config-zip --resource-group rg-appservice-codepush-server-dev  --name codepush-ftrdev --src "api.zip"
+       publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+       app-name: codepush-ftrdev
+       package: api
+
+    #   uses: azure/CLI@v1
+    #   with:
+    #     azcliversion: 2.30.0
+    #     inlineScript: |
+    #       zip -r api.zip api/bin
+    #       az webapp deployment source config-zip --resource-group rg-appservice-codepush-server-dev  --name codepush-ftrdev --src "api.zip"
     
 
 

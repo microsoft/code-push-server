@@ -38,7 +38,7 @@ jobs:
       with:
         azcliversion: 2.30.0
         inlineScript: |
-          zip -r api.zip api/bin
+          zip -r api.zip api
           az webapp deployment source config-zip --resource-group rg-appservice-codepush-server-dev  --name codepush-ftrdev --src "api.zip"
     
 

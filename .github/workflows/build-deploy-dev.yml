@@ -34,12 +34,13 @@ jobs:
         npm i
         npm run clean
         npm run build
+        cd ls
     - name: Deploy to Azure WebApp
       uses: azure/CLI@v1
       with:
         azcliversion: 2.30.0
         inlineScript: |
-          zip -r api.zip api
+          zip -r api.zip api/bin
           az webapp deployment source config-zip --resource-group rg-appservice-codepush-server-dev  --name codepush-ftrdev --src "api.zip"
     
 

@@ -24,17 +24,17 @@ jobs:
        az group create --name rg-appservice-codepush-server-dev --location centralus
        az group deployment create -n ghaction --resource-group rg-appservice-codepush-server-dev --template-file codepush-infrastructure.bicep --parameters project_suffix=ftrdev az_location=centralus github_client_id=${{ secrets.OATH_CLIENT_ID }} github_client_secret=${{ secrets.OATH_CLIENT_SECRET }} microsoft_client_id="" microsoft_client_secret=""
 
-    # - name: Setup Node 
-    #   uses: actions/setup-node@v3
-    #   with:
-    #     node-version: '16.x'
-    # - name: Build    
-    #   run: | 
-    #     npm i
-    #     npm run build
-    # - name: Deploy Code to infrastructure   
-    #   run : | 
-    #    az webapp deploy --resource-group rg-appservice-mobile-code --name ftr-mobile-code --src-path ./api 
+    - name: Setup Node 
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16.x'
+    - name: Build    
+      run: | 
+        npm i
+        npm run build
+    - name: Deploy Code to infrastructure   
+      run : | 
+       az webapp deploy --resource-group rg-appservice-codepush-server-dev --name codepush-ftrdev --src-path ./api 
 
 
     

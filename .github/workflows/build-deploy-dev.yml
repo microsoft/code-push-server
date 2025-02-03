@@ -33,9 +33,14 @@ jobs:
         cd api
         npm i
         npm run build
-    - name: Deploy Code to infrastructure   
-      run : | 
-       az webapp deploy --resource-group rg-appservice-codepush-server-dev --name codepush-ftrdev --src-path api 
+    - name: Deploy to Azure WebApp
+      uses: azure/CLI@v1
+      with:
+        azcliversion: 2.30.0
+        inlineScript: |
+          zip -r api.zip .
+          az webapp deployment source config-zip --resource-group rg-appservice-codepush-server-dev  --name codepush-ftrdev --src "api.zip"
+    
 
 
     

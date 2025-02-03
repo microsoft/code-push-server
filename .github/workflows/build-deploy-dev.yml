@@ -30,6 +30,7 @@ jobs:
         node-version: '16.x'
     - name: Build    
       run: | 
+        cd api
         npm i
         npm run build
     - name: Deploy Code to infrastructure   

@@ -87,6 +87,7 @@ export function toRestAccount(storageAccount: Storage.Account): Account {
   if (storageAccount.azureAdId) restAccount.linkedProviders.push("AAD");
   if (storageAccount.gitHubId) restAccount.linkedProviders.push("GitHub");
   if (storageAccount.microsoftId) restAccount.linkedProviders.push("Microsoft");
+  if (storageAccount.keycloakId) restAccount.linkedProviders.push("Keycloak");
 
   return restAccount;
 }

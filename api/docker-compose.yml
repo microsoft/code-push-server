@@ -1,0 +1,8 @@
+services:
+  redis:
+    image: redis:latest
+    command: ["redis-server", "--requirepass", "${REDIS_KEY}"]
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_KEY=${REDIS_KEY}

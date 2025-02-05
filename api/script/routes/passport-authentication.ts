@@ -9,7 +9,7 @@ import * as passportBearer from "passport-http-bearer";
 import * as passportGitHub from "passport-github2";
 import * as passportWindowsLive from "passport-windowslive";
 import * as q from "q";
-import * as superagent from "superagent"
+import * as superagent from "superagent";
 import rateLimit from "express-rate-limit";
 
 import * as converterUtils from "../utils/converter";
@@ -18,6 +18,7 @@ import * as restHeaders from "../utils/rest-headers";
 import * as security from "../utils/security";
 import * as storage from "../storage/storage";
 import * as validationUtils from "../utils/validation";
+import { Strategy } from "passport-oauth2";
 
 import Promise = q.Promise;
 
@@ -38,10 +39,26 @@ interface EmailAccount {
   primary?: boolean;
 }
 
+interface KeycloakConfig {
+  clientId: string;
+  clientSecret: string;
+  realm: string;
+  authServerUrl: string;
+}
+interface KeycloakUser {
+  sub: string;
+  name?: string;
+  email?: string;
+  preferred_username?: string;
+  given_name?: string;
+  family_name?: string;
+}
+
 export class PassportAuthentication {
   private static AZURE_AD_PROVIDER_NAME = "azure-ad";
   private static GITHUB_PROVIDER_NAME = "github";
   private static MICROSOFT_PROVIDER_NAME = "microsoft";
+  private static KEYCLOAK_PROVIDER_NAME = "keycloak";
 
   private _cookieSessionMiddleware: RequestHandler;
   private _serverUrl: string;
@@ -165,25 +182,61 @@ export class PassportAuthentication {
       this.setupAzureAdRoutes(router, microsoftClientId, microsoftClientSecret);
     }
 
+    // KEYCLOAK_CLIENT_ID:     The client ID you received from Keycloak when registering a client.
+    // KEYCLOAK_CLIENT_SECRET: The client secret you received from Keycloak when registering a client.
+    // KEYCLOAK_REALM:         The realm you created in Keycloak when registering a client.
+    // KEYCLOAK_AUTH_SERVER_URL: The URL of the Keycloak server.
+    const keycloakClientId: string = process.env["KEYCLOAK_CLIENT_ID"];
+    const keycloakClientSecret: string = process.env["KEYCLOAK_CLIENT_SECRET"];
+    const keycloakAuthServerUrl: string = process.env["KEYCLOAK_AUTH_SERVER_URL"];
+    const keycloakRealm: string = process.env["KEYCLOAK_REALM"];
+    const isKeycloakAuthenticationEnabled: boolean =
+      !!this._serverUrl && !!keycloakClientId && !!keycloakClientSecret && !!keycloakAuthServerUrl;
+    if (isKeycloakAuthenticationEnabled) {
+      this.setupKeycloakRoutes(router, {
+        authServerUrl: keycloakAuthServerUrl,
+        clientId: keycloakClientId,
+        clientSecret: keycloakClientSecret,
+        realm: keycloakRealm,
+      });
+    }
+
     router.get("/auth/login", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["hostname"] = req.query.hostname;
-      res.render("authenticate", { action: "login", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
+      res.render("authenticate", {
+        action: "login",
+        isGitHubAuthenticationEnabled,
+        isMicrosoftAuthenticationEnabled,
+        isKeycloakAuthenticationEnabled,
+      });
     });
 
     router.get("/auth/link", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["authorization"] = req.query.access_token;
-      res.render("authenticate", { action: "link", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
+      res.render("authenticate", {
+        action: "link",
+        isGitHubAuthenticationEnabled,
+        isMicrosoftAuthenticationEnabled,
+        isKeycloakAuthenticationEnabled,
+      });
     });
 
     router.get("/auth/register", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       req.session["hostname"] = req.query.hostname;
-      res.render("authenticate", { action: "register", isGitHubAuthenticationEnabled, isMicrosoftAuthenticationEnabled });
+      res.render("authenticate", {
+        action: "register",
+        isGitHubAuthenticationEnabled,
+        isMicrosoftAuthenticationEnabled,
+        isKeycloakAuthenticationEnabled,
+      });
     });
 
     return router;
   }
 
   private static getEmailAddress(user: passport.Profile): string {
+    if (user.email) return user.email;
+
     const emailAccounts: EmailAccount[] = user.emails;
 
     if (!emailAccounts || emailAccounts.length === 0) {
@@ -226,6 +279,8 @@ export class PassportAuthentication {
         return account.gitHubId;
       case PassportAuthentication.MICROSOFT_PROVIDER_NAME:
         return account.microsoftId;
+      case PassportAuthentication.KEYCLOAK_PROVIDER_NAME:
+        return account.keycloakId;
       default:
         throw new Error("Unrecognized provider");
     }
@@ -241,6 +296,9 @@ export class PassportAuthentication {
         return;
       case PassportAuthentication.MICROSOFT_PROVIDER_NAME:
         account.microsoftId = id;
+        return;
+      case PassportAuthentication.KEYCLOAK_PROVIDER_NAME:
+        account.keycloakId = id;
         return;
       default:
         throw new Error("Unrecognized provider");
@@ -260,7 +318,7 @@ export class PassportAuthentication {
     );
 
     router.get(
-      "/auth/register/" + providerName, 
+      "/auth/register/" + providerName,
       limiter,
       this._cookieSessionMiddleware,
       (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -350,8 +408,8 @@ export class PassportAuthentication {
                   const message: string = isProviderValid
                     ? "You are already registered with the service using this authentication provider.<br/>Please cancel the registration process (Ctrl-C) on the CLI and login with your account."
                     : "You are already registered with the service using a different authentication provider." +
-                    "<br/>Please cancel the registration process (Ctrl-C) on the CLI and login with your registered account." +
-                    "<br/>Once logged in, you can optionally link this provider to your account.";
+                      "<br/>Please cancel the registration process (Ctrl-C) on the CLI and login with your registered account." +
+                      "<br/>Once logged in, you can optionally link this provider to your account.";
                   restErrorUtils.sendAlreadyExistsPage(res, message);
                   return;
                 case "link":
@@ -393,7 +451,7 @@ export class PassportAuthentication {
                   restErrorUtils.sendForbiddenPage(
                     res,
                     "We weren't able to link your account, because the primary email address registered with your provider does not match the one on your CodePush account." +
-                    "<br/>Please use a matching email address, or contact us if you'd like to change the email address on your CodePush account."
+                      "<br/>Please use a matching email address, or contact us if you'd like to change the email address on your CodePush account."
                   );
                   return;
                 case "register":
@@ -478,6 +536,42 @@ export class PassportAuthentication {
       )
     );
 
+    this.setupCommonRoutes(router, providerName, strategyName);
+  }
+
+  private setupKeycloakRoutes(router: Router, keycloakConfig: KeycloakConfig): void {
+    const providerName = PassportAuthentication.KEYCLOAK_PROVIDER_NAME;
+    const strategyName = "keycloak";
+    const keycloakAuthUrl = `${keycloakConfig.authServerUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect`;
+    const options = {
+      authorizationURL: `${keycloakAuthUrl}/auth`,
+      tokenURL: `${keycloakAuthUrl}/token`,
+      clientID: keycloakConfig.clientId,
+      clientSecret: keycloakConfig.clientSecret,
+      callbackURL: this.getCallbackUrl(providerName),
+      scope: ["openid", "profile", "email"],
+    };
+    const verify = async (
+      accessToken: string,
+      _refreshToken: string,
+      _params: any,
+      _profile: any,
+      done: (error: any, user?: KeycloakUser) => void
+    ) => {
+      try {
+        const response = await fetch(`${keycloakAuthUrl}/userinfo`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to find user: ${response.statusText}`);
+        }
+        const user: KeycloakUser = await response.json();
+        return done(null, user);
+      } catch (error) {
+        return done(error);
+      }
+    };
+    passport.use(strategyName, new Strategy(options, verify));
     this.setupCommonRoutes(router, providerName, strategyName);
   }
 

@@ -23,8 +23,9 @@ jobs:
         with:
           node-version: '18.x'
 
-      - name: npm install, build, and test
+      - name: cd to api and npm install, build, and test
         run: |
+          cd api
           npm install
           npm run build --if-present
           npm run test --if-present

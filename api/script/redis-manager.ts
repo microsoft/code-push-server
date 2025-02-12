@@ -105,7 +105,7 @@ export class RedisManager {
         auth_pass: process.env.REDIS_KEY,
         tls: {
           // Note: Node defaults CA's to those trusted by Mozilla
-          rejectUnauthorized: true,
+          rejectUnauthorized: false,
         },
       };
       this._opsClient = redis.createClient(redisConfig);

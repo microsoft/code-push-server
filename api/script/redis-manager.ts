@@ -118,8 +118,8 @@ export class RedisManager {
         },
       };
 
-      this._opsClient = redis.createClient(newRedisConfig);
-      this._metricsClient = redis.createClient(newRedisConfig);
+      this._opsClient = redis.createClient(redisConfig);
+      this._metricsClient = redis.createClient(redisConfig);
       this._opsClient.on("error", (err: Error) => {
         console.error(err);
       });

@@ -98,8 +98,17 @@ export class RedisManager {
   private _setupMetricsClientPromise: Promise<void>;
 
   constructor() {
-    if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
-      const redisConfig = {
+    const hostAndPortPassed = process.env.REDIS_HOST && process.env.REDIS_PORT;
+    const connectionPassed = process.env.REDIS_CONN_STRING;
+    if (connectionPassed || hostAndPortPassed) {
+    const redisConfig = connectionPassed? {
+        url: process.env.REDIS_CONN_STRING,
+        socket: {
+            tls: true,
+            rejectUnauthorized: true,
+            connectTimeout: 10000  // Increase timeout to 10 seconds
+        }
+      } : {
         host: process.env.REDIS_HOST,
         port: process.env.REDIS_PORT,
         auth_pass: process.env.REDIS_KEY,
@@ -108,8 +117,9 @@ export class RedisManager {
           rejectUnauthorized: true,
         },
       };
-      this._opsClient = redis.createClient(redisConfig);
-      this._metricsClient = redis.createClient(redisConfig);
+
+      this._opsClient = redis.createClient(newRedisConfig);
+      this._metricsClient = redis.createClient(newRedisConfig);
       this._opsClient.on("error", (err: Error) => {
         console.error(err);
       });

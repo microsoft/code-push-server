@@ -90,7 +90,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
         next();
       });
 
-      if (process.env.LOGGING) {
+      if (process.env.LOGGING === "true") {
         app.use((req: express.Request, res: express.Response, next: (err?: any) => void): any => {
           console.log(); // Newline to mark new request
           console.log(`[REST] Received ${req.method} request at ${req.originalUrl}`);

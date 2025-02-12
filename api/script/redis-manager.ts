@@ -73,22 +73,22 @@ class PromisifiedRedisClient {
   public set: (key: string, value: string) => Promise<void>;
 
   constructor(redisClient: RedisClientType) {
-    this.del = (...keys) => redisClient.del(keys);
-    this.exists = (...keys) => redisClient.exists(keys);
-    this.expire = (key, seconds) => redisClient.expire(key, seconds);
-    this.hdel = (key, field) => redisClient.hDel(key, field);
-    this.hget = (key, field) => redisClient.hGet(key, field);
-    this.hgetall = (key) => redisClient.hGetAll(key);
-    this.hincrby = (key, field, value) => redisClient.hIncrBy(key, field, value);
-    this.hset = (key, field, value) => redisClient.hSet(key, field, value);
-    this.ping = (payload) => redisClient.ping(payload);
-    this.quit = () => redisClient.quit();
-    this.select = (databaseNumber) => redisClient.select(databaseNumber);
-    this.set = (key, value) => redisClient.set(key, value);
-    
-    this.execBatch = async (redisBatchClient: any) => {
-      const results = await redisBatchClient.exec();
-      return results;
+    // Convert native Promises to Q Promises with proper type handling
+    this.del = (...keys) => q(redisClient.del(keys));
+    this.exists = (...keys) => q(redisClient.exists(keys));
+    this.expire = (key, seconds) => q(redisClient.expire(key, seconds).then((success) => (success ? 1 : 0)));
+    this.hdel = (key, field) => q(redisClient.hDel(key, field));
+    this.hget = (key, field) => q(redisClient.hGet(key, field));
+    this.hgetall = (key) => q(redisClient.hGetAll(key));
+    this.hincrby = (key, field, value) => q(redisClient.hIncrBy(key, field, value));
+    this.hset = (key, field, value) => q(redisClient.hSet(key, field, value));
+    this.ping = (payload) => q(redisClient.ping(payload));
+    this.quit = () => q(redisClient.quit().then(() => undefined));
+    this.select = (databaseNumber) => q(redisClient.select(databaseNumber));
+    this.set = (key, value) => q(redisClient.set(key, value).then(() => undefined));
+
+    this.execBatch = (redisBatchClient: any) => {
+      return q(redisBatchClient.exec().then((results: any[]) => results));
     };
   }
 }
@@ -268,7 +268,7 @@ export class RedisManager {
         const currentDeploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(currentDeploymentKey);
         const currentLabelActiveField: string = Utilities.getLabelActiveCountField(currentLabel);
         const currentLabelDeploymentSucceededField: string = Utilities.getLabelStatusField(currentLabel, DEPLOYMENT_SUCCEEDED);
-        
+
         multi.hIncrBy(currentDeploymentKeyLabelsHash, currentLabelActiveField, 1);
         multi.hIncrBy(currentDeploymentKeyLabelsHash, currentLabelDeploymentSucceededField, 1);
 

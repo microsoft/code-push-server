@@ -1,0 +1,60 @@
+definitions:
+  scripts:
+    - &authenticate
+      name: Setup GCloud authentication
+      script: |
+        set -e
+        echo $GOOGLE_CLIENT_SECRET > client-secret.json
+        gcloud auth activate-service-account --key-file client-secret.json
+        gcloud auth configure-docker --quiet
+    - &build
+      name: Build
+      script: |
+        set -e
+        until docker system info > /dev/null 2>&1; do sleep 1; done
+        docker pull gcr.io/$GCLOUD_PROJECT_NAME/$ENV/code-push-server || true
+        docker build \
+          --cache-from gcr.io/$GCLOUD_PROJECT_NAME/$ENV/code-push-server \
+          -t code-push-server \
+          -f Dockerfile .
+        docker tag code-push-server gcr.io/$GCLOUD_PROJECT_NAME/$ENV/code-push-server
+        docker push gcr.io/$GCLOUD_PROJECT_NAME/$ENV/code-push-server
+    - &deploy
+      name: Deploy
+      script: |
+        set -e
+        gcloud compute scp client-secret.json $SERVER:/tmp/ --zone us-east1-b
+        gcloud compute ssh --ssh-flag="-T" $SERVER --zone us-east1-b -- "/bin/bash << EOF
+        cat /tmp/client-secret.json | docker login -u _json_key --password-stdin https://gcr.io
+        docker pull gcr.io/$GCLOUD_PROJECT_NAME/$ENV/code-push-server
+        docker stop code-push-server || true
+        docker rm code-push-server || true
+        docker run -d \
+          --env AZURE_STORAGE_ACCOUNT=$AZURE_STORAGE_ACCOUNT \
+          --env AZURE_STORAGE_ACCESS_KEY=$AZURE_STORAGE_ACCESS_KEY \
+          --env SERVER_URL="https://codepush-docker.codemagic.io" \
+          --env ENABLE_ACCOUNT_REGISTRATION=false \
+          --env REDIS_HOST="redis-1.internal.codemagic.io" \
+          --env REDIS_PORT=6379 \
+          --env REDIS_KEY=$REDIS_KEY \
+          -p 0.0.0.0:3000:3000 \
+          gcr.io/$GCLOUD_PROJECT_NAME/$ENV/code-push-server
+        EOF"
+
+workflows:
+  production:
+    name: Deploy to production
+    instance_type: linux
+    environment:
+      vars:
+        ENV: production
+        SERVER: codepush-docker
+    scripts:
+      - name: Get deployment target
+        script: |
+          set -e
+          echo "Continuing deployment to ${SERVER} host..."
+          echo "SERVER=ubuntu@$SERVER" >> $CM_ENV
+      - *authenticate
+      - *build
+      - *deploy

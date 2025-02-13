@@ -5,7 +5,7 @@ import * as yargs from "yargs";
 import * as cli from "../script/types/cli";
 import * as chalk from "chalk";
 import backslash = require("backslash");
-import parseDuration = require("parse-duration");
+import parse from "parse-duration";
 
 const packageJson = require("../../package.json");
 const ROLLOUT_PERCENTAGE_REGEX: RegExp = /^(100|[1-9][0-9]|[1-9])%?$/;
@@ -1318,5 +1318,5 @@ function isDefined(object: any): boolean {
 }
 
 function parseDurationMilliseconds(durationString: string): number {
-  return Math.floor(parseDuration(durationString));
+  return Math.floor(parse(durationString));
 }

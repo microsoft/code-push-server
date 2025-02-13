@@ -57,7 +57,7 @@ export class JsonStorage implements storage.Storage {
     let pathName = __dirname + "/JsonStorage.json";
         
     fs.access(pathName, fs.constants.F_OK, (err) => {
-            console.log(err ? "File does not exist" : "File exists");
+            //console.log(err ? "File does not exist" : "File exists");
     });
     fs.exists(
       pathName,
@@ -610,7 +610,16 @@ export class JsonStorage implements storage.Storage {
 
   public getBlobUrl(blobId: string): Promise<string> {
     return this.getBlobServer().then((server: http.Server) => {
-      return server.address() + "/" + blobId;
+        const address = server.address();
+        if (typeof address === "string") {
+            return `${address}/${blobId}`;
+        } else if (typeof address === "object" && address !== null) {
+            // Use a proper hostname instead of `[::]`
+            const hostname = address.address === "::" ? "127.0.0.1" : address.address;
+            return `http://${hostname}:${address.port}/${blobId}`;
+        } else {
+            throw new Error("Invalid server address format");
+        }
     });
   }
 

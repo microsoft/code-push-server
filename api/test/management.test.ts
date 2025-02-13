@@ -47,6 +47,8 @@ function managementTests(useJsonStorage?: boolean): void {
   var isTestingMetrics: boolean = !!(process.env.REDIS_HOST && process.env.REDIS_PORT);
 
   beforeEach((): q.Promise<void> => {
+
+    let useJsonStorage: boolean = !process.env.TEST_AZURE_STORAGE && !process.env.AZURE_ACQUISITION_URL;
     account = testUtils.makeAccount();
     otherAccount = testUtils.makeAccount();
 
@@ -60,7 +62,9 @@ function managementTests(useJsonStorage?: boolean): void {
           var deferred: q.Deferred<void> = q.defer<void>();
 
           defaultServer.start(function (err: Error, app: express.Express, serverStorage: storage.Storage) {
-            if (err) deferred.reject(err);
+            if (err) {
+              deferred.reject(err);
+            }
 
             server = app;
             storage = serverStorage;
@@ -100,7 +104,7 @@ function managementTests(useJsonStorage?: boolean): void {
       });
   });
 
-  afterEach((): q.Promise<void> => {
+  afterEach((): Promise<void> => {
     return redisManager.close().then(() => {
       if (storage instanceof JsonStorage) {
         return storage.dropAll();

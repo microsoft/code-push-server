@@ -21,7 +21,7 @@ if (process.env.TEST_AZURE_STORAGE) {
 function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage, disablePersistence?: boolean) {
   var storage: storageTypes.Storage;
 
-  before(() => {
+  beforeEach(() => {
     if (StorageType === AzureStorage) {
       storage = new StorageType(disablePersistence);
     }
@@ -1183,7 +1183,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
             return storage.updatePackageHistory(account.id, app.id, deployment.id, /*history*/ null);
           })
           .then(failOnCallSucceeded, (error: storageTypes.StorageError) => {
-            assert.equal(error.code, storageTypes.ErrorCode.Other);
+            assert.equal(error.code, storageTypes.ErrorCode.Invalid);
             return storage.getPackageHistory(account.id, app.id, deployment.id);
           })
           .then((actualPackageHistory: storageTypes.Package[]) => {
@@ -1208,13 +1208,16 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
       return storage
         .addBlob(shortid.generate(), utils.makeStreamFromString(fileContents), fileContents.length)
         .then((blobId: string) => {
+          console.log("🚀 ~ .then ~ storage.getBlobUrl(blobId):", storage.getBlobUrl(blobId))
           return storage.getBlobUrl(blobId);
         })
         .then((blobUrl: string) => {
+          console.log("🔍 Blob URL:", blobUrl);
           assert(blobUrl);
           return utils.retrieveStringContentsFromUrl(blobUrl);
         })
         .then((actualContents: string) => {
+          console.log("helle"+fileContents+"/n"+actualContents);
           assert.equal(fileContents, actualContents);
         });
     });

@@ -11,6 +11,8 @@ jobs:
   Create_infrastructure:
     name: Create_infrastructure
     runs-on: ubuntu-latest
+    permissions:
+      contents: read 
     steps: 
     - name: Code checkout    
       uses: actions/checkout@v3

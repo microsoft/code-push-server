@@ -9,7 +9,6 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import * as q from "q";
 import * as stream from "stream";
 
 // Do not throw an exception if either of these modules are missing, as they may not be needed by the
@@ -25,7 +24,6 @@ try {
   yauzl = require("yauzl");
 } catch (e) {}
 
-import Promise = q.Promise;
 const HASH_ALGORITHM = "sha256";
 
 const CODEPUSH_METADATA = '.codepushrelease';
@@ -39,19 +37,31 @@ export function generatePackageHashFromDirectory(directoryPath: string, basePath
     return manifest.computePackageHash();
   });
 }
+//function to mimic defer function in q package
+function defer<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: any) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
+
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: any) => void;
+};
 export function generatePackageManifestFromZip(filePath: string): Promise<PackageManifest> {
-  const deferred: q.Deferred<PackageManifest> = q.defer<PackageManifest>();
+  const deferred: Deferred<PackageManifest> = defer<PackageManifest>();
   const reject = (error: Error) => {
-    if (deferred.promise.isPending()) {
       deferred.reject(error);
-    }
   };
 
   const resolve = (manifest: PackageManifest) => {
-    if (deferred.promise.isPending()) {
       deferred.resolve(manifest);
-    }
   };
 
   let zipFile: any;
@@ -66,7 +76,7 @@ export function generatePackageManifestFromZip(filePath: string): Promise<Packag
 
     zipFile = openedZipFile;
     const fileHashesMap = new Map<string, string>();
-    const hashFilePromises: q.Promise<void>[] = [];
+    const hashFilePromises: Promise<void>[] = [];
 
     // Read each entry in the archive sequentially and generate a hash for it.
     zipFile.readEntry();
@@ -96,7 +106,7 @@ export function generatePackageManifestFromZip(filePath: string): Promise<Packag
         });
       })
       .on("end", (): void => {
-        q.all(hashFilePromises).then(() => resolve(new PackageManifest(fileHashesMap)), reject);
+        Promise.all(hashFilePromises).then(() => resolve(new PackageManifest(fileHashesMap)), reject);
       });
   });
 
@@ -104,7 +114,7 @@ export function generatePackageManifestFromZip(filePath: string): Promise<Packag
 }
 
 export function generatePackageManifestFromDirectory(directoryPath: string, basePath: string): Promise<PackageManifest> {
-  const deferred: q.Deferred<PackageManifest> = q.defer<PackageManifest>();
+  const deferred: Deferred<PackageManifest> = defer<PackageManifest>();
   const fileHashesMap = new Map<string, string>();
 
   recursiveFs.readdirr(directoryPath, (error?: any, directories?: string[], files?: string[]): void => {
@@ -128,13 +138,12 @@ export function generatePackageManifestFromDirectory(directoryPath: string, base
           });
         }
       });
-    }, q(<void>null));
+    }, Promise.resolve(<void>null));
 
     generateManifestPromise
       .then(() => {
         deferred.resolve(new PackageManifest(fileHashesMap));
       }, deferred.reject)
-      .done();
   });
 
   return deferred.promise;
@@ -147,24 +156,20 @@ export function hashFile(filePath: string): Promise<string> {
 
 export function hashStream(readStream: stream.Readable): Promise<string> {
   const hashStream = <stream.Transform>(<any>crypto.createHash(HASH_ALGORITHM));
-  const deferred: q.Deferred<string> = q.defer<string>();
+  const deferred: Deferred<string> = defer<string>();
 
   readStream
     .on("error", (error: any): void => {
-      if (deferred.promise.isPending()) {
         hashStream.end();
         deferred.reject(error);
-      }
     })
     .on("end", (): void => {
-      if (deferred.promise.isPending()) {
         hashStream.end();
 
         const buffer = <Buffer>hashStream.read();
         const hash: string = buffer.toString("hex");
 
         deferred.resolve(hash);
-      }
     });
 
   readStream.pipe(hashStream as any);
@@ -203,7 +208,7 @@ export class PackageManifest {
     // can also compute this hash easily given the update contents.
     entries = entries.sort();
 
-    return q(crypto.createHash(HASH_ALGORITHM).update(JSON.stringify(entries)).digest("hex"));
+    return Promise.resolve(crypto.createHash(HASH_ALGORITHM).update(JSON.stringify(entries)).digest("hex"));
   }
 
   public serialize(): string {

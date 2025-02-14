@@ -11,7 +11,6 @@ import * as hashUtils from "../script/utils/hash-utils";
 import * as http from "http";
 import * as packageDiffing from "../script/utils/package-diffing";
 import * as path from "path";
-import * as q from "q";
 import * as shortid from "shortid";
 import * as storage from "../script/storage/storage";
 import * as stream from "stream";
@@ -21,7 +20,6 @@ import clone = storage.clone;
 import PackageDiffer = packageDiffing.PackageDiffer;
 import PackageManifest = hashUtils.PackageManifest;
 import Pend = require("pend");
-import Promise = q.Promise;
 
 describe("Package diffing with JSON storage", () => packageDiffTests(JsonStorage));
 
@@ -87,7 +85,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
 
       packageDiffingUtils
         .generateDiffArchive(oldManifest, newManifest, TEST_ARCHIVE_FILE_PATH)
-        .done((diffArchiveFilePath: string): void => {
+        .then((diffArchiveFilePath: string): void => {
           fs.exists(diffArchiveFilePath, (exists: boolean) => {
             assert.ok(exists);
 
@@ -132,7 +130,6 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
 
                           callback(error);
                         }, callback)
-                        .done();
                     });
                   });
                 })
@@ -167,7 +164,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
 
       packageDiffingUtils
         .generateDiffArchive(oldManifest, newManifest, TEST_ARCHIVE_WITH_FOLDERS_FILE_PATH)
-        .done((diffArchiveFilePath: string): void => {
+        .then((diffArchiveFilePath: string): void => {
           fs.exists(diffArchiveFilePath, (exists: boolean) => {
             assert.ok(exists);
 
@@ -212,7 +209,6 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
 
                           callback(error);
                         }, callback)
-                        .done();
                     });
                   });
                 })
@@ -254,7 +250,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
           packageInfoPromises.push(uploadAndGetPackageInfo(testFilePath));
         });
 
-        return q
+        return Promise
           .all(packageInfoPromises)
           .then((allPackageInfo: PackageInfo[]) => {
             infoList = allPackageInfo;
@@ -273,7 +269,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
           })
           .then((deploymentId: string) => {
             deployment.id = deploymentId;
-            var commitPromise: Promise<void> = q<void>(null);
+            var commitPromise: Promise<void> = Promise.resolve(<void>(null));
             infoList.forEach((info: PackageInfo) => {
               var madePackage = utils.makePackage("1.0.0", false, info.packageHash);
               madePackage.blobUrl = info.blobUrl;
@@ -293,7 +289,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
       it("generateDiffPackageMap throws error for null package", (done) => {
         packageDiffingUtils
           .generateDiffPackageMap(account.id, app.id, deployment.id, /*newPackage*/ null)
-          .done(failOnCallSucceeded, (error: diffErrorUtils.DiffError) => {
+          .then(failOnCallSucceeded, (error: diffErrorUtils.DiffError) => {
             assert.equal(error.code, diffErrorUtils.ErrorCode.InvalidArguments);
             done();
           });
@@ -304,7 +300,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
         clonedPackage.blobUrl = "";
         packageDiffingUtils
           .generateDiffPackageMap(account.id, app.id, deployment.id, clonedPackage)
-          .done(failOnCallSucceeded, (error: diffErrorUtils.DiffError) => {
+          .then(failOnCallSucceeded, (error: diffErrorUtils.DiffError) => {
             assert.equal(error.code, diffErrorUtils.ErrorCode.InvalidArguments);
             done();
           });
@@ -315,7 +311,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
         clonedPackage.manifestBlobUrl = "";
         packageDiffingUtils
           .generateDiffPackageMap(account.id, app.id, deployment.id, clonedPackage)
-          .done(failOnCallSucceeded, (error: diffErrorUtils.DiffError) => {
+          .then(failOnCallSucceeded, (error: diffErrorUtils.DiffError) => {
             assert.equal(error.code, diffErrorUtils.ErrorCode.InvalidArguments);
             done();
           });
@@ -329,7 +325,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
             deployment2.id = depId;
             return packageDiffingUtils.generateDiffPackageMap(account.id, app.id, deployment2.id, appPackages[1]);
           })
-          .done((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
+          .then((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
             assert(!diffPackageMap);
             done();
           });
@@ -338,7 +334,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
       it("generateDiffPackageMap returns null for first package in history", (done) => {
         packageDiffingUtils
           .generateDiffPackageMap(account.id, app.id, deployment.id, appPackages[0])
-          .done((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
+          .then((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
             assert(!diffPackageMap);
             done();
           });
@@ -369,7 +365,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
           .then((returnPackage: storage.Package) => {
             return packageDiffingUtils.generateDiffPackageMap(account.id, app.id, deployment2.id, p3);
           })
-          .done((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
+          .then((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
             assert(!diffPackageMap);
             done();
           });
@@ -378,7 +374,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
       it("generateDiffPackageMap returns diff info for one package in history", (done) => {
         packageDiffingUtils
           .generateDiffPackageMap(account.id, app.id, deployment.id, appPackages[1])
-          .done((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
+          .then((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
             assert(diffPackageMap);
             assert.equal(Object.keys(diffPackageMap).length, 1);
             assert(diffPackageMap[appPackages[0].packageHash]);
@@ -389,7 +385,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
       it("generateDiffPackageMap returns multiple diffs for multiple packages in history", (done) => {
         packageDiffingUtils
           .generateDiffPackageMap(account.id, app.id, deployment.id, appPackages[3])
-          .done((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
+          .then((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
             assert(diffPackageMap);
             assert.equal(Object.keys(diffPackageMap).length, 3);
             assert(diffPackageMap[appPackages[0].packageHash]);
@@ -423,7 +419,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
           .then((returnPackage: storage.Package) => {
             return packageDiffingUtils.generateDiffPackageMap(account.id, app.id, deployment2.id, p3);
           })
-          .done((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
+          .then((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
             assert(diffPackageMap);
             assert.equal(Object.keys(diffPackageMap).length, 1);
             assert(diffPackageMap[p1.packageHash]);
@@ -458,7 +454,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
           .then((returnPackage: storage.Package) => {
             return packageDiffingUtils.generateDiffPackageMap(account.id, app.id, deployment2.id, p3);
           })
-          .done((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
+          .then((diffPackageMap: storage.PackageHashToBlobInfoMap) => {
             assert(diffPackageMap);
             assert.equal(Object.keys(diffPackageMap).length, 2);
             assert(diffPackageMap[p1.packageHash]);

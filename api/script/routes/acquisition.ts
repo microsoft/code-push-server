@@ -1,4 +1,3 @@
-// acquisition-router.ts
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
@@ -17,7 +16,6 @@ import * as validationUtils from "../utils/validation";
 
 import * as queryString from "querystring";
 import * as URL from "url";
-
 import { sendErrorToDatadog } from "../utils/tracer";
 
 const METRICS_BREAKING_VERSION = "1.5.2-beta";
@@ -33,12 +31,11 @@ function getUrlKey(originalUrl: string): string {
   return obj.pathname + "?" + queryString.stringify(obj.query);
 }
 
-async function createResponseUsingStorage(
+function createResponseUsingStorage(
   req: express.Request,
   res: express.Response,
   storage: storageTypes.Storage
-): Promise<redis.CacheableResponse | null> {
-
+): Promise<redis.CacheableResponse> {
   const deploymentKey: string = String(req.query.deploymentKey || req.query.deployment_key);
   const appVersion: string = String(req.query.appVersion || req.query.app_version);
   const packageHash: string = String(req.query.packageHash || req.query.package_hash);
@@ -54,14 +51,14 @@ async function createResponseUsingStorage(
 
   let originalAppVersion: string;
 
-  // Allow plain integer numbers e.g. "1", "2", etc.
+  // Make an exception to allow plain integer numbers e.g. "1", "2" etc.
   const isPlainIntegerNumber: boolean = /^\d+$/.test(updateRequest.appVersion);
   if (isPlainIntegerNumber) {
     originalAppVersion = updateRequest.appVersion;
     updateRequest.appVersion = originalAppVersion + ".0.0";
   }
 
-  // Allow missing patch versions e.g. "2.0" or "2.0-prerelease"
+  // Make an exception to allow missing patch versions e.g. "2.0" or "2.0-prerelease"
   const isMissingPatchVersion: boolean = /^\d+\.\d+([\+\-].*)?$/.test(updateRequest.appVersion);
   if (isMissingPatchVersion) {
     originalAppVersion = updateRequest.appVersion;
@@ -74,10 +71,8 @@ async function createResponseUsingStorage(
   }
 
   if (validationUtils.isValidUpdateCheckRequest(updateRequest)) {
-    try {
-      const packageHistory: storageTypes.Package[] = await storage.getPackageHistoryFromDeploymentKey(updateRequest.deploymentKey);
+    return storage.getPackageHistoryFromDeploymentKey(updateRequest.deploymentKey).then((packageHistory: storageTypes.Package[]) => {
       const updateObject: UpdateCheckCacheResponse = acquisitionUtils.getUpdatePackageInfo(packageHistory, updateRequest);
-
       if ((isMissingPatchVersion || isPlainIntegerNumber) && updateObject.originalPackage.appVersion === updateRequest.appVersion) {
         // Set the appVersion of the response to the original one with the missing patch version or plain number
         updateObject.originalPackage.appVersion = originalAppVersion;
@@ -91,13 +86,9 @@ async function createResponseUsingStorage(
         body: updateObject,
       };
 
-      return cacheableResponse;
-    } catch (error) {
-      // Propagate storage errors to be handled by the caller
-      throw error;
-    }
+      return Promise.resolve(cacheableResponse);
+    });
   } else {
-    // Send appropriate error messages based on validation failures
     if (!validationUtils.isValidKeyField(updateRequest.deploymentKey)) {
       errorUtils.sendMalformedRequestError(
         res,
@@ -117,7 +108,7 @@ async function createResponseUsingStorage(
       );
     }
 
-    return null;
+    return Promise.resolve(<redis.CacheableResponse>(null));
   }
 }
 
@@ -126,14 +117,16 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
 
-  router.get("/healthcheck", async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    try {
-      await storage.checkHealth();
-      await redisManager.checkHealth();
-      res.status(200).send("Healthy");
-    } catch (error) {
-      errorUtils.sendUnknownError(res, error, next);
-    }
+  router.get("/healthcheck", (req: express.Request, res: express.Response, next: (err?: any) => void): any => {
+    storage
+      .checkHealth()
+      .then(() => {
+        return redisManager.checkHealth();
+      })
+      .then(() => {
+        res.status(200).send("Healthy");
+      })
+      .catch((error: Error) => errorUtils.sendUnknownError(res, error, next))
   });
 
   return router;
@@ -144,71 +137,69 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
 
-  const updateCheck = (newApi: boolean) => {
-    return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const updateCheck = function (newApi: boolean) {
+    return function (req: express.Request, res: express.Response, next: (err?: any) => void) {
       const deploymentKey: string = String(req.query.deploymentKey || req.query.deployment_key);
       const key: string = redis.Utilities.getDeploymentKeyHash(deploymentKey);
       const clientUniqueId: string = String(req.query.clientUniqueId || req.query.client_unique_id);
       const url: string = getUrlKey(req.originalUrl);
       let fromCache: boolean = true;
-      let redisError: Error | null = null;
+      let redisError: Error;
 
-      try {
-        let cachedResponse: redis.CacheableResponse | null;
-        try {
-          cachedResponse = await redisManager.getCachedResponse(key, url);
-        } catch (error) {
-          // Store the redis error to be logged after sending the response
+      redisManager
+        .getCachedResponse(key, url)
+        .catch((error: Error) => {
+          // Store the redis error to be thrown after we send response.
           redisError = error;
-          cachedResponse = null;
-        }
+          return Promise.resolve(<redis.CacheableResponse>(null));
+        })
+        .then((cachedResponse: redis.CacheableResponse) => {
+          fromCache = !!cachedResponse;
+          return cachedResponse || createResponseUsingStorage(req, res, storage);
+        })
+        .then((response: redis.CacheableResponse) => {
+          if (!response) {
+            return Promise.resolve(<void>(null));
+          }
 
-        fromCache = !!cachedResponse;
-        const response = cachedResponse || await createResponseUsingStorage(req, res, storage);
+          let giveRolloutPackage: boolean = false;
+          const cachedResponseObject = <UpdateCheckCacheResponse>response.body;
+          if (cachedResponseObject.rolloutPackage && clientUniqueId) {
+            const releaseSpecificString: string =
+              cachedResponseObject.rolloutPackage.label || cachedResponseObject.rolloutPackage.packageHash;
+            giveRolloutPackage = rolloutSelector.isSelectedForRollout(
+              clientUniqueId,
+              cachedResponseObject.rollout,
+              releaseSpecificString
+            );
+          }
 
-        if (!response) {
-          // If response is null, an error has already been sent to the client
-          return;
-        }
+          const updateCheckBody: { updateInfo: UpdateCheckResponse } = {
+            updateInfo: giveRolloutPackage ? cachedResponseObject.rolloutPackage : cachedResponseObject.originalPackage,
+          };
 
-        let giveRolloutPackage: boolean = false;
-        const cachedResponseObject = response.body as UpdateCheckCacheResponse;
-        if (cachedResponseObject.rolloutPackage && clientUniqueId) {
-          const releaseSpecificString: string =
-            cachedResponseObject.rolloutPackage.label || cachedResponseObject.rolloutPackage.packageHash;
-          giveRolloutPackage = rolloutSelector.isSelectedForRollout(
-            clientUniqueId,
-            cachedResponseObject.rollout,
-            releaseSpecificString
-          );
-        }
+          // Change in new API
+          updateCheckBody.updateInfo.target_binary_range = updateCheckBody.updateInfo.appVersion;
 
-        const updateCheckBody: { updateInfo: UpdateCheckResponse } = {
-          updateInfo: giveRolloutPackage ? cachedResponseObject.rolloutPackage : cachedResponseObject.originalPackage,
-        };
+          res.locals.fromCache = fromCache;
+          res.status(response.statusCode).send(newApi ? utils.convertObjectToSnakeCase(updateCheckBody) : updateCheckBody);
 
-        // Modify response for the new API
-        updateCheckBody.updateInfo.target_binary_range = updateCheckBody.updateInfo.appVersion;
-
-        res.locals.fromCache = fromCache;
-        res.status(response.statusCode).send(newApi ? utils.convertObjectToSnakeCase(updateCheckBody) : updateCheckBody);
-
-        // Update Redis cache after sending the response to avoid blocking
-        if (!fromCache) {
-          await redisManager.setCachedResponse(key, url, response);
-        }
-
-        if (redisError) {
-          sendErrorToDatadog(redisError);
-          // Optionally, log the error or handle it as needed
-        }
-      } catch (error) {
-        errorUtils.restErrorHandler(res, error, next);
-      }
+          // Update REDIS cache after sending the response so that we don't block the request.
+          if (!fromCache) {
+            return redisManager.setCachedResponse(key, url, response);
+          }
+        })
+        .then(() => {
+          if (redisError) {
+            sendErrorToDatadog(redisError);
+            throw redisError;
+          }
+        })
+        .catch((error: storageTypes.StorageError) => errorUtils.restErrorHandler(res, error, next))
     };
   };
 
-  const reportStatusDeploy = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const reportStatusDeploy = function (req: express.Request, res: express.Response, next: (err?: any) => void) {
     const deploymentKey = req.body.deploymentKey || req.body.deployment_key;
     const appVersion = req.body.appVersion || req.body.app_version;
     const previousDeploymentKey = req.body.previousDeploymentKey || req.body.previous_deployment_key || deploymentKey;
@@ -228,30 +219,28 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
     const sdkVersion: string = restHeaders.getSdkVersion(req);
     if (semver.valid(sdkVersion) && semver.gte(sdkVersion, METRICS_BREAKING_VERSION)) {
       // If previousDeploymentKey not provided, assume it is the same deployment key.
-      try {
-        let redisUpdatePromise: Promise<void>;
+      let redisUpdatePromise: Promise<void>;
 
-        if (req.body.label && req.body.status === redis.DEPLOYMENT_FAILED) {
-          redisUpdatePromise = redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status);
-        } else {
-          const labelOrAppVersion: string = req.body.label || appVersion;
-          redisUpdatePromise = redisManager.recordUpdate(
-            deploymentKey,
-            labelOrAppVersion,
-            previousDeploymentKey,
-            previousLabelOrAppVersion
-          );
-        }
-
-        await redisUpdatePromise;
-        res.sendStatus(200);
-
-        if (clientUniqueId) {
-          await redisManager.removeDeploymentKeyClientActiveLabel(previousDeploymentKey, clientUniqueId);
-        }
-      } catch (error) {
-        errorUtils.sendUnknownError(res, error, next);
+      if (req.body.label && req.body.status === redis.DEPLOYMENT_FAILED) {
+        redisUpdatePromise = redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status);
+      } else {
+        const labelOrAppVersion: string = req.body.label || appVersion;
+        redisUpdatePromise = redisManager.recordUpdate(
+          deploymentKey,
+          labelOrAppVersion,
+          previousDeploymentKey,
+          previousLabelOrAppVersion
+        );
       }
+
+      redisUpdatePromise
+        .then(() => {
+          res.sendStatus(200);
+          if (clientUniqueId) {
+            redisManager.removeDeploymentKeyClientActiveLabel(previousDeploymentKey, clientUniqueId);
+          }
+        })
+        .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
     } else {
       if (!clientUniqueId) {
         return errorUtils.sendMalformedRequestError(
@@ -260,26 +249,27 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         );
       }
 
-      try {
-        const currentVersionLabel: string | null = await redisManager.getCurrentActiveLabel(deploymentKey, clientUniqueId);
-
-        if (req.body.label && req.body.label !== currentVersionLabel) {
-          await redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status);
-          if (req.body.status === redis.DEPLOYMENT_SUCCEEDED) {
-            await redisManager.updateActiveAppForClient(deploymentKey, clientUniqueId, req.body.label, currentVersionLabel || undefined);
+      return redisManager
+        .getCurrentActiveLabel(deploymentKey, clientUniqueId)
+        .then((currentVersionLabel: string) => {
+          if (req.body.label && req.body.label !== currentVersionLabel) {
+            return redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status).then(() => {
+              if (req.body.status === redis.DEPLOYMENT_SUCCEEDED) {
+                return redisManager.updateActiveAppForClient(deploymentKey, clientUniqueId, req.body.label, currentVersionLabel);
+              }
+            });
+          } else if (!req.body.label && appVersion !== currentVersionLabel) {
+            return redisManager.updateActiveAppForClient(deploymentKey, clientUniqueId, appVersion, appVersion);
           }
-        } else if (!req.body.label && appVersion !== currentVersionLabel) {
-          await redisManager.updateActiveAppForClient(deploymentKey, clientUniqueId, appVersion, appVersion);
-        }
-
-        res.sendStatus(200);
-      } catch (error) {
-        errorUtils.sendUnknownError(res, error, next);
-      }
+        })
+        .then(() => {
+          res.sendStatus(200);
+        })
+        .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
     }
   };
 
-  const reportStatusDownload = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const reportStatusDownload = function (req: express.Request, res: express.Response, next: (err?: any) => void) {
     const deploymentKey = req.body.deploymentKey || req.body.deployment_key;
     if (!req.body || !deploymentKey || !req.body.label) {
       return errorUtils.sendMalformedRequestError(
@@ -287,15 +277,14 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         "A download status report must contain a valid deploymentKey and package label."
       );
     }
-    try {
-      await redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, redis.DOWNLOADED);
-      res.sendStatus(200);
-    } catch (error) {
-      errorUtils.sendUnknownError(res, error, next);
-    }
+    return redisManager
+      .incrementLabelStatusCount(deploymentKey, req.body.label, redis.DOWNLOADED)
+      .then(() => {
+        res.sendStatus(200);
+      })
+      .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
   };
 
-  // Define routes with the appropriate handlers
   router.get("/updateCheck", updateCheck(false));
   router.get("/v0.1/public/codepush/update_check", updateCheck(true));
 

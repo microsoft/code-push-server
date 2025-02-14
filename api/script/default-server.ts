@@ -23,7 +23,6 @@ import * as bodyParser from "body-parser";
 const domain = require("express-domain-middleware");
 import * as express from "express";
 const csrf = require('lusca').csrf;
-import * as q from "q";
 import { S3Storage } from "./storage/aws-storage";
 
 interface Secret {
@@ -49,7 +48,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
   let isSecretsManagerConfigured: boolean;
   let secretValue: any;
 
-  q<void>(null)
+  Promise.resolve(<void>(null))
     .then(async () => {
       if (!useJsonStorage) {
         //storage = new JsonStorage();
@@ -176,5 +175,4 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
 
       done(null, app, storage);
     })
-    .done();
 }

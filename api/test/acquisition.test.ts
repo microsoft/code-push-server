@@ -451,6 +451,7 @@ describe("Acquisition Rest API", () => {
         .end(function (err: any, result: any) {
           if (err) throw err;
           let response = JSON.parse(result.text);
+          console.log("🚀 ~ response:", response)
           assert.equal(response.updateInfo.isAvailable, true);
           assert.equal(response.updateInfo.downloadURL, appPackage.diffPackageMap[previousPackageHash].url);
           assert.equal(response.updateInfo.packageSize, 5);
@@ -1162,6 +1163,7 @@ describe("Acquisition Rest API", () => {
               redisManager
                 .getMetricsWithDeploymentKey(deployment.key)
                 .then((metrics: any) => {
+                  console.log("🚀 ~ .then ~ redis.Utilities:", redis.Utilities);
                   assert.equal(metrics[redis.Utilities.getLabelActiveCountField("1.0.0")], 1);
                   assert.equal(metrics[redis.Utilities.getLabelActiveCountField("v2")], 1);
                   assert.equal(metrics[redis.Utilities.getLabelStatusField("v2", redis.DEPLOYMENT_SUCCEEDED)], 1);

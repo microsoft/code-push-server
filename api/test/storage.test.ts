@@ -3,14 +3,12 @@
 
 import * as assert from "assert";
 import * as shortid from "shortid";
-import * as q from "q";
 
 import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";
 import * as storageTypes from "../script/storage/storage";
 import * as utils from "./utils.test";
 
-import Promise = q.Promise;
 
 describe("JSON Storage", () => storageTests(JsonStorage));
 
@@ -35,7 +33,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
 
   afterEach((): void => {
     if (storage instanceof JsonStorage) {
-      storage.dropAll().done();
+      storage.dropAll();
     }
   });
 
@@ -1128,7 +1126,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
 
       beforeEach(() => {
         expectedPackageHistory = [];
-        var promiseChain: Promise<void> = q<void>(null);
+        var promiseChain: Promise<void> = Promise.resolve(<void>(null));
         var packageNumber = 1;
         for (var i = 1; i <= 3; i++) {
           promiseChain = promiseChain
@@ -1208,7 +1206,6 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
       return storage
         .addBlob(shortid.generate(), utils.makeStreamFromString(fileContents), fileContents.length)
         .then((blobId: string) => {
-          console.log("🚀 ~ .then ~ storage.getBlobUrl(blobId):", storage.getBlobUrl(blobId))
           return storage.getBlobUrl(blobId);
         })
         .then((blobUrl: string) => {
@@ -1241,7 +1238,7 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
 
           return utils.retrieveStringContentsFromUrl(blobUrl);
         })
-        .timeout(1000, "timeout")
+        .then((result) => timeout(Promise.resolve(result), 1000, "timeout"))
         .then(
           (retrievedContents: string) => {
             assert.equal(null, retrievedContents);
@@ -1261,3 +1258,13 @@ function storageTests(StorageType: new (...args: any[]) => storageTypes.Storage,
 function failOnCallSucceeded(result: any): any {
   throw new Error("Expected the promise to be rejected, but it succeeded with value " + (result ? JSON.stringify(result) : result));
 }
+
+function timeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(message)), ms)
+    )
+  ]);
+}
+

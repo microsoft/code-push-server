@@ -8,7 +8,6 @@ const passportActiveDirectory = require("passport-azure-ad");
 import * as passportBearer from "passport-http-bearer";
 import * as passportGitHub from "passport-github2";
 import * as passportWindowsLive from "passport-windowslive";
-import * as q from "q";
 import * as superagent from "superagent"
 import rateLimit from "express-rate-limit";
 
@@ -19,7 +18,6 @@ import * as security from "../utils/security";
 import * as storage from "../storage/storage";
 import * as validationUtils from "../utils/validation";
 
-import Promise = q.Promise;
 
 export interface AuthenticationConfig {
   storage: storage.Storage;
@@ -75,7 +73,6 @@ export class PassportAuthentication {
             done(/*err*/ null, { id: accountId });
           })
           .catch((error: storage.StorageError): void => PassportAuthentication.storageErrorHandler(error, done))
-          .done();
       })
     );
   }
@@ -417,7 +414,6 @@ export class PassportAuthentication {
             error.message = `Unexpected failure with action ${action}, provider ${providerName}, email ${emailAddress}, and message: ${error.message}`;
             restErrorUtils.sendUnknownError(res, error, next);
           })
-          .done();
       }
     );
 

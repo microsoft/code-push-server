@@ -1,9 +1,15 @@
-// redis-manager.ts
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as assert from "assert";
 import * as express from "express";
-import { Cluster, ClusterOptions, Redis, ClusterNode } from "ioredis";
+import * as q from "q";
+// import * as redis from "redis";
+import { Cluster, ClusterOptions, Redis, ClusterNode } from "ioredis"
+
+import Promise = q.Promise;
+import { ClusterConfig } from "aws-sdk/clients/opensearch";
+import { type } from "os";
 import { sendErrorToDatadog } from "./utils/tracer";
 
 export const DEPLOYMENT_SUCCEEDED = "DeploymentSucceeded";
@@ -25,39 +31,104 @@ export module Utilities {
     return status === DEPLOYMENT_SUCCEEDED || status === DEPLOYMENT_FAILED || status === DOWNLOADED;
   }
 
-  export function getLabelStatusField(label: string, status: string): string | null {
+  export function getLabelStatusField(label: string, status: string): string {
     if (isValidDeploymentStatus(status)) {
-      return `${label}:${status}`;
+      return label + ":" + status;
     } else {
       return null;
     }
   }
 
-  export function getLabelActiveCountField(label: string): string | null {
+  export function getLabelActiveCountField(label: string): string {
     if (label) {
-      return `${label}:${ACTIVE}`;
+      return label + ":" + ACTIVE;
     } else {
       return null;
     }
   }
 
   export function getDeploymentKeyHash(deploymentKey: string): string {
-    return `deploymentKey:${deploymentKey}`;
+    return "deploymentKey:" + deploymentKey;
   }
 
   export function getDeploymentKeyLabelsHash(deploymentKey: string): string {
-    return `deploymentKeyLabels:${deploymentKey}`;
+    return "deploymentKeyLabels:" + deploymentKey;
   }
 
   export function getDeploymentKeyClientsHash(deploymentKey: string): string {
-    return `deploymentKeyClients:${deploymentKey}`;
+    return "deploymentKeyClients:" + deploymentKey;
+  }
+}
+class PromisifiedRedisClient {
+  private client: Redis | Cluster;
+
+  constructor(client: Redis | Cluster) {
+    this.client = client;
+  }
+
+  public set(key: string, value: string, expiry?: number): Promise<void> {
+    const args = expiry ? [key, value, "EX", expiry] : [key, value];
+    return q.ninvoke(this.client, "set", ...args);
+  }
+
+  public get(key: string): Promise<string | null> {
+    return q.ninvoke(this.client, "get", key);
+  }
+
+  public exists(...keys: string[]): Promise<number> {
+    return q.ninvoke(this.client, "exists", ...keys);
+  }
+
+  public hget(key: string, field: string): Promise<string | null> {
+    return q.ninvoke(this.client, "hget", key, field);
+  }
+
+  public hdel(key: string, field: string): Promise<string | null> {
+    return q.ninvoke(this.client, "hdel", key, field);
+  }
+
+  public hset(key: string, field: string, value: string): Promise<number> {
+    return q.ninvoke(this.client, "hset", key, field, value);
+  }
+
+  public del(key: string): Promise<number> {
+    return q.ninvoke(this.client, "del", key);
+  }
+
+  public ping(): Promise<string> {
+    return q.ninvoke(this.client, "ping");
+  }
+
+  public hgetall(key: string): Promise<any> {
+    console.log("hgetall key:", key);
+    return q.ninvoke(this.client, "hgetall", key);
+  }
+
+  // public execBatch(redisBatchClient: BatchC): Promise<any[]> {
+  //   new Redis().pipeline();
+  //   return q.ninvoke<any[]>(redisBatchClient, "exec");
+  // }
+
+  public expire(key: string, seconds: number): Promise<number> {
+    return q.ninvoke(this.client, "expire", key, seconds);
+  }
+
+  public hincrby(key: string, field: string, incrementBy: number): Promise<number> {
+    return q.ninvoke(this.client, "hincrby", key, field, incrementBy);
+  }
+
+  public quit(): Promise<void> {
+    return q.ninvoke(this.client, "quit");
   }
 }
 
 export class RedisManager {
   private static DEFAULT_EXPIRY: number = 3600; // one hour, specified in seconds
-  private _opsClient: Cluster | Redis;
-  private _metricsClient: Cluster | Redis;
+  private _opsClient: Cluster | Redis = null;
+  private _promisifiedOpsClient: PromisifiedRedisClient | null = null;
+
+  private _metricsClient: Cluster | Redis = null;
+  private _promisifiedMetricsClient: PromisifiedRedisClient | null = null;
 
   private _setupMetricsClientPromise: Promise<void> | null = null;
 
@@ -66,7 +137,7 @@ export class RedisManager {
       console.log("port redis:", process.env.REDIS_PORT);
       const redisConfig = {
         host: process.env.REDIS_HOST,
-        port: parseInt(process.env.REDIS_PORT, 10),
+        port: parseInt(process.env.REDIS_PORT),
         // auth_pass: process.env.REDIS_KEY,
         // tls: {
         //   // Note: Node defaults CA's to those trusted by Mozilla
@@ -74,7 +145,8 @@ export class RedisManager {
         // },
       };
 
-      const clusterRetryStrategy = (times: number): number | null => {
+
+      const clusterRetryStrategy = (times) => {
         // Customize retry logic; return null to stop retrying
         if (times > 5) {
           console.error("Too many retries. Giving up.");
@@ -83,7 +155,7 @@ export class RedisManager {
         return Math.min(times * 100, 3000); // Incremental delay
       };
 
-      const options: ClusterOptions = {
+      const options : ClusterOptions = {   
         redisOptions: {
           connectTimeout: 15000, // Timeout for initial connection (in ms)
           maxRetriesPerRequest: 5, // Max retries for a failed request
@@ -93,31 +165,27 @@ export class RedisManager {
       };
 
       const startUpNodes: ClusterNode[] = [
-        {
-          host: process.env.REDIS_HOST,
-          port: parseInt(process.env.REDIS_PORT, 10),
-        },
-      ];
+          {
+            host: process.env.REDIS_HOST,
+            port: parseInt(process.env.REDIS_PORT),
+          },
+      ]
 
-      console.log("REDIS_CLUSTER_ENABLED:", process.env.REDIS_CLUSTER_ENABLED);
-      console.log("Type of REDIS_CLUSTER_ENABLED:", typeof process.env.REDIS_CLUSTER_ENABLED);
-      const clusterEnabled = process.env.REDIS_CLUSTER_ENABLED === "true";
-      console.log("Cluster Enabled:", clusterEnabled);
 
-      if (clusterEnabled) {
+      console.log("value ",process.env.REDIS_CLUSTER_ENABLED)
+      console.log("typeof ", typeof process.env.REDIS_CLUSTER_ENABLED)
+      const clusterEnabledWithDoubleEqual = process.env.REDIS_CLUSTER_ENABLED == "true";
+      const clusterEnabledWithTrippleEqual = process.env.REDIS_CLUSTER_ENABLED === "true";
+      console.log("clusterEnabledWithDoubleEqual", clusterEnabledWithDoubleEqual);
+      console.log("clusterEnabledWithTrippleEqual", clusterEnabledWithTrippleEqual);
+
+      if (process.env.REDIS_CLUSTER_ENABLED == "true") {
         console.log("startUpNodes, options", startUpNodes, options);
       } else {
         console.log("Redis config since no cluster enabled:", redisConfig);
       }
-
-      this._opsClient = clusterEnabled
-        ? new Cluster(startUpNodes, options)
-        : new Redis(redisConfig);
-
-      this._metricsClient = clusterEnabled
-        ? new Cluster(startUpNodes, options)
-        : new Redis(redisConfig);
-
+      this._opsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster(startUpNodes, options) : new Redis(redisConfig);
+      this._metricsClient = process.env.REDIS_CLUSTER_ENABLED == "true" ? new Cluster(startUpNodes, options) : new Redis(redisConfig);
       this._opsClient.on("error", (err: Error) => {
         console.error("Redis ops client error:", err);
       });
@@ -126,23 +194,14 @@ export class RedisManager {
         console.error("Redis Metrics client error:", err);
       });
 
-      // Initialize metrics client health
-      this._setupMetricsClientPromise = this._metricsClient
+      this._promisifiedOpsClient = new PromisifiedRedisClient(this._opsClient);
+      this._promisifiedMetricsClient = new PromisifiedRedisClient(this._metricsClient);
+      this._setupMetricsClientPromise = this._promisifiedMetricsClient
         .set("health", "healthy")
-        .then(() => {
-          console.log("Initial health status set to 'healthy'.");
-        })
-        .catch((err: Error) => {
-          console.error("Failed to set initial health status:", err);
-        });
-    }
-
-    // Ensure that _opsClient and _metricsClient are defined if Redis is not enabled
-    if (!process.env.REDIS_HOST || !process.env.REDIS_PORT) {
+        .then(() => {})
+        .catch((err) => console.error("Failed to set initial health status:", err));
+    } else {
       console.warn("No REDIS_HOST or REDIS_PORT environment variable configured.");
-      this._opsClient = null;
-      this._metricsClient = null;
-      this._setupMetricsClientPromise = null;
     }
   }
 
@@ -150,48 +209,46 @@ export class RedisManager {
     return !!this._opsClient && !!this._metricsClient;
   }
 
-  public async checkHealth(): Promise<void> {
+  public checkHealth(): Promise<void> {
     if (!this.isEnabled) {
-      throw new Error("Redis manager is not enabled");
+      return q.reject<void>("Redis manager is not enabled");
     }
 
     console.log("Starting Redis health check...");
-    try {
-      await Promise.all([
-        this._opsClient.ping().then(() => console.log("Ops Client Ping successful")),
-        this._metricsClient.ping().then(() => console.log("Metrics Client Ping successful")),
-      ]);
-      console.log("Redis health check passed.");
-    } catch (err) {
-      console.error("Redis health check failed:", err);
-      sendErrorToDatadog(err);
-      throw err;
-    }
+    return q
+      .all([
+        this._promisifiedOpsClient.ping().then(() => console.log("Ops Client Ping successful")),
+        this._promisifiedMetricsClient.ping().then(() => console.log("Metrics Client Ping successful")),
+      ])
+      .spread(() => {
+        console.log("Redis health check passed.");
+      })
+      .catch((err) => {
+        console.error("Redis health check failed:", err);
+        sendErrorToDatadog(err);
+        throw err;
+      });
   }
 
   /**
    * Get a response from cache if possible, otherwise return null.
    * @param expiryKey: An identifier to get cached response if not expired
    * @param url: The url of the request to cache
-   * @return The object of type CacheableResponse or null
+   * @return The object of type CacheableResponse
    */
-  public async getCachedResponse(expiryKey: string, url: string): Promise<CacheableResponse | null> {
+  public getCachedResponse(expiryKey: string, url: string): Promise<CacheableResponse> {
     if (!this.isEnabled) {
-      return null;
+      return q<CacheableResponse>(null);
     }
 
-    try {
-      const serializedResponse = await this._opsClient.hget(expiryKey, url);
+    return this._promisifiedOpsClient.hget(expiryKey, url).then((serializedResponse: string): Promise<CacheableResponse> => {
       if (serializedResponse) {
-        const response: CacheableResponse = JSON.parse(serializedResponse);
-        return response;
+        const response = <CacheableResponse>JSON.parse(serializedResponse);
+        return q<CacheableResponse>(response);
       } else {
-        return null;
+        return q<CacheableResponse>(null);
       }
-    } catch (error) {
-      console.error(`Error getting cached response for key: ${expiryKey}, url: ${url}`, error);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -200,253 +257,171 @@ export class RedisManager {
    * @param url: The url of the request to cache
    * @param response: The response to cache
    */
-  public async setCachedResponse(expiryKey: string, url: string, response: CacheableResponse): Promise<void> {
+  public setCachedResponse(expiryKey: string, url: string, response: CacheableResponse): Promise<void> {
     if (!this.isEnabled) {
-      return;
+      return q<void>(null);
     }
 
-    try {
-      const serializedResponse: string = JSON.stringify(response);
-      const isExisting: number = await this._opsClient.exists(expiryKey);
-      const isNewKey: boolean = isExisting === 0;
-
-      await this._opsClient.hset(expiryKey, url, serializedResponse);
-
-      if (isNewKey) {
-        await this._opsClient.expire(expiryKey, RedisManager.DEFAULT_EXPIRY);
-      }
-    } catch (error) {
-      console.error(`Error setting cached response for key: ${expiryKey}, url: ${url}`, error);
-      throw error;
-    }
+    // Store response in cache with a timed expiry
+    const serializedResponse: string = JSON.stringify(response);
+    let isNewKey: boolean;
+    return this._promisifiedOpsClient
+      .exists(expiryKey)
+      .then((isExisting: number) => {
+        isNewKey = !isExisting;
+        return this._promisifiedOpsClient.hset(expiryKey, url, serializedResponse);
+      })
+      .then(() => {
+        if (isNewKey) {
+          return this._promisifiedOpsClient.expire(expiryKey, RedisManager.DEFAULT_EXPIRY);
+        }
+      })
+      .then(() => {});
   }
 
-  public async invalidateCache(expiryKey: string): Promise<void> {
-    if (!this.isEnabled) {
-      return;
-    }
+  public invalidateCache(expiryKey: string): Promise<void> {
+    
+    if (!this.isEnabled) return q(<void>null);
 
-    try {
-      await this._opsClient.del(expiryKey);
-    } catch (error) {
-      console.error(`Error invalidating cache for key: ${expiryKey}`, error);
-      throw error;
-    }
+    return this._promisifiedOpsClient.del(expiryKey).then(() => {});
   }
 
-  /**
-   * Atomically increments the status field for the deployment by 1,
-   * or 1 by default. If the field does not exist, it will be created with the value of 1.
-   */
-  public async incrementLabelStatusCount(deploymentKey: string, label: string, status: string): Promise<void> {
+  // Atomically increments the status field for the deployment by 1,
+  // or 1 by default. If the field does not exist, it will be created with the value of 1.
+  public incrementLabelStatusCount(deploymentKey: string, label: string, status: string): Promise<void> {
     if (!this.isEnabled) {
-      return;
+      return q(<void>null);
     }
 
     const hash: string = Utilities.getDeploymentKeyLabelsHash(deploymentKey);
-    const field: string | null = Utilities.getLabelStatusField(label, status);
+    const field: string = Utilities.getLabelStatusField(label, status);
 
-    if (!field) {
-      throw new Error(`Invalid deployment status: ${status}`);
-    }
-
-    try {
-      await this._setupMetricsClientPromise;
-      await this._metricsClient.hincrby(hash, field, 1);
-    } catch (error) {
-      console.error(`Error incrementing label status count for deploymentKey: ${deploymentKey}, label: ${label}, status: ${status}`, error);
-      throw error;
-    }
+    return this._setupMetricsClientPromise.then(() => this._promisifiedMetricsClient.hincrby(hash, field, 1)).then(() => {});
   }
 
-  public async clearMetricsForDeploymentKey(deploymentKey: string): Promise<void> {
+  public clearMetricsForDeploymentKey(deploymentKey: string): Promise<void> {
     if (!this.isEnabled) {
-      return;
+      return q(<void>null);
     }
 
-    try {
-      await this._setupMetricsClientPromise;
-      await this._metricsClient.del(Utilities.getDeploymentKeyLabelsHash(deploymentKey));
-      await this._metricsClient.del(Utilities.getDeploymentKeyClientsHash(deploymentKey));
-    } catch (error) {
-      console.error(`Error clearing metrics for deploymentKey: ${deploymentKey}`, error);
-      throw error;
-    }
+    return this._setupMetricsClientPromise
+      .then(() =>
+        this._promisifiedMetricsClient.del(
+          Utilities.getDeploymentKeyLabelsHash(deploymentKey)
+        )
+      ).then(() => 
+        this._promisifiedMetricsClient.del(
+          Utilities.getDeploymentKeyClientsHash(deploymentKey)
+        )
+      )
+      .then(() => {});
   }
 
-  /**
-   * Retrieves metrics for a specific deployment key.
-   * Returns an object mapping labelStatus to their counts.
-   */
-  public async getMetricsWithDeploymentKey(deploymentKey: string): Promise<DeploymentMetrics | null> {
+  // Promised return value will look something like
+  // { "v1:DeploymentSucceeded": 123, "v1:DeploymentFailed": 4, "v1:Active": 123 ... }
+  public getMetricsWithDeploymentKey(deploymentKey: string): Promise<DeploymentMetrics> {
     if (!this.isEnabled) {
-      return null;
+      return q(<DeploymentMetrics>null);
     }
 
-    try {
-      await this._setupMetricsClientPromise;
-      const metrics = await this._metricsClient.hgetall(Utilities.getDeploymentKeyLabelsHash(deploymentKey));
-
-      if (metrics && Object.keys(metrics).length > 0) {
-        const parsedMetrics: DeploymentMetrics = {};
-        for (const key in metrics) {
-          if (metrics.hasOwnProperty(key)) {
-            const value = metrics[key];
-            const numberValue = Number(value);
-            if (!isNaN(numberValue)) {
-              parsedMetrics[key] = numberValue;
-            } else {
-              console.warn(`Invalid number for key: ${key}, value: ${value}`);
+    return this._setupMetricsClientPromise
+      .then(() => this._promisifiedMetricsClient.hgetall(Utilities.getDeploymentKeyLabelsHash(deploymentKey)))
+      .then((metrics) => {
+        // Redis returns numerical values as strings, handle parsing here.
+        if (metrics) {
+          Object.keys(metrics).forEach((metricField) => {
+            if (!isNaN(metrics[metricField])) {
+              metrics[metricField] = +metrics[metricField];
             }
-          }
+          });
         }
-        return parsedMetrics;
-      } else {
-        return null;
-      }
-    } catch (error) {
-      console.error(`Error getting metrics for deploymentKey: ${deploymentKey}`, error);
-      throw error;
-    }
+
+        return <DeploymentMetrics>metrics;
+      });
   }
 
-  /**
-   * Records an update by incrementing the appropriate fields.
-   */
-  public async recordUpdate(
-    currentDeploymentKey: string,
-    currentLabel: string,
-    previousDeploymentKey?: string,
-    previousLabel?: string
-  ): Promise<void> {
+  public recordUpdate(currentDeploymentKey: string, currentLabel: string, previousDeploymentKey?: string, previousLabel?: string) {
     if (!this.isEnabled) {
-      return;
+      return q(<void>null);
     }
 
-    try {
-      await this._setupMetricsClientPromise;
-      const pipeline = this._metricsClient.pipeline();
+    return this._setupMetricsClientPromise
+      .then(() => {
+        const batchClient: any = (<any>this._metricsClient).pipeline();
+        const currentDeploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(currentDeploymentKey);
+        const currentLabelActiveField: string = Utilities.getLabelActiveCountField(currentLabel);
+        const currentLabelDeploymentSucceededField: string = Utilities.getLabelStatusField(currentLabel, DEPLOYMENT_SUCCEEDED);
+        batchClient.hincrby(currentDeploymentKeyLabelsHash, currentLabelActiveField, /* incrementBy */ 1);
+        batchClient.hincrby(currentDeploymentKeyLabelsHash, currentLabelDeploymentSucceededField, /* incrementBy */ 1);
 
-      const currentDeploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(currentDeploymentKey);
-      const currentLabelActiveField: string | null = Utilities.getLabelActiveCountField(currentLabel);
-      const currentLabelDeploymentSucceededField: string | null = Utilities.getLabelStatusField(currentLabel, DEPLOYMENT_SUCCEEDED);
-
-      if (currentLabelActiveField) {
-        pipeline.hincrby(currentDeploymentKeyLabelsHash, currentLabelActiveField, 1);
-      }
-
-      if (currentLabelDeploymentSucceededField) {
-        pipeline.hincrby(currentDeploymentKeyLabelsHash, currentLabelDeploymentSucceededField, 1);
-      }
-
-      if (previousDeploymentKey && previousLabel) {
-        const previousDeploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(previousDeploymentKey);
-        const previousLabelActiveField: string | null = Utilities.getLabelActiveCountField(previousLabel);
-        if (previousLabelActiveField) {
-          pipeline.hincrby(previousDeploymentKeyLabelsHash, previousLabelActiveField, -1);
+        if (previousDeploymentKey && previousLabel) {
+          const previousDeploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(previousDeploymentKey);
+          const previousLabelActiveField: string = Utilities.getLabelActiveCountField(previousLabel);
+          batchClient.hincrby(previousDeploymentKeyLabelsHash, previousLabelActiveField, /* incrementBy */ -1);
         }
-      }
 
-      await pipeline.exec();
-    } catch (error) {
-      console.error(`Error recording update from deploymentKey: ${currentDeploymentKey} to ${currentLabel}`, error);
-      throw error;
-    }
+        return batchClient.exec(batchClient);
+      })
+      .then(() => {});
   }
 
-  /**
-   * Removes the active label for a client in a deployment.
-   */
-  public async removeDeploymentKeyClientActiveLabel(deploymentKey: string, clientUniqueId: string): Promise<void> {
+  public removeDeploymentKeyClientActiveLabel(deploymentKey: string, clientUniqueId: string) {
     if (!this.isEnabled) {
-      return;
+      return q(<void>null);
     }
 
-    try {
-      await this._setupMetricsClientPromise;
-      await this._metricsClient.hdel(Utilities.getDeploymentKeyClientsHash(deploymentKey), clientUniqueId);
-    } catch (error) {
-      console.error(`Error removing active label for deploymentKey: ${deploymentKey}, clientUniqueId: ${clientUniqueId}`, error);
-      throw error;
-    }
+    return this._setupMetricsClientPromise
+      .then(() => {
+        const deploymentKeyClientsHash: string = Utilities.getDeploymentKeyClientsHash(deploymentKey);
+        return this._promisifiedMetricsClient.hdel(deploymentKeyClientsHash, clientUniqueId);
+      })
+      .then(() => {});
   }
 
   // For unit tests only
-  public async close(): Promise<void> {
-    if (!this._opsClient && !this._metricsClient) return;
+  public close(): Promise<void> {
+    const promiseChain: Promise<void> = q(<void>null);
+    if (!this._opsClient && !this._metricsClient) return promiseChain;
 
-    try {
-      if (this._opsClient) {
-        await this._opsClient.quit();
-      }
-      if (this._metricsClient) {
-        await this._metricsClient.quit();
-      }
-    } catch (error) {
-      console.error("Error closing Redis clients:", error);
-      throw error;
-    }
+    return promiseChain
+      .then(() => this._opsClient && this._promisifiedOpsClient.quit())
+      .then(() => this._metricsClient && this._promisifiedMetricsClient.quit())
+      .then(() => <void>null);
   }
 
   /* deprecated */
-  public async getCurrentActiveLabel(deploymentKey: string, clientUniqueId: string): Promise<string | null> {
+  public getCurrentActiveLabel(deploymentKey: string, clientUniqueId: string): Promise<string> {
     if (!this.isEnabled) {
-      return null;
+      return q(<string>null);
     }
 
-    try {
-      await this._setupMetricsClientPromise;
-      const label = await this._metricsClient.hget(Utilities.getDeploymentKeyClientsHash(deploymentKey), clientUniqueId);
-      return label;
-    } catch (error) {
-      console.error(`Error getting current active label for deploymentKey: ${deploymentKey}, clientUniqueId: ${clientUniqueId}`, error);
-      throw error;
-    }
+    return this._setupMetricsClientPromise.then(() =>
+      this._promisifiedMetricsClient.hget(Utilities.getDeploymentKeyClientsHash(deploymentKey), clientUniqueId)
+    );
   }
 
   /* deprecated */
-  public async updateActiveAppForClient(
-    deploymentKey: string,
-    clientUniqueId: string,
-    toLabel: string,
-    fromLabel?: string
-  ): Promise<void> {
+  public updateActiveAppForClient(deploymentKey: string, clientUniqueId: string, toLabel: string, fromLabel?: string): Promise<void> {
     if (!this.isEnabled) {
-      return;
+      return q(<void>null);
     }
 
-    try {
-      await this._setupMetricsClientPromise;
-      const pipeline = this._metricsClient.pipeline();
+    return this._setupMetricsClientPromise
+      .then(() => {
+        const batchClient: any = (<any>this._metricsClient).pipeline();
+        const deploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(deploymentKey);
+        const deploymentKeyClientsHash: string = Utilities.getDeploymentKeyClientsHash(deploymentKey);
+        const toLabelActiveField: string = Utilities.getLabelActiveCountField(toLabel);
 
-      const deploymentKeyLabelsHash: string = Utilities.getDeploymentKeyLabelsHash(deploymentKey);
-      const deploymentKeyClientsHash: string = Utilities.getDeploymentKeyClientsHash(deploymentKey);
-      const toLabelActiveField: string | null = Utilities.getLabelActiveCountField(toLabel);
-
-      if (toLabelActiveField) {
-        pipeline.hset(deploymentKeyClientsHash, clientUniqueId, toLabel);
-        pipeline.hincrby(deploymentKeyLabelsHash, toLabelActiveField, 1);
-      }
-
-      if (fromLabel) {
-        const fromLabelActiveField: string | null = Utilities.getLabelActiveCountField(fromLabel);
-        if (fromLabelActiveField) {
-          // First, check the current value before decrementing
-          const currentValue = await this._metricsClient.hget(deploymentKeyLabelsHash, fromLabelActiveField);
-          const currentCount = currentValue ? parseInt(currentValue, 10) : 0;
-
-          if (currentCount > 0) {
-            pipeline.hincrby(deploymentKeyLabelsHash, fromLabelActiveField, -1);
-          } else {
-            console.warn(`Attempted to decrement ${fromLabelActiveField}, but it is already 0.`);
-          }
+        batchClient.hset(deploymentKeyClientsHash, clientUniqueId, toLabel);
+        batchClient.hincrby(deploymentKeyLabelsHash, toLabelActiveField, /* incrementBy */ 1);
+        if (fromLabel) {
+          const fromLabelActiveField: string = Utilities.getLabelActiveCountField(fromLabel);
+          batchClient.hincrby(deploymentKeyLabelsHash, fromLabelActiveField, /* incrementBy */ -1);
         }
-      }
 
-      await pipeline.exec();
-    } catch (error) {
-      console.error(`Error updating active app for clientUniqueId: ${clientUniqueId} in deploymentKey: ${deploymentKey}`, error);
-      throw error;
-    }
+        return batchClient.exec(batchClient);
+      })
+      .then(() => {});
   }
 }

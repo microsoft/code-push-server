@@ -1,11 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as q from "q";
 import * as stream from "stream";
 import * as error from "../error";
 
-import Promise = q.Promise;
 import { AppCreationRequest } from "../types/rest-definitions";
 import { bool } from "aws-sdk/clients/signer";
 

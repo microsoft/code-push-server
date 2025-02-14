@@ -4,7 +4,6 @@
 import * as fs from "fs";
 import * as http from "http";
 import * as https from "https";
-import { Promise } from "q";
 import * as shortid from "shortid";
 import * as stream from "stream";
 
@@ -121,7 +120,7 @@ export function makeStreamFromString(stringValue: string): stream.Readable {
 
 export function makeStringFromStream(stream: stream.Readable): Promise<string> {
   var stringValue = "";
-  return Promise((resolve: (stringValue: string) => void) => {
+  return new Promise((resolve: (stringValue: string) => void) => {
     stream
       .on("data", (data: string) => {
         stringValue += data;
@@ -133,7 +132,7 @@ export function makeStringFromStream(stream: stream.Readable): Promise<string> {
 }
 
 export function getStreamAndSizeForFile(path: string): Promise<FileProps> {
-  return Promise((resolve: (props: FileProps) => void, reject: (reason: any) => void) => {
+  return new Promise((resolve: (props: FileProps) => void, reject: (reason: any) => void) => {
     fs.stat(path, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
       if (err) {
         reject(err);
@@ -154,7 +153,7 @@ export function retrieveStringContentsFromUrl(url: string): Promise<string> {
     protocol = http;
   }
 
-  return Promise((resolve: (stringValue: string) => void) => {
+  return new Promise((resolve: (stringValue: string) => void) => {
     const requestOptions: https.RequestOptions = {
       path: url,
     };

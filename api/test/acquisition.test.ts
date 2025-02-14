@@ -451,7 +451,6 @@ describe("Acquisition Rest API", () => {
         .end(function (err: any, result: any) {
           if (err) throw err;
           let response = JSON.parse(result.text);
-          console.log("🚀 ~ response:", response)
           assert.equal(response.updateInfo.isAvailable, true);
           assert.equal(response.updateInfo.downloadURL, appPackage.diffPackageMap[previousPackageHash].url);
           assert.equal(response.updateInfo.packageSize, 5);

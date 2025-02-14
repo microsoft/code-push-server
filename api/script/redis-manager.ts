@@ -64,57 +64,140 @@ class PromisifiedRedisClient {
     this.client = client;
   }
 
+  /** Set a key in Redis with an optional expiry */
   public async set(key: string, value: string, expiry?: number): Promise<void> {
-    if (expiry) {
-      await this.client.set(key, value, "EX", expiry);
-    } else {
-      await this.client.set(key, value);
+    try {
+      if (expiry) {
+        await this.client.set(key, value, "EX", expiry);
+      } else {
+        await this.client.set(key, value);
+      }
+    } catch (error) {
+      console.error(`Redis SET error for key: ${key}`, error);
+      throw error;
     }
   }
 
+  /** Get a value from Redis */
   public async get(key: string): Promise<string | null> {
-    return await this.client.get(key);
+    try {
+      return await this.client.get(key);
+    } catch (error) {
+      console.error(`Redis GET error for key: ${key}`, error);
+      return null;
+    }
   }
 
+  /** Check if keys exist */
   public async exists(...keys: string[]): Promise<number> {
-    return await this.client.exists(...keys);
+    try {
+      return await this.client.exists(...keys);
+    } catch (error) {
+      console.error(`Redis EXISTS error for keys: ${keys.join(", ")}`, error);
+      return 0;
+    }
   }
 
+  /** Get a field from a Redis hash */
   public async hget(key: string, field: string): Promise<string | null> {
-    return await this.client.hget(key, field);
+    try {
+      return await this.client.hget(key, field);
+    } catch (error) {
+      console.error(`Redis HGET error for key: ${key}, field: ${field}`, error);
+      return null;
+    }
   }
 
-  public async hdel(key: string, field: string): Promise< number| null> {
-    return await this.client.hdel(key, field);
+  /** Delete a field from a Redis hash */
+  public async hdel(key: string, field: string): Promise<number> {
+    try {
+      return await this.client.hdel(key, field);
+    } catch (error) {
+      console.error(`Redis HDEL error for key: ${key}, field: ${field}`, error);
+      return 0;
+    }
   }
 
+  /** Set a field in a Redis hash */
   public async hset(key: string, field: string, value: string): Promise<number> {
-    return await this.client.hset(key, field, value);
+    try {
+      return await this.client.hset(key, field, value);
+    } catch (error) {
+      console.error(`Redis HSET error for key: ${key}, field: ${field}`, error);
+      return 0;
+    }
   }
 
+  /** Delete a key */
   public async del(key: string): Promise<number> {
-    return await this.client.del(key);
+    try {
+      return await this.client.del(key);
+    } catch (error) {
+      console.error(`Redis DEL error for key: ${key}`, error);
+      return 0;
+    }
   }
 
+  /** Ping Redis to check connection */
   public async ping(): Promise<string> {
-    return await this.client.ping();
+    try {
+      return await this.client.ping();
+    } catch (error) {
+      console.error("Redis PING error", error);
+      return "ERROR";
+    }
   }
 
-  public async hgetall(key: string): Promise<any> {
-    console.log("hgetall key:", key);
-    return await this.client.hgetall(key);
+  /** Get all fields and values in a Redis hash */
+  public async hgetall(key: string): Promise<Record<string, string>> {
+    try {
+      console.log(`Fetching all fields for key: ${key}`);
+      return await this.client.hgetall(key);
+    } catch (error) {
+      console.error(`Redis HGETALL error for key: ${key}`, error);
+      return {};
+    }
   }
 
+  /** Expire a key after a given number of seconds */
   public async expire(key: string, seconds: number): Promise<number> {
-    return await this.client.expire(key, seconds);
+    try {
+      return await this.client.expire(key, seconds);
+    } catch (error) {
+      console.error(`Redis EXPIRE error for key: ${key}`, error);
+      return 0;
+    }
   }
 
+  /** Increment a field in a Redis hash */
   public async hincrby(key: string, field: string, incrementBy: number): Promise<number> {
-    return await this.client.hincrby(key, field, incrementBy);
+    try {
+      return await this.client.hincrby(key, field, incrementBy);
+    } catch (error) {
+      console.error(`Redis HINCRBY error for key: ${key}, field: ${field}`, error);
+      return 0;
+    }
   }
 
+  /** Quit the Redis client */
   public async quit(): Promise<void> {
-    await this.client.quit();
+    try {
+      await this.client.quit();
+    } catch (error) {
+      console.error("Error while closing Redis connection", error);
+    }
+  }
+
+  /** Batch Execution using Redis Pipelining */
+  public async execBatch(commands: Array<[string, ...any[]]>): Promise<any[]> {
+    try {
+      const pipeline = this.client.pipeline();
+      commands.forEach((cmd) => pipeline[cmd[0]](...cmd.slice(1)));
+      return await pipeline.exec();
+    } catch (error) {
+      console.error("Redis batch execution error", error);
+      return [];
+    }
   }
 }
 
@@ -321,19 +404,21 @@ export class RedisManager {
     }
 
     return this._setupMetricsClientPromise
-      .then(() => this._promisifiedMetricsClient.hgetall(Utilities.getDeploymentKeyLabelsHash(deploymentKey)))
-      .then((metrics) => {
-        // Redis returns numerical values as strings, handle parsing here.
-        if (metrics) {
-          Object.keys(metrics).forEach((metricField) => {
-            if (!isNaN(metrics[metricField])) {
-              metrics[metricField] = +metrics[metricField];
-            }
-          });
-        }
-
-        return <DeploymentMetrics>metrics;
-      });
+    .then(() => this._promisifiedMetricsClient.hgetall(Utilities.getDeploymentKeyLabelsHash(deploymentKey)))
+    .then((metrics) => {
+      if (metrics) {
+        const parsedMetrics: Record<string, number> = {};
+  
+        Object.keys(metrics).forEach((metricField) => {
+          const value = Number(metrics[metricField]);
+          parsedMetrics[metricField] = isNaN(value) ? 0 : value; // Handle NaN cases safely
+        });
+  
+        return parsedMetrics as DeploymentMetrics; // Ensure it matches DeploymentMetrics type
+      }
+  
+      return {} as DeploymentMetrics; // Handle empty case safely
+    });  
   }
 
   public recordUpdate(currentDeploymentKey: string, currentLabel: string, previousDeploymentKey?: string, previousLabel?: string) {

@@ -1163,7 +1163,6 @@ describe("Acquisition Rest API", () => {
               redisManager
                 .getMetricsWithDeploymentKey(deployment.key)
                 .then((metrics: any) => {
-                  console.log("🚀 ~ .then ~ redis.Utilities:", redis.Utilities);
                   assert.equal(metrics[redis.Utilities.getLabelActiveCountField("1.0.0")], 1);
                   assert.equal(metrics[redis.Utilities.getLabelActiveCountField("v2")], 1);
                   assert.equal(metrics[redis.Utilities.getLabelStatusField("v2", redis.DEPLOYMENT_SUCCEEDED)], 1);

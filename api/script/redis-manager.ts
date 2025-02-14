@@ -3,11 +3,9 @@
 
 import * as assert from "assert";
 import * as express from "express";
-import * as q from "q";
 // import * as redis from "redis";
 import { Cluster, ClusterOptions, Redis, ClusterNode } from "ioredis"
 
-import Promise = q.Promise;
 import { ClusterConfig } from "aws-sdk/clients/opensearch";
 import { type } from "os";
 import { sendErrorToDatadog } from "./utils/tracer";
@@ -66,59 +64,57 @@ class PromisifiedRedisClient {
     this.client = client;
   }
 
-  public set(key: string, value: string, expiry?: number): Promise<void> {
-    const args = expiry ? [key, value, "EX", expiry] : [key, value];
-    return q.ninvoke(this.client, "set", ...args);
+  public async set(key: string, value: string, expiry?: number): Promise<void> {
+    if (expiry) {
+      await this.client.set(key, value, "EX", expiry);
+    } else {
+      await this.client.set(key, value);
+    }
   }
 
-  public get(key: string): Promise<string | null> {
-    return q.ninvoke(this.client, "get", key);
+  public async get(key: string): Promise<string | null> {
+    return await this.client.get(key);
   }
 
-  public exists(...keys: string[]): Promise<number> {
-    return q.ninvoke(this.client, "exists", ...keys);
+  public async exists(...keys: string[]): Promise<number> {
+    return await this.client.exists(...keys);
   }
 
-  public hget(key: string, field: string): Promise<string | null> {
-    return q.ninvoke(this.client, "hget", key, field);
+  public async hget(key: string, field: string): Promise<string | null> {
+    return await this.client.hget(key, field);
   }
 
-  public hdel(key: string, field: string): Promise<string | null> {
-    return q.ninvoke(this.client, "hdel", key, field);
+  public async hdel(key: string, field: string): Promise< number| null> {
+    return await this.client.hdel(key, field);
   }
 
-  public hset(key: string, field: string, value: string): Promise<number> {
-    return q.ninvoke(this.client, "hset", key, field, value);
+  public async hset(key: string, field: string, value: string): Promise<number> {
+    return await this.client.hset(key, field, value);
   }
 
-  public del(key: string): Promise<number> {
-    return q.ninvoke(this.client, "del", key);
+  public async del(key: string): Promise<number> {
+    return await this.client.del(key);
   }
 
-  public ping(): Promise<string> {
-    return q.ninvoke(this.client, "ping");
+  public async ping(): Promise<string> {
+    return await this.client.ping();
   }
 
-  public hgetall(key: string): Promise<any> {
+  public async hgetall(key: string): Promise<any> {
     console.log("hgetall key:", key);
-    return q.ninvoke(this.client, "hgetall", key);
+    return await this.client.hgetall(key);
   }
 
-  // public execBatch(redisBatchClient: BatchC): Promise<any[]> {
-  //   new Redis().pipeline();
-  //   return q.ninvoke<any[]>(redisBatchClient, "exec");
-  // }
-
-  public expire(key: string, seconds: number): Promise<number> {
-    return q.ninvoke(this.client, "expire", key, seconds);
+  public async expire(key: string, seconds: number): Promise<number> {
+    return await this.client.expire(key, seconds);
   }
 
-  public hincrby(key: string, field: string, incrementBy: number): Promise<number> {
-    return q.ninvoke(this.client, "hincrby", key, field, incrementBy);
+  public async hincrby(key: string, field: string, incrementBy: number): Promise<number> {
+    return await this.client.hincrby(key, field, incrementBy);
   }
 
-  public quit(): Promise<void> {
-    return q.ninvoke(this.client, "quit");
+  public async quit(): Promise<void> {
+    await this.client.quit();
   }
 }
 
@@ -211,16 +207,16 @@ export class RedisManager {
 
   public checkHealth(): Promise<void> {
     if (!this.isEnabled) {
-      return q.reject<void>("Redis manager is not enabled");
+      return Promise.reject<void>("Redis manager is not enabled");
     }
 
     console.log("Starting Redis health check...");
-    return q
+    return Promise
       .all([
         this._promisifiedOpsClient.ping().then(() => console.log("Ops Client Ping successful")),
         this._promisifiedMetricsClient.ping().then(() => console.log("Metrics Client Ping successful")),
       ])
-      .spread(() => {
+      .then(() => {
         console.log("Redis health check passed.");
       })
       .catch((err) => {
@@ -238,15 +234,15 @@ export class RedisManager {
    */
   public getCachedResponse(expiryKey: string, url: string): Promise<CacheableResponse> {
     if (!this.isEnabled) {
-      return q<CacheableResponse>(null);
+      return Promise.resolve(<CacheableResponse>(null));
     }
 
     return this._promisifiedOpsClient.hget(expiryKey, url).then((serializedResponse: string): Promise<CacheableResponse> => {
       if (serializedResponse) {
         const response = <CacheableResponse>JSON.parse(serializedResponse);
-        return q<CacheableResponse>(response);
+        return Promise.resolve(<CacheableResponse>(response));
       } else {
-        return q<CacheableResponse>(null);
+        return Promise.resolve(<CacheableResponse>(null));
       }
     });
   }
@@ -259,7 +255,7 @@ export class RedisManager {
    */
   public setCachedResponse(expiryKey: string, url: string, response: CacheableResponse): Promise<void> {
     if (!this.isEnabled) {
-      return q<void>(null);
+      return Promise.resolve(<void>(null));
     }
 
     // Store response in cache with a timed expiry
@@ -281,7 +277,7 @@ export class RedisManager {
 
   public invalidateCache(expiryKey: string): Promise<void> {
     
-    if (!this.isEnabled) return q(<void>null);
+    if (!this.isEnabled) return Promise.resolve(<void>null);
 
     return this._promisifiedOpsClient.del(expiryKey).then(() => {});
   }
@@ -290,7 +286,7 @@ export class RedisManager {
   // or 1 by default. If the field does not exist, it will be created with the value of 1.
   public incrementLabelStatusCount(deploymentKey: string, label: string, status: string): Promise<void> {
     if (!this.isEnabled) {
-      return q(<void>null);
+      return Promise.resolve(<void>null);
     }
 
     const hash: string = Utilities.getDeploymentKeyLabelsHash(deploymentKey);
@@ -301,7 +297,7 @@ export class RedisManager {
 
   public clearMetricsForDeploymentKey(deploymentKey: string): Promise<void> {
     if (!this.isEnabled) {
-      return q(<void>null);
+      return Promise.resolve(<void>null);
     }
 
     return this._setupMetricsClientPromise
@@ -321,7 +317,7 @@ export class RedisManager {
   // { "v1:DeploymentSucceeded": 123, "v1:DeploymentFailed": 4, "v1:Active": 123 ... }
   public getMetricsWithDeploymentKey(deploymentKey: string): Promise<DeploymentMetrics> {
     if (!this.isEnabled) {
-      return q(<DeploymentMetrics>null);
+      return Promise.resolve(<DeploymentMetrics>null);
     }
 
     return this._setupMetricsClientPromise
@@ -342,7 +338,7 @@ export class RedisManager {
 
   public recordUpdate(currentDeploymentKey: string, currentLabel: string, previousDeploymentKey?: string, previousLabel?: string) {
     if (!this.isEnabled) {
-      return q(<void>null);
+      return Promise.resolve(<void>null);
     }
 
     return this._setupMetricsClientPromise
@@ -367,7 +363,7 @@ export class RedisManager {
 
   public removeDeploymentKeyClientActiveLabel(deploymentKey: string, clientUniqueId: string) {
     if (!this.isEnabled) {
-      return q(<void>null);
+      return Promise.resolve(<void>null);
     }
 
     return this._setupMetricsClientPromise
@@ -380,7 +376,7 @@ export class RedisManager {
 
   // For unit tests only
   public close(): Promise<void> {
-    const promiseChain: Promise<void> = q(<void>null);
+    const promiseChain: Promise<void> = Promise.resolve(<void>null);
     if (!this._opsClient && !this._metricsClient) return promiseChain;
 
     return promiseChain
@@ -392,7 +388,7 @@ export class RedisManager {
   /* deprecated */
   public getCurrentActiveLabel(deploymentKey: string, clientUniqueId: string): Promise<string> {
     if (!this.isEnabled) {
-      return q(<string>null);
+      return Promise.resolve(<string>null);
     }
 
     return this._setupMetricsClientPromise.then(() =>
@@ -403,7 +399,7 @@ export class RedisManager {
   /* deprecated */
   public updateActiveAppForClient(deploymentKey: string, clientUniqueId: string, toLabel: string, fromLabel?: string): Promise<void> {
     if (!this.isEnabled) {
-      return q(<void>null);
+      return Promise.resolve(<void>null);
     }
 
     return this._setupMetricsClientPromise

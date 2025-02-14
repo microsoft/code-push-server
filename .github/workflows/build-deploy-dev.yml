@@ -20,11 +20,9 @@ jobs:
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
-    # - name: create resources
-    #   run: |
-    #    cd api
-    #    az group create --name rg-appservice-codepush-server-dev --location centralus
-    #    az group deployment create -n ghaction --resource-group rg-appservice-codepush-server-dev --template-file codepush-infrastructure.bicep --parameters project_suffix=ftrdev az_location=centralus github_client_id=${{ secrets.OATH_CLIENT_ID }} github_client_secret=${{ secrets.OATH_CLIENT_SECRET }} microsoft_client_id="" microsoft_client_secret=""
+    - name: create resources
+      run: |
+       az group deployment create -n ghaction --resource-group rg-appservice-codepush-server-dev --template-file codepush-infrastructure.bicep --parameters project_suffix=ftrdev az_location=centralus github_client_id=${{ secrets.OATH_CLIENT_ID }} github_client_secret=${{ secrets.OATH_CLIENT_SECRET }} microsoft_client_id="" microsoft_client_secret=""
 
     - name: Setup Node 
       uses: actions/setup-node@v3

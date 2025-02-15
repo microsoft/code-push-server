@@ -436,6 +436,7 @@ describe("Acquisition Rest API", () => {
 
     it("returns 200 and optional v3 update from v2 labelled request", (done) => {
       requestParameters.deploymentKey = deployment.key;
+      requestParameters.packageHash = previousPackageHash;
       requestParameters.appVersion = appPackage.appVersion;
       request(server || serverUrl)
         .get(

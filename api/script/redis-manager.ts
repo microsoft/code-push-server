@@ -189,16 +189,16 @@ class PromisifiedRedisClient {
   }
 
   /** Batch Execution using Redis Pipelining */
-  public async execBatch(commands: Array<[string, ...any[]]>): Promise<any[]> {
-    try {
-      const pipeline = this.client.pipeline();
-      commands.forEach((cmd) => pipeline[cmd[0]](...cmd.slice(1)));
-      return await pipeline.exec();
-    } catch (error) {
-      console.error("Redis batch execution error", error);
-      return [];
-    }
-  }
+  // public async execBatch(commands: Array<[string, ...any[]]>): Promise<any[]> {
+  //   try {
+  //     const pipeline = this.client.pipeline();
+  //     commands.forEach((cmd) => pipeline[cmd[0]](...cmd.slice(1)));
+  //     return await pipeline.exec();
+  //   } catch (error) {
+  //     console.error("Redis batch execution error", error);
+  //     return [];
+  //   }
+  // }
 }
 
 export class RedisManager {

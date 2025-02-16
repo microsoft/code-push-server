@@ -1,4 +1,3 @@
-// test/acquisition.test.ts
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
@@ -14,10 +13,26 @@ import * as utils from "./utils.test";
 
 import { AzureStorage } from "../script/storage/azure-storage";
 import { JsonStorage } from "../script/storage/json-storage";
-import { S3Storage } from "../script/storage/aws-storage";
+import {S3Storage} from "../script/storage/aws-storage"
 import { UpdateCheckRequest } from "../script/types/rest-definitions";
 import { SDK_VERSION_HEADER } from "../script/utils/rest-headers";
 
+//function to mimic defer function in q package
+export function defer<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: any) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: any) => void;
+};
 describe("Acquisition Rest API", () => {
   let account: storage.Account;
   let app: storage.App;
@@ -34,25 +49,26 @@ describe("Acquisition Rest API", () => {
   beforeEach((): Promise<void> => {
     let useJsonStorage: boolean = !process.env.TEST_AZURE_STORAGE && !process.env.AZURE_ACQUISITION_URL;
 
-    return Promise.resolve()
+    return Promise.resolve<void>(null)
       .then(() => {
         if (process.env.AZURE_ACQUISITION_URL) {
           serverUrl = process.env.AZURE_ACQUISITION_URL;
           isAzureServer = true;
           storageInstance = useJsonStorage ? new JsonStorage() : new AzureStorage();
         } else {
-          return new Promise<void>((resolve, reject) => {
-            defaultServer.start(function (err: Error, appInstance: express.Express, serverStorage: storage.Storage) {
-              if (err) {
-                reject(err);
-                return;
-              }
+          let deferred: Deferred<void> = defer<void>();
 
-              server = appInstance;
-              storageInstance = serverStorage;
-              resolve();
-            }, useJsonStorage);
-          });
+          defaultServer.start(function (err: Error, app: express.Express, serverStorage: storage.Storage) {
+            if (err) {
+              deferred.reject(err);
+            }
+
+            server = app;
+            storageInstance = serverStorage;
+            deferred.resolve(null);
+          }, useJsonStorage);
+
+          return deferred.promise;
         }
       })
       .then(() => {
@@ -117,7 +133,7 @@ describe("Acquisition Rest API", () => {
   });
 
   afterEach((): Promise<void> => {
-    return Promise.resolve()
+    return Promise.resolve(<void>null)
       .then(() => {
         if (storageInstance instanceof JsonStorage) {
           return storageInstance.dropAll();
@@ -153,7 +169,6 @@ describe("Acquisition Rest API", () => {
         appVersion: "1.0.0",
         packageHash: "hash009",
         isCompanion: false,
-        label: "", // Ensure label is defined
       };
 
       done();
@@ -712,7 +727,6 @@ describe("Acquisition Rest API", () => {
           appVersion: "1.0.0",
           packageHash: "hash100",
           isCompanion: false,
-          label: "", // Ensure label is defined
         };
 
         done();
@@ -746,8 +760,9 @@ describe("Acquisition Rest API", () => {
             "/updateCheck?" +
               queryString.stringify({
                 deploymentKey: requestParameters.deploymentKey,
-                appVersion: requestParameters.appVersion,
                 packageHash: requestParameters.packageHash,
+                appVersion: requestParameters.appVersion,
+                isCompanion: requestParameters.isCompanion,
               })
           )
           .expect(200)
@@ -769,8 +784,9 @@ describe("Acquisition Rest API", () => {
             "/updateCheck?" +
               queryString.stringify({
                 deploymentKey: requestParameters.deploymentKey,
-                appVersion: requestParameters.appVersion,
                 packageHash: requestParameters.packageHash,
+                appVersion: requestParameters.appVersion,
+                isCompanion: requestParameters.isCompanion,
               })
           )
           .expect(200)
@@ -784,16 +800,17 @@ describe("Acquisition Rest API", () => {
           });
       });
 
-      it("returns 200 and available update for 2.0.0 binary for older package hash", (done) => {
+      it("returns 200 and update available for 2.0.0 binary for older package hash", (done) => {
         requestParameters.appVersion = "2.0.0";
         requestParameters.packageHash = "hash202";
+        console.log("--->>>", JSON.stringify(requestParameters, null,2))
         request(server || serverUrl)
           .get(
             "/updateCheck?" +
               queryString.stringify({
                 deploymentKey: requestParameters.deploymentKey,
-                appVersion: requestParameters.appVersion,
                 packageHash: requestParameters.packageHash,
+                appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
               })
           )
@@ -801,6 +818,7 @@ describe("Acquisition Rest API", () => {
           .end(function (err: any, result: any) {
             if (err) throw err;
             let response = JSON.parse(result.text);
+            console.log("--->>>resp", response)
             assert.equal(response.updateInfo.isAvailable, true);
             assert.equal(response.updateInfo.appVersion, "2.0.0");
             assert.equal(response.updateInfo.label, "v6");
@@ -808,17 +826,19 @@ describe("Acquisition Rest API", () => {
           });
       });
 
-      it("returns 200 and available mandatory update for 3.0.0 binary on older package hash", (done) => {
+      it("returns 200 and update available for 3.0.0 binary on older package hash", (done) => {
         requestParameters.appVersion = "3.0.0";
         requestParameters.packageHash = "hash304";
+
+        //console.log("====>>>", JSON.stringify(requestParameters, null,2))
 
         request(server || serverUrl)
           .get(
             "/updateCheck?" +
               queryString.stringify({
                 deploymentKey: requestParameters.deploymentKey,
-                appVersion: requestParameters.appVersion,
                 packageHash: requestParameters.packageHash,
+                appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
               })
           )
@@ -826,6 +846,7 @@ describe("Acquisition Rest API", () => {
           .end(function (err: any, result: any) {
             if (err) throw err;
             let response = JSON.parse(result.text);
+            console.log("====>>>", response)
 
             assert.equal(response.updateInfo.isAvailable, true);
             assert.equal(response.updateInfo.isMandatory, true);
@@ -843,8 +864,8 @@ describe("Acquisition Rest API", () => {
             "/updateCheck?" +
               queryString.stringify({
                 deploymentKey: requestParameters.deploymentKey,
-                appVersion: requestParameters.appVersion,
                 packageHash: requestParameters.packageHash,
+                appVersion: requestParameters.appVersion,
                 isCompanion: requestParameters.isCompanion,
               })
           )
@@ -854,6 +875,169 @@ describe("Acquisition Rest API", () => {
             let response = JSON.parse(result.text);
             assert.equal(response.updateInfo.isAvailable, false);
             assert.equal(response.updateInfo.updateAppVersion, false);
+            done();
+          });
+      });
+    });
+
+    describe("Updates can target a range of binary versions", () => {
+      let account2: storage.Account;
+      let app2: storage.App;
+      let deployment2: storage.Deployment;
+      let package2: storage.Package;
+
+      beforeEach(() => {
+        account2 = utils.makeAccount();
+        return storageInstance
+          .addAccount(account2)
+          .then((accountId: string) => {
+            account2.id = accountId;
+            app2 = utils.makeStorageApp();
+            return storageInstance.addApp(account2.id, app2);
+          })
+          .then((addedApp: storage.App) => {
+            app2.id = addedApp.id;
+            deployment2 = utils.makeStorageDeployment();
+            return storageInstance.addDeployment(account2.id, app2.id, deployment2);
+          })
+          .then((deploymentId: string) => {
+            deployment2.id = deploymentId;
+            package2 = utils.makePackage("*", /*isMandatory*/ false, "hash100", "v1");
+            deployment2.package = package2;
+            return storageInstance.commitPackage(account2.id, app2.id, deployment2.id, deployment2.package);
+          })
+          .then(() => {
+            package2 = utils.makePackage("^1.0.0", /*isMandatory*/ true, "hash101", "v2");
+            deployment2.package = package2;
+            return storageInstance.commitPackage(account2.id, app2.id, deployment2.id, deployment2.package);
+          })
+          .then(() => {
+            package2 = utils.makePackage(">=1.1.0 <1.2.0", /*isMandatory*/ false, "hash103", "v3");
+            deployment2.package = package2;
+            return storageInstance.commitPackage(account2.id, app2.id, deployment2.id, deployment2.package);
+          });
+      });
+
+      beforeEach((done) => {
+        requestParameters = <UpdateCheckRequest>{
+          deploymentKey: deployment2.key,
+          appVersion: "2.0.0",
+          packageHash: "hash100",
+          isCompanion: false,
+        };
+
+        done();
+      });
+
+      it("returns 200 and update targeting all versions for 2.0.0 binary", (done) => {
+        request(server || serverUrl)
+          .get(
+            "/updateCheck?" +
+              queryString.stringify({
+                deploymentKey: requestParameters.deploymentKey,
+                appVersion: requestParameters.appVersion,
+                isCompanion: requestParameters.isCompanion,
+              })
+          )
+          .expect(200)
+          .end(function (err: any, result: any) {
+            if (err) throw err;
+            let response = JSON.parse(result.text);
+            assert.equal(response.updateInfo.isAvailable, true);
+            assert.equal(response.updateInfo.appVersion, "2.0.0");
+            assert.equal(response.updateInfo.isMandatory, false);
+            assert.equal(response.updateInfo.label, "v1");
+            done();
+          });
+      });
+
+      it("returns 200 and update targeting major version 1 and minor version 0 and any patch version for 1.0.1 binary", (done) => {
+        request(server || serverUrl)
+          .get(
+            "/updateCheck?" +
+              queryString.stringify({
+                deploymentKey: requestParameters.deploymentKey,
+                appVersion: "1.0.1",
+                isCompanion: requestParameters.isCompanion,
+              })
+          )
+          .expect(200)
+          .end(function (err: any, result: any) {
+            if (err) throw err;
+            let response = JSON.parse(result.text);
+            assert.equal(response.updateInfo.isAvailable, true);
+            assert.equal(response.updateInfo.appVersion, "1.0.1");
+            assert.equal(response.updateInfo.isMandatory, true);
+            assert.equal(response.updateInfo.label, "v2");
+            done();
+          });
+      });
+
+      it("returns 200, no update available, and the binary update notification for a 0.0.1 binary that already got the latest applicable package hash", (done) => {
+        requestParameters.packageHash = "hash100";
+        request(server || serverUrl)
+          .get(
+            "/updateCheck?" +
+              queryString.stringify({
+                deploymentKey: requestParameters.deploymentKey,
+                packageHash: requestParameters.packageHash,
+                appVersion: "0.0.1",
+                isCompanion: requestParameters.isCompanion,
+              })
+          )
+          .expect(200)
+          .end(function (err: any, result: any) {
+            if (err) throw err;
+            let response = JSON.parse(result.text);
+            assert.equal(response.updateInfo.isAvailable, false);
+            assert.equal(response.updateInfo.updateAppVersion, true);
+            assert.equal(response.updateInfo.appVersion, ">=1.1.0 <1.2.0");
+            done();
+          });
+      });
+
+      it("returns 200 and no update available for a 3.0.0 binary that already got the latest applicable package hash", (done) => {
+        requestParameters.packageHash = "hash100";
+        request(server || serverUrl)
+          .get(
+            "/updateCheck?" +
+              queryString.stringify({
+                deploymentKey: requestParameters.deploymentKey,
+                packageHash: requestParameters.packageHash,
+                appVersion: "3.0.0",
+                isCompanion: requestParameters.isCompanion,
+              })
+          )
+          .expect(200)
+          .end(function (err: any, result: any) {
+            if (err) throw err;
+            let response = JSON.parse(result.text);
+            assert.equal(response.updateInfo.isAvailable, false);
+            assert.equal(response.updateInfo.updateAppVersion, false);
+            done();
+          });
+      });
+
+      it("returns 200 and update available for 1.1.5 binary with older package hash", (done) => {
+        requestParameters.appVersion = "1.1.5";
+        requestParameters.packageHash = "hash100";
+        request(server || serverUrl)
+          .get(
+            "/updateCheck?" +
+              queryString.stringify({
+                deploymentKey: requestParameters.deploymentKey,
+                packageHash: requestParameters.packageHash,
+                appVersion: requestParameters.appVersion,
+                isCompanion: requestParameters.isCompanion,
+              })
+          )
+          .expect(200)
+          .end(function (err: any, result: any) {
+            if (err) throw err;
+            let response = JSON.parse(result.text);
+            assert.equal(response.updateInfo.isAvailable, true);
+            assert.equal(response.updateInfo.appVersion, "1.1.5");
+            assert.equal(response.updateInfo.label, "v3");
             done();
           });
       });
@@ -904,7 +1088,7 @@ describe("Acquisition Rest API", () => {
             return storageInstance.getPackageHistory(account2.id, app2.id, deployment2.id);
           })
           .then((packageHistory: storage.Package[]) => {
-            packageHistory[2].isDisabled = true; // Disable the third package (v3)
+            packageHistory[2].isDisabled = true;
             return storageInstance.updatePackageHistory(account2.id, app2.id, deployment2.id, packageHistory);
           });
       });
@@ -914,7 +1098,6 @@ describe("Acquisition Rest API", () => {
           deploymentKey: deployment2.key,
           appVersion: "2.0.0",
           isCompanion: false,
-          label: "", // Ensure label is defined
         };
 
         done();
@@ -1119,7 +1302,7 @@ describe("Acquisition Rest API", () => {
               });
           });
         }
-
+      
         sendReport(
           JSON.stringify({
             deploymentKey: deployment.key,
@@ -1179,7 +1362,7 @@ describe("Acquisition Rest API", () => {
 
       it("returns 200 and increments the correct counters in Redis when switching deployment keys if SDK version is >=1.5.2-beta", (done) => {
         function sendReport(statusReport: string): Promise<void> {
-          return new Promise<void>((resolve, reject) => {
+          return  new Promise<void>((resolve, reject) => {
             request(server || serverUrl)
               .post("/reportStatus/deploy")
               .set("Content-Type", "application/json")
@@ -1189,9 +1372,9 @@ describe("Acquisition Rest API", () => {
               .end((err) => (err ? reject(err) : resolve()));
           });
         }
-
+      
         let anotherDeployment: storage.Deployment = utils.makeStorageDeployment();
-
+      
         storageInstance
           .addDeployment(account.id, app.id, anotherDeployment)
           .then((deploymentId: string) => {
@@ -1273,7 +1456,7 @@ describe("Acquisition Rest API", () => {
               done();
             }
           })
-          .catch((err: any) => done(err));
+          .catch((err: any) => done(err));   
       });
     });
 

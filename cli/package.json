@@ -27,7 +27,7 @@
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.29.4",
     "opener": "^1.5.2",
-    "parse-duration": "1.1.0",
+    "parse-duration": "^1.1.0",
     "plist": "^3.0.6",
     "progress": "^2.0.3",
     "prompt": "^1.3.0",

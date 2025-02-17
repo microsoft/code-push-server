@@ -3,6 +3,7 @@ import * as cookieSession from "cookie-session";
 import { Request, Response, Router, RequestHandler } from "express";
 import * as storage from "../storage/storage";
 import rateLimit from "express-rate-limit";
+import { sendErrorToDatadog } from "../utils/tracer";
 
 // Replace with your actual Google Client ID (from Google Developer Console)
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "<Your Google Client ID>";
@@ -44,6 +45,7 @@ export class Authentication {
       const payload = ticket.getPayload();
       return payload; // Return the user info from Google token
     } catch (error) {
+      sendErrorToDatadog(new Error("401: Unauthorised Invalid Google Token"));
       throw new Error("Invalid Google token");
     }
   }
@@ -65,6 +67,7 @@ export class Authentication {
     try {
       return await this._storageInstance.getAccount(userId);
     } catch (e) {
+      sendErrorToDatadog(new Error("403: User Not found"));
       throw new Error("No User found");
     }
   }

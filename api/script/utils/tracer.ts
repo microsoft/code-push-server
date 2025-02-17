@@ -1,14 +1,12 @@
 import ddTrace from 'dd-trace'
-ddTrace.init() // initialized in a different file to avoid hoisting.
+ddTrace.init({
+      profiling: true,
+      env: 'load',
+      service: 'code-push-server',
+      version: '8.2.4'
+    })
 export default ddTrace
 
-/*({
-  profiling: true,
-  env: 'load',
-  service: 'code-push-server',
-  version: '1.8.1.6'
-})*/
-ddTrace
 export const getTraceId = () => {
   const span = ddTrace.scope().active()
   return span ? span.context().toTraceId() : undefined

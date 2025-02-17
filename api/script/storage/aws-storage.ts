@@ -315,15 +315,30 @@ export class S3Storage implements storage.Storage {
 
         // Ensure the database exists, then initialize Sequelize
         this.setupPromise = this.createDatabaseIfNotExists().then(() => {
-          this.sequelize = new Sequelize(
-              process.env.DB_NAME || DB_NAME,
-              process.env.DB_USER,
-              process.env.DB_PASS || DB_PASS,
-              {
-                  host: process.env.DB_HOST || DB_HOST,
-                  dialect: 'mysql',
+          this.sequelize = new Sequelize({
+            database: process.env.DB_NAME || DB_NAME,
+            dialect: 'mysql',
+            replication: {
+                write: {
+                    host: process.env.DB_HOST || DB_HOST,
+                    username: process.env.DB_USER || DB_USER,
+                    password: process.env.DB_PASS || DB_PASS
+                },
+                read: [
+                    {
+                        host: process.env.DB_HOST_READER,
+                        username: process.env.DB_USER || DB_USER,
+                        password: process.env.DB_PASS || DB_PASS
+                    }
+                ]
+            },
+            pool: {
+                max: 50,
+                min: 5,
+                acquire: 5000,
+                idle: 1000
               }
-          );
+            });
           return this.setup();
       });   
     }
@@ -1322,16 +1337,28 @@ export class S3Storage implements storage.Storage {
         return this.setupPromise
           .then(async () => {
             let deployment = await this.sequelize.models[MODELS.DEPLOYMENT].findOne({ where: { key: deploymentKey } });
+            if (!deployment?.dataValues) {
+              console.warn(`Deployment not found for key: ${deploymentKey}`);
+              return [];
+            }
             return deployment.dataValues;
           })
           .then((deployment: storage.Deployment) => {
             // Fetch all packages associated with the deploymentId, ordered by uploadTime
+            if (!deployment?.id) {
+              console.warn("Skipping package lookup due to missing deployment data.");
+              return [];
+            }
             return this.sequelize.models[MODELS.PACKAGE].findAll({
               where: { deploymentId: deployment.id },
               order: [['uploadTime', 'ASC']], // Sort by upload time to maintain historical order
             });
           })
           .then((packageRecords: any[]) => {
+            if (!Array.isArray(packageRecords) || packageRecords.length === 0) {
+              console.warn("No packages found for the given deployment.");
+              return [];
+            }
             // Map each package record to the storage.Package format
             return packageRecords.map((pkgRecord) => this.formatPackage(pkgRecord.dataValues));
           })

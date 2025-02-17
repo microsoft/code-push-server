@@ -4,7 +4,6 @@
 import * as express from "express";
 import * as fs from "fs";
 import * as http from "http";
-import * as q from "q";
 import * as stream from "stream";
 
 import * as storage from "./storage";

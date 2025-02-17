@@ -803,7 +803,6 @@ describe("Acquisition Rest API", () => {
       it("returns 200 and update available for 2.0.0 binary for older package hash", (done) => {
         requestParameters.appVersion = "2.0.0";
         requestParameters.packageHash = "hash202";
-        console.log("--->>>", JSON.stringify(requestParameters, null,2))
         request(server || serverUrl)
           .get(
             "/updateCheck?" +
@@ -818,7 +817,6 @@ describe("Acquisition Rest API", () => {
           .end(function (err: any, result: any) {
             if (err) throw err;
             let response = JSON.parse(result.text);
-            console.log("--->>>resp", response)
             assert.equal(response.updateInfo.isAvailable, true);
             assert.equal(response.updateInfo.appVersion, "2.0.0");
             assert.equal(response.updateInfo.label, "v6");
@@ -830,7 +828,6 @@ describe("Acquisition Rest API", () => {
         requestParameters.appVersion = "3.0.0";
         requestParameters.packageHash = "hash304";
 
-        //console.log("====>>>", JSON.stringify(requestParameters, null,2))
 
         request(server || serverUrl)
           .get(
@@ -846,7 +843,6 @@ describe("Acquisition Rest API", () => {
           .end(function (err: any, result: any) {
             if (err) throw err;
             let response = JSON.parse(result.text);
-            console.log("====>>>", response)
 
             assert.equal(response.updateInfo.isAvailable, true);
             assert.equal(response.updateInfo.isMandatory, true);

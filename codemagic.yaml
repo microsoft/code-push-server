@@ -47,6 +47,8 @@ definitions:
           --env LOGGING=true \
           --name code-push-server \
           -p 0.0.0.0:3001:3000 \
+          --log-driver local \
+          --log-opt max-file=$DOCKER_LOG_OPT_MAX_FILE \
           gcr.io/$GCLOUD_PROJECT_NAME/$ENV/code-push-server
         EOF"
 

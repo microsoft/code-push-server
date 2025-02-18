@@ -1,9 +1,9 @@
 import ddTrace from 'dd-trace'
 ddTrace.init({
-      profiling: true,
+      profiling: false,
       env: 'load',
       service: 'code-push-server',
-      version: '8.2.4'
+      version: '8.2.5'
     })
 export default ddTrace
 

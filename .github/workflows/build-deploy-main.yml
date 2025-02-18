@@ -11,7 +11,10 @@ jobs:
   create_infrastructure:
     name: create_infrastructure
     runs-on: ubuntu-latest
-    environment: dev
+    env:
+      TF_WORKSPACE: "code-push-server-nonprod"
+      TF_IN_AUTOMATION: true
+      name: dev
     permissions:
       contents: read 
     steps: 
@@ -21,6 +24,10 @@ jobs:
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}   
+    - name: Setup Terraform  
+      uses: hashicorp/setup-terraform@v3
+      with:
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}    
     - name: Initialise Terraform
       working-directory: ./terraform
       run: terraform init -var environment="nonprod" location="centralus" 

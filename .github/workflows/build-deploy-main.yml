@@ -30,10 +30,10 @@ jobs:
         cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}    
     - name: Initialise Terraform
       working-directory: ./terraform
-      run: terraform init -var environment="nonprod" location="centralus" 
+      run: terraform init 
     - name: Apply Terraform
       working-directory: ./terraform
-      run: terraform apply -var environment="nonprod" location="centralus"  github_id=${{ secrets.OATH_CLIENT_ID }} github_secret=${{ secrets.OATH_CLIENT_SECRET }} -input=false -auto-approve 
+      run: terraform apply -input=false -auto-approve 
     
 #   build:
 #     name: build

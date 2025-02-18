@@ -38,7 +38,7 @@ resource "azurerm_app_service" "root" {
 
 
 resource "azurerm_storage_account" "storage_account" {
-  name                     = "codepush-server-storage-${var.environment}"
+  name                     = "codepushstorage${var.environment}"
   location                 = azurerm_resource_group.root.location
   resource_group_name      = azurerm_resource_group.root.name
   account_tier             = "Standard"

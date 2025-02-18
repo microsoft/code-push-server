@@ -9,7 +9,7 @@ import * as passportBearer from "passport-http-bearer";
 import * as passportGitHub from "passport-github2";
 import * as passportWindowsLive from "passport-windowslive";
 import * as superagent from "superagent"
-import rateLimit from "express-rate-limit";
+// import rateLimit from "express-rate-limit";
 
 import * as converterUtils from "../utils/converter";
 import * as restErrorUtils from "../utils/rest-error-handling";
@@ -25,10 +25,10 @@ export interface AuthenticationConfig {
 
 const DEFAULT_SESSION_EXPIRY = 1000 * 60 * 60 * 24 * 60; // 60 days
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-});
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // limit each IP to 100 requests per windowMs
+// });
 
 interface EmailAccount {
   value: string;
@@ -247,7 +247,7 @@ export class PassportAuthentication {
   private setupCommonRoutes(router: Router, providerName: string, strategyName: string): void {
     router.get(
       "/auth/login/" + providerName,
-      limiter,
+      // limiter,
       this._cookieSessionMiddleware,
       (req: Request, res: Response, next: (err?: any) => void): any => {
         req.session["action"] = "login";
@@ -258,7 +258,7 @@ export class PassportAuthentication {
 
     router.get(
       "/auth/register/" + providerName, 
-      limiter,
+      // limiter,
       this._cookieSessionMiddleware,
       (req: Request, res: Response, next: (err?: any) => void): any => {
         if (!PassportAuthentication.isAccountRegistrationEnabled()) {
@@ -274,7 +274,7 @@ export class PassportAuthentication {
 
     router.get(
       "/auth/link/" + providerName,
-      limiter,
+      // limiter,
       this._cookieSessionMiddleware,
       (req: Request, res: Response, next: (err?: any) => void): any => {
         req.session["action"] = "link";
@@ -285,7 +285,7 @@ export class PassportAuthentication {
 
     router.get(
       "/auth/callback/" + providerName,
-      limiter,
+      // limiter,
       this._cookieSessionMiddleware,
       passport.authenticate(strategyName, { failureRedirect: "/auth/login/" + providerName, session: false }),
       (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -417,7 +417,7 @@ export class PassportAuthentication {
       }
     );
 
-    router.get("/accesskey", limiter, this._cookieSessionMiddleware, (req: Request, res: Response): any => {
+    router.get("/accesskey", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
       const accessKey: string = req.session["accessKey"];
       const isNewAccount: boolean = req.session["isNewAccount"];
 

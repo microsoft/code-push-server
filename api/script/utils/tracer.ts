@@ -1,10 +1,5 @@
 import ddTrace from 'dd-trace'
-ddTrace.init({
-      profiling: false,
-      env: 'load',
-      service: 'code-push-server',
-      version: '8.2.5'
-    })
+ddTrace.init()
 export default ddTrace
 
 export const getTraceId = () => {

@@ -73,10 +73,16 @@ resource "azurerm_virtual_network" "virtual_network" {
 }
 
 resource "azurerm_subnet" "subnet" {
-  name                 = "example-subnet"
+  name                 = "codepush-server-subnet-${var.environment}"
   resource_group_name  = azurerm_resource_group.root.name
   virtual_network_name = azurerm_virtual_network.virtual_network.name
   address_prefixes     = ["10.0.1.0/24"]
+    delegation {
+    name = "delegation"
+    service_delegation {
+      name    = "Microsoft.Web/serverFarms"
+    }
+  }
 }
 
 resource "azurerm_redis_cache" "redis" {

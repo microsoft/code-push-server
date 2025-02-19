@@ -77,7 +77,7 @@ resource "azurerm_redis_cache" "redis" {
   public_network_access_enabled = "false"
 
   redis_configuration {
-
+  active_directory_authentication_enabled = "true"
   }
 }
 

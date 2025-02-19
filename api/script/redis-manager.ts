@@ -9,7 +9,6 @@ import { Cluster, ClusterOptions, Redis, ClusterNode } from "ioredis"
 import { ClusterConfig } from "aws-sdk/clients/opensearch";
 import { type } from "os";
 import { sendErrorToDatadog } from "./utils/tracer";
-import { promisify } from "util";
 
 export const DEPLOYMENT_SUCCEEDED = "DeploymentSucceeded";
 export const DEPLOYMENT_FAILED = "DeploymentFailed";
@@ -66,49 +65,49 @@ class PromisifiedRedisClient {
   }
 
   public async set(key: string, value: string, expiry?: number): Promise<void> {
-    const setAsync = promisify(this.client.set).bind(this.client);
+    const setAsync = (this.client.set).bind(this.client);
     const args = expiry ? [key, value, "EX", expiry] : [key, value];
     await setAsync(...args);
   }
 
 public async get(key: string): Promise<string | null> {
-  const getAsync = promisify(this.client.get).bind(this.client);
+  const getAsync = (this.client.get).bind(this.client);
   return await getAsync(key);
   }
 
   public async exists(...keys: string[]): Promise<number> {
-    const existsAsync = promisify(this.client.exists).bind(this.client);
+    const existsAsync = (this.client.exists).bind(this.client);
     return await existsAsync(...keys);
   }
 
   public async hget(key: string, field: string): Promise<string | null> {
-    const hgetAsync = promisify(this.client.hget).bind(this.client);
+    const hgetAsync = (this.client.hget).bind(this.client);
     return await hgetAsync(key, field);
   }
 
   public async hdel(key: string, field: string): Promise<number> {
-    const hdelAsync = promisify(this.client.hdel).bind(this.client);
+    const hdelAsync = (this.client.hdel).bind(this.client);
     return await hdelAsync(key, field);
   }
 
   public async hset(key: string, field: string, value: string): Promise<number> {
-    const hsetAsync = promisify(this.client.hset).bind(this.client);
+    const hsetAsync = (this.client.hset).bind(this.client);
     return await hsetAsync(key, field, value);
   }
 
   public async del(key: string): Promise<number> {
-    const delAsync = promisify(this.client.del).bind(this.client);
+    const delAsync = (this.client.del).bind(this.client);
     return await delAsync(key);
   }
 
   public async ping(): Promise<string> {
-    const pingAsync = promisify(this.client.ping).bind(this.client);
+    const pingAsync = (this.client.ping).bind(this.client);
     return await pingAsync();
   }
 
   public async hgetall(key: string): Promise<any> {
     console.log("hgetall key:", key);
-    const hgetallAsync = promisify(this.client.hgetall).bind(this.client);
+    const hgetallAsync = (this.client.hgetall).bind(this.client);
     return await hgetallAsync(key);
   }
 
@@ -118,17 +117,17 @@ public async get(key: string): Promise<string | null> {
   // }
 
   public async expire(key: string, seconds: number): Promise<number> {
-    const expireAsync = promisify(this.client.expire).bind(this.client);
+    const expireAsync = (this.client.expire).bind(this.client);
     return await expireAsync(key, seconds);
   }
 
   public async hincrby(key: string, field: string, incrementBy: number): Promise<number> {
-    const hincrbyAsync = promisify(this.client.hincrby).bind(this.client);
+    const hincrbyAsync = (this.client.hincrby).bind(this.client);
     return await hincrbyAsync(key, field, incrementBy);
   }
 
   public async quit(): Promise<void> {
-    const quitAsync = promisify(this.client.quit).bind(this.client);
+    const quitAsync = (this.client.quit).bind(this.client);
     await quitAsync();
   }
 }

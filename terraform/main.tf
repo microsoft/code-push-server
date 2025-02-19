@@ -33,8 +33,11 @@ resource "azurerm_app_service" "root" {
     AZURE_STORAGE_ACCESS_KEY = var.redis_storage_access_key
     AZURE_STORAGE_ACCOUNT= var.redis_azure_storage_account
     LOGGING = true
+    WEBSITE_NODE_DEFAULT_VERSION = "18-lts"
+    CORS_ORIGIN = var.server_url
+    SERVER_URL = var.server_url
   }
-
+   
   identity {
     type = "SystemAssigned"
   }

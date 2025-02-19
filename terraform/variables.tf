@@ -31,5 +31,9 @@ variable "redis_azure_storage_account" {
   description = "Azure Redis storage account name"
 }
 
+variable "server_url" {
+  type        = string
+  description = "App service url" 
+}
 
 

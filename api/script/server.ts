@@ -13,7 +13,7 @@ setInterval(() => {
   blocked((time, stack) => {
     console.log(`⚠️ Event loop blocked for ${time}ms!`);
     console.log(stack);
-  }, { threshold: 100 });
+  }, { threshold: 500 });
 }, 5000); // Check every 5 seconds
 
 

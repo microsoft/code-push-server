@@ -1,5 +1,12 @@
 import ddTrace from 'dd-trace'
-ddTrace.init()
+ddTrace.init({
+  profiling: false, // Disable CPU profiling
+  runtimeMetrics: false, // Disable extra runtime metrics
+  logInjection: false, // Reduce log processing
+  reportHostname: false, // Avoid hostname reporting overhead
+  flushInterval: 5000, // Reduce the frequency of requests to Datadog agent
+  experimental: { b3: true }, // Use B3 headers for lower overhead
+});
 export default ddTrace
 
 export const getTraceId = () => {

@@ -37,7 +37,10 @@ resource "azurerm_app_service" "root" {
     CORS_ORIGIN = var.server_url
     SERVER_URL = var.server_url
   }
-   
+   site_config {
+     linux_fx_version = "NODE|18.x"
+     always_on = "true"
+   }
   identity {
     type = "SystemAssigned"
   }

@@ -105,7 +105,7 @@ resource "azurerm_private_endpoint" "redis_private_endpoint" {
   name                = "codepush-redis-private-endpoint-${var.environment}"
   location            = var.location
   resource_group_name = azurerm_resource_group.root.name
-  subnet_id           = "${azurerm_virtual_network.virtual_network.subnet[0].*.id[0]}"
+  subnet_id           ="${azurerm_virtual_network.virtual_network.subnet[0].*.id[0]}" 
 
    private_dns_zone_group {
     name                 = "codepushprivatednsrediszonegroup"

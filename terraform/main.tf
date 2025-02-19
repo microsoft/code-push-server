@@ -66,24 +66,17 @@ resource "azurerm_network_security_group" "network_security" {
 
 
 resource "azurerm_virtual_network" "virtual_network" {
-  name                = "codepush-server-vnet-${var.environment}"
+  name                = "codepush-vnet-${var.environment}"
   location            = azurerm_resource_group.root.location
   resource_group_name = azurerm_resource_group.root.name
   address_space       = ["10.0.0.0/16"]
-}
 
-resource "azurerm_subnet" "subnet" {
-  name                 = "codepush-server-subnet-${var.environment}"
-  resource_group_name  = azurerm_resource_group.root.name
-  virtual_network_name = azurerm_virtual_network.virtual_network.name
-  address_prefixes     = ["10.0.1.0/24"]
-    delegation {
-    name = "delegation"
-    service_delegation {
-      name    = "Microsoft.Web/serverFarms"
-    }
+  subnet {
+    name             = "subnet1"
+    address_prefixes = ["10.0.1.0/24"]
   }
 }
+
 
 resource "azurerm_redis_cache" "redis" {
   name                 = "codepush-server-redis-${var.environment}"
@@ -101,10 +94,6 @@ resource "azurerm_redis_cache" "redis" {
   }
 }
 
-resource "azurerm_app_service_virtual_network_swift_connection" "virtual_network_connection" {
-  app_service_id = azurerm_app_service.root.id
-  subnet_id      = azurerm_subnet.subnet.id
-}
 
 resource "azurerm_private_dns_zone" "dns" {
   name                = "codepush.privatelink.redis.cache.windows.net"
@@ -115,7 +104,7 @@ resource "azurerm_private_endpoint" "redis_private_endpoint" {
   name                = "codepush-redis-private-endpoint-${var.environment}"
   location            = var.location
   resource_group_name = azurerm_resource_group.root.name
-  subnet_id           = azurerm_subnet.subnet.id
+  subnet_id           = "subnet1"
 
    private_dns_zone_group {
     name                 = "codepushprivatednsrediszonegroup"

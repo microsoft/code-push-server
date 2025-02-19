@@ -63,7 +63,7 @@ jobs:
 
   deploy-to-nonprod:
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build, create_infrastructure]
     environment: dev
     steps:
       - name: Download artifact from build job

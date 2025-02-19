@@ -38,11 +38,11 @@ resource "azurerm_app_service" "root" {
     SERVER_URL = var.server_url
   }
   site_config {
-   ip_restriction {
-      name                      = "Allow access from vnet"
-      virtual_network_subnet_id = azurerm_subnet.subnet.id
-      priority                  = "200"
-    }
+#    ip_restriction {
+#       name                      = "Allow access from vnet"
+#       virtual_network_subnet_id = azurerm_subnet.subnet.id
+#       priority                  = "200"
+#     }
   } 
   identity {
     type = "SystemAssigned"
@@ -95,6 +95,7 @@ resource "azurerm_redis_cache" "redis" {
 }
 
 
+
 resource "azurerm_private_dns_zone" "dns" {
   name                = "codepush.privatelink.redis.cache.windows.net"
   resource_group_name = azurerm_resource_group.root.name
@@ -104,7 +105,7 @@ resource "azurerm_private_endpoint" "redis_private_endpoint" {
   name                = "codepush-redis-private-endpoint-${var.environment}"
   location            = var.location
   resource_group_name = azurerm_resource_group.root.name
-  subnet_id           = "${data.azurerm_virtual_network.virtual_network.subnet.id}"
+  subnet_id           = "${azurerm_virtual_network.virtual_network.subnet.id}"
 
    private_dns_zone_group {
     name                 = "codepushprivatednsrediszonegroup"

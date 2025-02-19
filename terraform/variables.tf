@@ -18,4 +18,18 @@ variable "environment" {
   description = "Environment to which the application belongs"
 }
 
+variable "redis_conn_string" {
+  type        = string
+  description = "Azure redis connection string"
+}
+variable "redis_storage_access_key" {
+  type        = string
+  description = "Azure Redis storage access key"
+}
+variable "redis_azure_storage_account" {
+  type        = string
+  description = "Azure Redis storage account name"
+}
+
+
 

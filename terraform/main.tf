@@ -29,6 +29,10 @@ resource "azurerm_app_service" "root" {
   app_settings = {
     GITHUB_CLIENT_ID     = var.github_id
     GITHUB_CLIENT_SECRET = var.github_secret
+    REDIS_CONN_STRING    = var.redis_conn_string
+    AZURE_STORAGE_ACCESS_KEY = var.redis_storage_access_key
+    AZURE_STORAGE_ACCOUNT= var.redis_azure_storage_account
+    LOGGING = true
   }
 
   identity {

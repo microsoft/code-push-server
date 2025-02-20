@@ -247,7 +247,7 @@ export class PassportAuthentication {
   private setupCommonRoutes(router: Router, providerName: string, strategyName: string): void {
     router.get(
       "/auth/login/" + providerName,
-      // limiter,
+      limiter,
       this._cookieSessionMiddleware,
       (req: Request, res: Response, next: (err?: any) => void): any => {
         req.session["action"] = "login";
@@ -258,7 +258,7 @@ export class PassportAuthentication {
 
     router.get(
       "/auth/register/" + providerName, 
-      // limiter,
+      limiter,
       this._cookieSessionMiddleware,
       (req: Request, res: Response, next: (err?: any) => void): any => {
         if (!PassportAuthentication.isAccountRegistrationEnabled()) {
@@ -274,7 +274,7 @@ export class PassportAuthentication {
 
     router.get(
       "/auth/link/" + providerName,
-      // limiter,
+      limiter,
       this._cookieSessionMiddleware,
       (req: Request, res: Response, next: (err?: any) => void): any => {
         req.session["action"] = "link";
@@ -285,7 +285,7 @@ export class PassportAuthentication {
 
     router.get(
       "/auth/callback/" + providerName,
-      // limiter,
+      limiter,
       this._cookieSessionMiddleware,
       passport.authenticate(strategyName, { failureRedirect: "/auth/login/" + providerName, session: false }),
       (req: Request, res: Response, next: (err?: any) => void): any => {

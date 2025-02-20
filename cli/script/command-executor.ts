@@ -1573,7 +1573,7 @@ function sessionRemove(command: cli.ISessionRemoveCommand): Promise<void> {
 
 function releaseErrorHandler(error: CodePushError, command: cli.ICommand): void {
   if ((<any>command).noDuplicateReleaseError && error.statusCode === AccountManager.ERROR_CONFLICT) {
-    console.warn(chalk.yellow("[Warning] " + error.message));
+    console.log(chalk.yellow("[Warning] " + error.message));
   } else {
     throw error;
   }

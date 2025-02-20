@@ -9,7 +9,7 @@ import * as passportBearer from "passport-http-bearer";
 import * as passportGitHub from "passport-github2";
 import * as passportWindowsLive from "passport-windowslive";
 import * as superagent from "superagent"
-// import rateLimit from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 
 import * as converterUtils from "../utils/converter";
 import * as restErrorUtils from "../utils/rest-error-handling";
@@ -25,10 +25,10 @@ export interface AuthenticationConfig {
 
 const DEFAULT_SESSION_EXPIRY = 1000 * 60 * 60 * 24 * 60; // 60 days
 
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // limit each IP to 100 requests per windowMs
-// });
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+});
 
 interface EmailAccount {
   value: string;

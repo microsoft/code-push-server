@@ -11,7 +11,7 @@ import { JsonStorage } from "./storage/json-storage";
 import { RedisManager } from "./redis-manager";
 import { Storage } from "./storage/storage";
 import { Response } from "express";
-//import rateLimit from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || "<your-s3-bucket-name>";
 const RDS_DB_INSTANCE_IDENTIFIER = process.env.RDS_DB_INSTANCE_IDENTIFIER || "<your-rds-instance>";
 const SECRETS_MANAGER_SECRET_ID = process.env.SECRETS_MANAGER_SECRET_ID || "<your-secret-id>";
@@ -137,13 +137,13 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use(api.headers({ origin: process.env.CORS_ORIGIN || "http://localhost:4000" }));
       app.use(api.health({ storage: storage, redisManager: redisManager }));
 
-      // const limiter = rateLimit({
-      //   windowMs: 1000, // 1 minute
-      //   max: 90000, // limit each IP to 100 requests per windowMs
-      //   validate: { xForwardedForHeader: false }
-      // });
+      const limiter = rateLimit({
+        windowMs: 1000, // 1 minute
+        max: 90000, // limit each IP to 100 requests per windowMs
+        validate: { xForwardedForHeader: false }
+      });
 
-      // app.use(limiter);
+      app.use(limiter);
 
       if (process.env.DISABLE_ACQUISITION !== "true") {
         app.use(api.acquisition({ storage: storage, redisManager: redisManager }));

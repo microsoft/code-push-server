@@ -24,7 +24,7 @@ import PackageDiffer = packageDiffing.PackageDiffer;
 import NameResolver = storageTypes.NameResolver;
 import PackageManifest = hashUtils.PackageManifest;
 import tryJSON = require("try-json");
-// import rateLimit from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 import { isPrototypePollutionKey } from "../storage/storage";
 
 const DEFAULT_ACCESS_KEY_EXPIRY = 1000 * 60 * 60 * 24 * 60; // 60 days
@@ -880,10 +880,10 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
   });
 
-  // const releaseRateLimiter = rateLimit({
-  //   windowMs: 15 * 60 * 1000, // 15 minutes
-  //   max: 100, // limit each IP to 100 requests per windowMs
-  // });
+  const releaseRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+  });
 
   router.post(
     "/apps/:appName/deployments/:deploymentName/release",

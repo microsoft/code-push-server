@@ -66,7 +66,7 @@ resource "azurerm_virtual_network" "virtual_network" {
 
   subnet {
     name             = "subnet1"
-    address_prefixes = ["10.0.1.0/24"]
+    address_prefixes = ["10.0.0.0/24"]
   }
 }
 
@@ -121,5 +121,10 @@ resource "azurerm_private_dns_zone_virtual_network_link" "virtual_network_link" 
   resource_group_name   = azurerm_resource_group.root.name
 }
 // Auto-scaling policy
+
+resource "azurerm_app_service_virtual_network_swift_connection" "virtual_conn" {
+  app_service_id = azurerm_app_service.root.id
+  subnet_id      = "${azurerm_virtual_network.virtual_network.subnet.*.id[0]}"
+}
 
  

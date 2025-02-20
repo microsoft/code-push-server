@@ -11,7 +11,7 @@
         "log_date_format": "DD-MM-YYYY HH:mm Z",
         "cwd": "/var/www/code-push-server/api",
         "env": {
-          "NODE_ENV": "prod"
+          "NODE_ENV": "load"
         }
       }
     ]

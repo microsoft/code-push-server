@@ -68,6 +68,17 @@ resource "azurerm_virtual_network" "virtual_network" {
     name             = "subnet1"
     address_prefixes = ["10.0.0.0/24"]
   }
+  subnet {
+    name              = "subnetwithdelegation"
+    address_prefixes    = ["10.0.1.0/24"]
+    delegation {
+      name = "subnetdelegation"
+
+      service_delegation {
+        name    = "Microsoft.Web/serverFarms"
+      }
+    }
+  }
 }
 
 
@@ -124,7 +135,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "virtual_network_link" 
 
 resource "azurerm_app_service_virtual_network_swift_connection" "virtual_conn" {
   app_service_id = azurerm_app_service.root.id
-  subnet_id      = "${azurerm_virtual_network.virtual_network.subnet.*.id[0]}"
+  subnet_id      = "${azurerm_virtual_network.virtual_network.subnet.*.id[1]}"
 }
 
  

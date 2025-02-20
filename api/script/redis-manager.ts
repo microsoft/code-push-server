@@ -211,7 +211,7 @@ export class RedisManager {
         .then(() => {})
         .catch((err) => console.error("Failed to set initial health status:", err));
     } else {
-      console.warn("No REDIS_HOST or REDIS_PORT environment variable configured.");
+      console.log("No REDIS_HOST or REDIS_PORT environment variable configured.");
     }
   }
 
@@ -436,7 +436,7 @@ export class RedisManager {
               if (currentCount > 0) {
                 batchClient.hincrby(deploymentKeyLabelsHash, fromLabelActiveField, -1);
               } else {
-                console.warn(`Attempted to decrement ${fromLabelActiveField}, but it is already 0.`);
+                console.log(`Attempted to decrement ${fromLabelActiveField}, but it is already 0.`);
               }
   
               return batchClient.exec();

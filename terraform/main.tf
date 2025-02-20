@@ -37,13 +37,6 @@ resource "azurerm_app_service" "root" {
     CORS_ORIGIN = var.server_url
     SERVER_URL = var.server_url
   }
-  site_config {
-#    ip_restriction {
-#       name                      = "Allow access from vnet"
-#       virtual_network_subnet_id = azurerm_subnet.subnet.id
-#       priority                  = "200"
-#     }
-  } 
   identity {
     type = "SystemAssigned"
   }

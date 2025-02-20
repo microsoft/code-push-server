@@ -9,12 +9,12 @@ const https = require("https");
 const fs = require("fs");
 const blocked = require('blocked-at');
 
-// setInterval(() => {
-//   blocked((time, stack) => {
-//     console.log(`⚠️ Event loop blocked for ${time}ms!`);
-//     console.log(stack);
-//   }, { threshold: 500 });
-// }, 5000); // Check every 5 seconds
+setInterval(() => {
+  blocked((time, stack) => {
+    console.log(`⚠️ Event loop blocked for ${time}ms!`);
+    console.log(stack);
+  }, { threshold: 500 });
+}, 5000); // Check every 5 seconds
 
 
 defaultServer.start(function (err: Error, app: express.Express) {

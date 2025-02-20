@@ -96,37 +96,37 @@ resource "azurerm_redis_cache" "redis" {
 
 
 
-resource "azurerm_private_dns_zone" "dns" {
-  name                = "codepush.privatelink.redis.cache.windows.net"
-  resource_group_name = azurerm_resource_group.root.name
-}
+# resource "azurerm_private_dns_zone" "dns" {
+#   name                = "codepush.privatelink.redis.cache.windows.net"
+#   resource_group_name = azurerm_resource_group.root.name
+# }
 
-resource "azurerm_private_endpoint" "redis_private_endpoint" {
-  name                = "codepush-redis-private-endpoint-${var.environment}"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.root.name
-  subnet_id           ="${azurerm_virtual_network.virtual_network.subnet.id}" 
+# resource "azurerm_private_endpoint" "redis_private_endpoint" {
+#   name                = "codepush-redis-private-endpoint-${var.environment}"
+#   location            = var.location
+#   resource_group_name = azurerm_resource_group.root.name
+#   subnet_id           ="${azurerm_virtual_network.virtual_network.subnet.id}" 
 
-   private_dns_zone_group {
-    name                 = "codepushprivatednsrediszonegroup"
-    private_dns_zone_ids = [azurerm_private_dns_zone.dns.id]
-  }
+#    private_dns_zone_group {
+#     name                 = "codepushprivatednsrediszonegroup"
+#     private_dns_zone_ids = [azurerm_private_dns_zone.dns.id]
+#   }
 
-  private_service_connection {
-    name                           = "codepushserviceconnection"
-    private_connection_resource_id = azurerm_redis_cache.redis.id
-    is_manual_connection           = false
-    subresource_names              = ["redisCache"]
-  }
-}
+#   private_service_connection {
+#     name                           = "codepushserviceconnection"
+#     private_connection_resource_id = azurerm_redis_cache.redis.id
+#     is_manual_connection           = false
+#     subresource_names              = ["redisCache"]
+#   }
+# }
 
 
-resource "azurerm_private_dns_zone_virtual_network_link" "virtual_network_link" {
-  name                  = "codepush-virtual-link-${var.environment}"
-  private_dns_zone_name = azurerm_private_dns_zone.dns.name
-  virtual_network_id    = azurerm_virtual_network.virtual_network.id
-  resource_group_name   = azurerm_resource_group.root.name
-}
+# resource "azurerm_private_dns_zone_virtual_network_link" "virtual_network_link" {
+#   name                  = "codepush-virtual-link-${var.environment}"
+#   private_dns_zone_name = azurerm_private_dns_zone.dns.name
+#   virtual_network_id    = azurerm_virtual_network.virtual_network.id
+#   resource_group_name   = azurerm_resource_group.root.name
+# }
 // Auto-scaling policy
 
  

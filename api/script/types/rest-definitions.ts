@@ -112,11 +112,13 @@ export interface App {
   /*generated*/ collaborators?: CollaboratorMap;
   /*key*/ name: string;
   /*generated*/ deployments?: string[];
+  iconUrl?: string;
 }
 
 /*in*/
 export interface AppCreationRequest extends App {
   manuallyProvisionDeployments?: boolean;
+  iconUrl?: string;
 }
 
 /*inout*/

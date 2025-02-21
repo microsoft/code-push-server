@@ -69,6 +69,10 @@ module Validation {
       !/:/.test(name)
     ); // Forbid colon because we use it as a delimiter for qualified app names
   }
+  
+  function isValidUrlField(url: any): boolean {
+    return getStringValidator(/*maxLength=*/ 10000, /*minLength=*/ 1)(url) && url.match(/^https?:\/\//) !== null;
+  }
 
   export function isValidRolloutField(rollout: any): boolean {
     // rollout is an optional field, or when defined should be a number between 1-100.
@@ -131,6 +135,7 @@ module Validation {
   export function validateApp(app: restTypes.App | storageTypes.App, isUpdate: boolean): ValidationError[] {
     const fields: FieldDefinition = {
       name: isValidNameField, // During creation/modification, the app's 'name' field will never be qualified with an email
+      iconUrl: isValidUrlField,
     };
 
     let requiredFields: string[] = [];

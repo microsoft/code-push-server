@@ -40,6 +40,7 @@
     "email-validator": "1.0.3",
     "express": "^4.21.2",
     "express-domain-middleware": "0.1.0",
+    "express-rate-limit": "^7.5.0",
     "google-auth-library": "9.9.0",
     "ioredis": "5.4.0",
     "lusca": "^1.7.0",

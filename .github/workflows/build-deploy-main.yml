@@ -27,6 +27,16 @@ jobs:
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - id: ip
+      run: |
+        ip=`dig +short myip.opendns.com @resolver1.opendns.com`
+        echo "::set-output name=address::$ip"
+      shell: bash
+    - run: |
+        if az acr show --name "${{ env.REGISTER_SERVER }}" | grep -q 'Premium'; then
+          az acr network-rule add --name "${{ env.REGISTER_SERVER }}" --ip-address "${{ steps.ip.outputs.address }}"
+          sleep 20
+        fi
     - uses: azure/docker-login@v1
       with:
         login-server: ${{ env.REGISTER_SERVER }}
@@ -44,7 +54,13 @@ jobs:
         tags: ${{ env.REGISTER_SERVER }}/${{ github.repository }}:${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max       
-
+    - name: Remove registry network rule
+      run: |
+          if az acr show --name "${{ env.REGISTER_SERVER }}" | grep -q 'Premium'; then
+            az acr network-rule remove --name "${{ env.REGISTER_SERVER }}" --ip-address "${{ steps.ip.outputs.address }}"
+          fi
+      shell: bash
+      if: always()
     # - uses: ./.github/actions/Build-Publish-Docker
     #   with:
     #    azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}

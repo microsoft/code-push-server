@@ -20,6 +20,8 @@ jobs:
     name: "Build and store Docker image"
     runs-on: ubuntu-latest
     environment: ${{github.event.inputs.environment}}
+    permissions:
+      contents: write 
     steps:
     - name: 'Checkout GitHub Actions'
       uses: actions/checkout@v2

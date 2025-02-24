@@ -19,7 +19,7 @@ jobs:
   docker:
     name: "Build and store Docker image"
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{github.event.inputs.environment}}
     steps:
     - name: 'Checkout GitHub Actions'
       uses: actions/checkout@v2
@@ -60,7 +60,7 @@ jobs:
     env:
       TF_WORKSPACE: "code-push-server-${{ github.event.inputs.environment }}"
       TF_IN_AUTOMATION: true
-      name: dev
+      name:  ${{github.event.inputs.environment}}
     defaults:
       run:
         working-directory: ./terraform  
@@ -90,7 +90,7 @@ jobs:
   Deploy:
     runs-on: ubuntu-latest
     needs: [ docker, manage_infrastructure]
-    environment: dev
+    environment:  ${{github.event.inputs.environment}}
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4

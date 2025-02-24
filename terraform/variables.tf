@@ -38,7 +38,7 @@ variable "server_url" {
 
 data "azurerm_container_registry" "ftrContainerRepo" {
   name                = "ftrContainerRepo"
-  resource_group_name = "rg-infra-nonprod-${var.environment}"
+  resource_group_name = "rg-appservice-codepush-server-${var.environment}"
 }
 
 locals {

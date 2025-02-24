@@ -5,16 +5,64 @@ on:
     inputs:
       branch:
         type: string
+        description: 'Enter branch or commit to checkout'
+      environment:
+        type: environment
+        required: true
+        description: 'environment to run'
+        default: nonprod 
         
+env:
+  REGISTER_SERVER: ftrContainerRepo.azurecr.io
 
 jobs:
-  create_infrastructure:
-    name: create_infrastructure
+  docker:
+    name: "Build and store Docker image"
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+    - name: 'Checkout GitHub Actions'
+      uses: actions/checkout@v2
+    - name: Azure login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - uses: azure/docker-login@v1
+      with:
+        login-server: ${{ env.REGISTER_SERVER }}
+        username: ${{ secrets.REGISTRY_USERNAME }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Build docker  image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        tags: ${{ env.REGISTER_SERVER }}/${{ github.repository }}:${{ github.event.inputs.environment}}.${{ github.sha }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max       
+
+    # - uses: ./.github/actions/Build-Publish-Docker
+    #   with:
+    #    azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
+    #    registry_server: ftrContainerRepo.azurecr.io
+    #    registry_username: ${{ secrets.REGISTRY_USERNAME }}
+    #    registry_password: ${{ secrets.REGISTRY_PASSWORD }}  
+    #    environment: ${{ env.environment }}
+
+  manage_infrastructure:
+    name: manage_infrastructure
     runs-on: ubuntu-latest
     env:
-      TF_WORKSPACE: "code-push-server-nonprod"
+      TF_WORKSPACE: "code-push-server-${{ github.event.inputs.environment }}"
       TF_IN_AUTOMATION: true
       name: dev
+    defaults:
+      run:
+        working-directory: ./terraform  
     permissions:
       contents: read 
     steps: 
@@ -29,41 +77,18 @@ jobs:
       with:
         cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}    
     - name: Initialise Terraform
-      working-directory: ./terraform
       run: terraform init 
     - name: Apply Terraform
-      working-directory: ./terraform
-      run: terraform apply -input=false -auto-approve 
-    
-  build:
-    name: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read 
-    steps: 
-    - name: Code checkout    
-      uses: actions/checkout@v3
-    - name: Setup Node 
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18.x'
-    - name: Build    
-      run: | 
-        cd api
-        npm install
-        npm run clean
-        npm run build 
-    - name: Zip artifact for deployment
-      run: zip release.zip ./* -r
-    - name: Upload artifact for deployment job
-      uses: actions/upload-artifact@v4
-      with:
-        name: node-app
-        path: release.zip    
+      run: terraform apply var environment=${{ github.event.inputs.environment }} -input=false -auto-approve 
+    - name: Azure logout   
+      run: az logout
+      shell: bash
+      if: always()  
+     
 
-  deploy-to-nonprod:
+  Deploy:
     runs-on: ubuntu-latest
-    needs: [build, create_infrastructure]
+    needs: [ docker, manage_infrastructure]
     environment: dev
     steps:
       - name: Download artifact from build job
@@ -76,9 +101,11 @@ jobs:
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'codepush-server-app-nonprod'
+          app-name: 'codepush-server-app-${{ github.event.inputs.environment }}'
           package: .
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          image: ${{ env.REGISTER_SERVER }}/${{ github.repository }}:${{ github.event.inputs.environment}}.${{ github.sha }}:latest
+
 
 
       

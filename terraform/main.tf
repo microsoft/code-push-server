@@ -36,6 +36,9 @@ resource "azurerm_app_service" "root" {
     WEBSITE_NODE_DEFAULT_VERSION = "18-lts"
     CORS_ORIGIN = var.server_url
     SERVER_URL = var.server_url
+    DOCKER_REGISTRY_SERVER_URL      = "https://${data.azurerm_container_registry.ftrContainerRepo.login_server}"
+    DOCKER_REGISTRY_SERVER_USERNAME = data.azurerm_container_registry.ftrContainerRepo.admin_username
+    DOCKER_REGISTRY_SERVER_PASSWORD = "${local.docker_reg_svr_pwd}"
   }
   identity {
     type = "SystemAssigned"

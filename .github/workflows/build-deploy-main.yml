@@ -98,7 +98,7 @@ jobs:
     - name: Initialise Terraform
       run: terraform init 
     - name: Apply Terraform
-      run: terraform apply var environment=${{ github.event.inputs.environment }} -input=false -auto-approve 
+      run: terraform apply -var environment=${{ github.event.inputs.environment }} -input=false -auto-approve 
     - name: Azure logout   
       run: az logout
       shell: bash

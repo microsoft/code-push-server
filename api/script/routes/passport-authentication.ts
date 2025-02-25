@@ -11,6 +11,7 @@ import * as passportWindowsLive from "passport-windowslive";
 import * as q from "q";
 import * as superagent from "superagent";
 import rateLimit from "express-rate-limit";
+import * as jwt from "jsonwebtoken";
 
 import * as converterUtils from "../utils/converter";
 import * as restErrorUtils from "../utils/rest-error-handling";
@@ -571,7 +572,77 @@ export class PassportAuthentication {
         return done(error);
       }
     };
+
     passport.use(strategyName, new Strategy(options, verify));
+
+    router.post("/login-kc", async (req, res) => {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      try {
+        const formData = new URLSearchParams();
+        formData.append("client_id", keycloakConfig.clientId);
+        formData.append("client_secret", keycloakConfig.clientSecret);
+        formData.append("grant_type", "password");
+        formData.append("username", email);
+        formData.append("password", password);
+        formData.append("scope", "openid profile email");
+
+        const response = await fetch(options.tokenURL, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData.toString(),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          return res.status(response.status).json({ error: errorData.error_description || "Invalid credentials" });
+        }
+
+        const tokenData = await response.json();
+        const accessToken = tokenData.access_token;
+
+        const decodedToken = jwt.decode(accessToken) as { name?: string; email?: string };
+
+        if (!decodedToken?.email) {
+          return res.status(400).json({ error: "Email not found in token" });
+        }
+
+        const user = await this._storageInstance.getAccountByEmail(decodedToken.email);
+
+        if (!user) {
+          return res.status(403).json({ error: "User not registered. Please sign up first." });
+        }
+
+        const now = Date.now();
+        const friendlyName = `Login-${now}`;
+        const accessKey = {
+          name: security.generateSecureKey(user.id),
+          createdTime: now,
+          createdBy: req.ip,
+          description: friendlyName,
+          expires: now + DEFAULT_SESSION_EXPIRY,
+          friendlyName,
+          isSession: true,
+        };
+
+        await this._storageInstance.addAccessKey(user.id, accessKey);
+        const sessionKey = accessKey.name;
+
+        return res.json({
+          accessKey: sessionKey,
+          name: decodedToken.name,
+          email: decodedToken.email,
+        });
+      } catch (error) {
+        console.error("Login error:", error);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+    });
+
     this.setupCommonRoutes(router, providerName, strategyName);
   }
 

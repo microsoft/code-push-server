@@ -36,11 +36,4 @@ variable "server_url" {
   description = "App service url" 
 }
 
-data "azurerm_container_registry" "ftrContainerRepo" {
-  name                = "ftrContainerRepo"
-  resource_group_name = "rg-appservice-codepush-server-${var.environment}"
-}
 
-locals {
-    docker_reg_svr_pwd = sensitive(data.azurerm_container_registry.ftrContainerRepo.admin_password)
-}

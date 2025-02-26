@@ -5,17 +5,13 @@ resource "azurerm_resource_group" "root" {
 
 
 // Define the service plan to be used for the App Service
-resource "azurerm_app_service_plan" "root" {
+resource "azurerm_service_plan" "root" {
   name				  = "codepush-server-service-plan-${var.environment}"
-  kind                = "Linux"
-  reserved            = true
   location            = var.location
   resource_group_name = azurerm_resource_group.root.name
+  os_type = "Linux"
+  sku_name = "P0v3"
 
-  sku {
-    tier = "Premium"
-    size = "P0V3"
-  }
 }
 
 // Define the primary instance of the application
@@ -23,13 +19,17 @@ resource "azurerm_linux_web_app" "root" {
   name                = "codepush-server-app-${var.environment}"
   location            = var.location
   resource_group_name = azurerm_resource_group.root.name
-  service_plan_id = azurerm_app_service_plan.root.id
+  service_plan_id = azurerm_service_plan.root.id
   https_only          = true
  site_config {
    always_on = true
    health_check_path = "/"
+ 
+   application_stack   {
+    node_version = "18-lts"
+  }
  }
-  app_settings = {
+  app_settings =  {
     GITHUB_CLIENT_ID     = var.github_id
     GITHUB_CLIENT_SECRET = var.github_secret
     AZURE_STORAGE_ACCESS_KEY = var.redis_storage_access_key
@@ -38,11 +38,8 @@ resource "azurerm_linux_web_app" "root" {
     WEBSITE_NODE_DEFAULT_VERSION = "18-lts"
     CORS_ORIGIN = var.server_url
     SERVER_URL = var.server_url
-  
-  application_stack = {
-    node_version = 18-lts
   }
-  }
+
   identity {
     type = "SystemAssigned"
  }

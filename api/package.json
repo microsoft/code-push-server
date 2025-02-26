@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node ./bin/script/server.js",
     "start:env": "node -r dotenv/config ./bin/script/server.js dotenv_config_path=.env dotenv_config_silent=true",
-    "clean": "rimraf bin",
-    "build": "tsc && shx cp -r ./script/views ./bin/script",
+    "build": "rimraf bin && tsc && shx cp -r ./script/views ./bin/script",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
     "lint:fix": "npx eslint ./script/**/*.ts --fix"

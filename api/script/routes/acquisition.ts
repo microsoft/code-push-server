@@ -27,7 +27,7 @@ export interface AcquisitionConfig {
 
 function getUrlKey(originalUrl: string): string {
   const obj: any = URL.parse(originalUrl, /*parseQueryString*/ true);
-  delete obj.query.clientUniqueId;
+  delete obj.query.client_unique_id;
   return obj.pathname + "?" + queryString.stringify(obj.query);
 }
 

@@ -216,7 +216,8 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
       }
     }
 
-    const sdkVersion: string = restHeaders.getSdkVersion(req);
+    const rawSdkVersion = restHeaders.getSdkVersion(req);
+    const sdkVersion = rawSdkVersion ? rawSdkVersion.replace(/[^0-9.]/g, '') : null;
     if (semver.valid(sdkVersion) && semver.gte(sdkVersion, METRICS_BREAKING_VERSION)) {
       // If previousDeploymentKey not provided, assume it is the same deployment key.
       let redisUpdatePromise: Promise<void>;

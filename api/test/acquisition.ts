@@ -9,12 +9,10 @@ import * as request from "supertest";
 import Promise = q.Promise;
 
 import * as defaultServer from "../script/default-server";
-import * as storage from "../script/storage/storage";
-import * as redis from "../script/redis-manager";
+import { GcpStorage } from "../script/storage/gcp-storage";
 import * as utils from "./utils";
 
-import { AzureStorage } from "../script/storage/azure-storage";
-import { JsonStorage } from "../script/storage/json-storage";
+import { GcpStorage } from "../script/storage/gcp-storage";
 import { UpdateCheckRequest } from "../script/types/rest-definitions";
 import { SDK_VERSION_HEADER } from "../script/utils/rest-headers";
 
@@ -120,9 +118,7 @@ describe("Acquisition Rest API", () => {
   after((): Promise<void> => {
     return q(<void>null)
       .then(() => {
-        if (storageInstance instanceof JsonStorage) {
-          return storageInstance.dropAll();
-        }
+        return storageInstance.dropAll();
       })
       .then(() => {
         if (redisManager) {

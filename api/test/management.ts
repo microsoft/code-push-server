@@ -15,23 +15,18 @@ import * as restTypes from "../script/types/rest-definitions";
 import * as storage from "../script/storage/storage";
 import * as testUtils from "./utils";
 
-import { AzureStorage } from "../script/storage/azure-storage";
-import { JsonStorage } from "../script/storage/json-storage";
+import { GcpStorage } from "../script/storage/gcp-storage";
 
 import Permissions = storage.Permissions;
 
 if (!process.env.AZURE_MANAGEMENT_URL) {
   // cannot use local JSON storage when running tests against an Azure server
-  describe("Management Rest API with JSON Storage", () => managementTests(/*useJsonStorage=*/ true));
-}
-
-if (process.env.TEST_AZURE_STORAGE) {
-  describe("Management Rest API with Azure Storage", () => managementTests());
+describe("Management Rest API", () => managementTests());
 }
 
 const ACCESS_KEY_MASKING_STRING = "(hidden)";
 
-function managementTests(useJsonStorage?: boolean): void {
+function managementTests(): void {
   var server: express.Express;
   var serverUrl: string;
   var storage: storage.Storage;

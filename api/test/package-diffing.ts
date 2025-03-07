@@ -23,7 +23,7 @@ import PackageManifest = hashUtils.PackageManifest;
 import Pend = require("pend");
 import Promise = q.Promise;
 
-describe("Package diffing with JSON storage", () => packageDiffTests(JsonStorage));
+describe("Package diffing with Gcp storage", () => packageDiffTests(GcpStorage));
 
 if (process.env.TEST_AZURE_STORAGE) {
   describe("Package diffing with Azure Storage", () => packageDiffTests(AzureStorage));

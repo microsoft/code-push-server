@@ -1,0 +1,17 @@
+{
+    "apps": [
+      {
+        "name": "code-push-server",
+        "script": "./bin/script/server.js",
+        "instances": "-2",
+        "watch": true,
+        "merge_logs": true,
+        "exec_mode": "cluster",
+        "log_date_format": "DD-MM-YYYY HH:mm Z",
+        "cwd": "../api",
+        "env": {
+          "NODE_ENV": "dev"
+        }
+      }
+    ]
+}

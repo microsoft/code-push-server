@@ -121,7 +121,12 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
     storage
       .checkHealth()
       .then(() => {
-        return redisManager.checkHealth();
+        return Promise.race([
+          redisManager.checkHealth(),
+          new Promise((resolve) => setTimeout(resolve, 30)) // Timeout after 30ms
+        ]).catch((redisError: Error) => {
+          console.warn("Redis health check failed or timed out:", redisError.message);
+        });
       })
       .then(() => {
         res.status(200).send("Healthy");

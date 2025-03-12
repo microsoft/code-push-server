@@ -278,11 +278,15 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
             redisWithTimeout(
               redisManager.removeDeploymentKeyClientActiveLabel(previousDeploymentKey, clientUniqueId)
             ).catch((err) => {
+              sendErrorToDatadog(err);
               console.error("Error or timeout on removeDeploymentKeyClientActiveLabel:", err);
             });
           }
         })
-        .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
+        .catch((error: any) => {
+          errorUtils.sendUnknownError(res, error, next)
+          sendErrorToDatadog(error);
+        })
     } else {
       if (!clientUniqueId) {
         return errorUtils.sendMalformedRequestError(
@@ -313,7 +317,10 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         .then(() => {
           res.sendStatus(200);
         })
-        .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
+        .catch((error: any) => {
+          errorUtils.sendUnknownError(res, error, next)
+          sendErrorToDatadog(error);
+        })
     }
   };
 

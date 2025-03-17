@@ -333,7 +333,7 @@ export class S3Storage implements storage.Storage {
                 ]
             },
             pool: {
-                max: 50,
+                max: 20,
                 min: 5,
                 acquire: 5000,
                 idle: 1000

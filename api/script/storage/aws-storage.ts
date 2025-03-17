@@ -320,13 +320,13 @@ export class S3Storage implements storage.Storage {
             dialect: 'mysql',
             replication: {
                 write: {
-                    host: process.env.DB_HOST || DB_HOST,
+                    host: process.env.DB_HOST_LOAD1 || DB_HOST,
                     username: process.env.DB_USER || DB_USER,
                     password: process.env.DB_PASS || DB_PASS
                 },
                 read: [
                     {
-                        host: process.env.DB_HOST_READER,
+                        host: process.env.DB_HOST_LOAD1_READER,
                         username: process.env.DB_USER || DB_USER,
                         password: process.env.DB_PASS || DB_PASS
                     }
@@ -349,7 +349,7 @@ export class S3Storage implements storage.Storage {
 
       try {
           const connection = await mysql.createConnection({
-              host: process.env.DB_HOST || DB_HOST,
+              host: process.env.DB_HOST_LOAD1 || DB_HOST,
               user: process.env.DB_USER,
               password: process.env.DB_PASS || DB_PASS,
           });

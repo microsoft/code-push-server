@@ -143,10 +143,10 @@ export class RedisManager {
   private _setupMetricsClientPromise: Promise<void> | null = null;
 
   constructor() {
-    if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
+    if (process.env.REDIS_HOST_LOAD1 && process.env.REDIS_PORT) {
       console.log("port redis:", process.env.REDIS_PORT);
       const redisConfig = {
-        host: process.env.REDIS_HOST,
+        host: process.env.REDIS_HOST_LOAD1,
         port: parseInt(process.env.REDIS_PORT),
         // auth_pass: process.env.REDIS_KEY,
         // tls: {
@@ -176,7 +176,7 @@ export class RedisManager {
 
       const startUpNodes: ClusterNode[] = [
           {
-            host: process.env.REDIS_HOST,
+            host: process.env.REDIS_HOST_LOAD1,
             port: parseInt(process.env.REDIS_PORT),
           },
       ]

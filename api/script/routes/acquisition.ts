@@ -142,7 +142,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
   const storage: storageTypes.Storage = config.storage;
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
-  const REDIS_TIMEOUT_MS = 30; 
+  const REDIS_TIMEOUT_MS = 50; 
 
   function redisWithTimeout<T>(redisPromise: Promise<T>): Promise<T> {
     return Promise.race([

@@ -873,7 +873,7 @@ export class AzureStorage implements storage.Storage {
       const blobStorageCredential = new StorageSharedKeyCredential(_accountName, _accountKey);
 
       const tableServiceUrl = `https://${_accountName}.table.core.windows.net`;
-      const blobServiceUrl = `https://${_accountName}.blob.core.windows.net`;
+      const blobServiceUrl = process.env.AZURE_STORAGE_CUSTOM_DOMAIN ?? `https://${_accountName}.blob.core.windows.net`;
 
       tableServiceClient = new TableServiceClient(tableServiceUrl, tableStorageCredential, {
         retryOptions: {

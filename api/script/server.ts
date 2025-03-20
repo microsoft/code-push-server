@@ -31,7 +31,7 @@ defaultServer.start(function (err: Error, app: express.Express) {
     });
   } else {
     server = app.listen(port, function () {
-      console.log(`API listening at http://localhost:${port} (Process ID: ${process.pid})`);
+      console.log(`API listening at http://localhost:${port}`);
     });
   }
 

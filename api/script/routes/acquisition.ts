@@ -118,21 +118,22 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
   const router: express.Router = express.Router();
 
   router.get("/healthcheck", (req: express.Request, res: express.Response, next: (err?: any) => void): any => {
-    storage
-      .checkHealth()
-      .then(() => {
-        return Promise.race([
+      Promise.any([
+        storage.checkHealth(),
+        Promise.race([
           redisManager.checkHealth(),
-          new Promise((resolve) => setTimeout(resolve, 30)) // Timeout after 30ms
-        ]).catch((redisError: Error) => {
-          console.warn("Redis health check failed or timed out:", redisError.message);
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout after 30ms")), 30)
+          )
+        ])
+      ])
+        .then(() => res.status(200).send("Healthy"))
+        .catch((error: Error) => {
+          errorUtils.sendUnknownError(res, error, next);
+          sendErrorToDatadog(error);
         });
-      })
-      .then(() => {
-        res.status(200).send("Healthy");
-      })
-      .catch((error: Error) => errorUtils.sendUnknownError(res, error, next))
-  });
+    }
+  );
 
   return router;
 }
@@ -141,6 +142,16 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
   const storage: storageTypes.Storage = config.storage;
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
+  const REDIS_TIMEOUT_MS = 50; 
+
+  function redisWithTimeout<T>(redisPromise: Promise<T>): Promise<T> {
+    return Promise.race([
+      redisPromise,
+      new Promise<T>((_resolve, reject) => {
+        setTimeout(() => reject(new Error("Redis request timed out. Redis might be down")), REDIS_TIMEOUT_MS);
+      }),
+    ]);
+  }
 
   const updateCheck = function (newApi: boolean) {
     return function (req: express.Request, res: express.Response, next: (err?: any) => void) {
@@ -148,30 +159,39 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
       const key: string = redis.Utilities.getDeploymentKeyHash(deploymentKey);
       const clientUniqueId: string = String(req.query.clientUniqueId || req.query.client_unique_id);
       const url: string = getUrlKey(req.originalUrl);
-      let fromCache: boolean = true;
-      let redisError: Error;
 
-      redisManager
-        .getCachedResponse(key, url)
+      let fromCache = true;
+      let redisError: Error | null = null;
+
+      redisWithTimeout<redis.CacheableResponse>(redisManager.getCachedResponse(key, url))
         .catch((error: Error) => {
-          // Store the redis error to be thrown after we send response.
+          // If Redis is down/slow, we store the error for logging but return null
+          // so we can continue with DB lookups.
           redisError = error;
-          return Promise.resolve(<redis.CacheableResponse>(null));
+          return null; // triggers fallback to DB
         })
-        .then((cachedResponse: redis.CacheableResponse) => {
+        .then((cachedResponse: redis.CacheableResponse | null) => {
           fromCache = !!cachedResponse;
+
+          // If we got nothing from Redis, we use the DB storage approach.
           return cachedResponse || createResponseUsingStorage(req, res, storage);
         })
         .then((response: redis.CacheableResponse) => {
           if (!response) {
-            return Promise.resolve(<void>(null));
+            // If we still have no response, something else has gone wrong.
+            // Possibly return next() with an error or handle differently.
+            return Promise.resolve();
           }
 
-          let giveRolloutPackage: boolean = false;
-          const cachedResponseObject = <UpdateCheckCacheResponse>response.body;
+          const cachedResponseObject = response.body as UpdateCheckCacheResponse;
+          let giveRolloutPackage = false;
+
+          // Decide if we should serve the "rolloutPackage" or the original package
           if (cachedResponseObject.rolloutPackage && clientUniqueId) {
             const releaseSpecificString: string =
-              cachedResponseObject.rolloutPackage.label || cachedResponseObject.rolloutPackage.packageHash;
+              cachedResponseObject.rolloutPackage.label ||
+              cachedResponseObject.rolloutPackage.packageHash;
+
             giveRolloutPackage = rolloutSelector.isSelectedForRollout(
               clientUniqueId,
               cachedResponseObject.rollout,
@@ -180,29 +200,43 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
           }
 
           const updateCheckBody: { updateInfo: UpdateCheckResponse } = {
-            updateInfo: giveRolloutPackage ? cachedResponseObject.rolloutPackage : cachedResponseObject.originalPackage,
+            updateInfo: giveRolloutPackage
+              ? cachedResponseObject.rolloutPackage
+              : cachedResponseObject.originalPackage,
           };
 
-          // Change in new API
+          // In the new API, we overwrite "target_binary_range"
           updateCheckBody.updateInfo.target_binary_range = updateCheckBody.updateInfo.appVersion;
 
+          // Send the final response
           res.locals.fromCache = fromCache;
-          res.status(response.statusCode).send(newApi ? utils.convertObjectToSnakeCase(updateCheckBody) : updateCheckBody);
+          res
+            .status(response.statusCode)
+            .send(newApi ? utils.convertObjectToSnakeCase(updateCheckBody) : updateCheckBody);
 
-          // Update REDIS cache after sending the response so that we don't block the request.
+          // Update Redis cache AFTER sending response, if we didn't have a cache hit
           if (!fromCache) {
-            return redisManager.setCachedResponse(key, url, response);
+            redisManager.setCachedResponse(key, url, response).catch((err) => {
+              // Log the error, but don’t block the request (which is already done).
+              console.error("Failed while setting cached response in Redis:", err);
+              sendErrorToDatadog(err);
+            });
           }
         })
         .then(() => {
+          // If there was a Redis error, log it (e.g., to Datadog) and optionally throw
           if (redisError) {
             sendErrorToDatadog(redisError);
-            throw redisError;
+            console.error("Redis error:", redisError);
           }
         })
-        .catch((error: storageTypes.StorageError) => errorUtils.restErrorHandler(res, error, next))
+        .catch((error: storageTypes.StorageError) => {
+          // If DB storage also failed or some other error
+          errorUtils.restErrorHandler(res, error, next);
+        });
     };
   };
+
 
   const reportStatusDeploy = function (req: express.Request, res: express.Response, next: (err?: any) => void) {
     const deploymentKey = req.body.deploymentKey || req.body.deployment_key;
@@ -228,25 +262,31 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
       let redisUpdatePromise: Promise<void>;
 
       if (req.body.label && req.body.status === redis.DEPLOYMENT_FAILED) {
-        redisUpdatePromise = redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status);
+        redisUpdatePromise = 
+          redisWithTimeout(redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status));
       } else {
         const labelOrAppVersion: string = req.body.label || appVersion;
-        redisUpdatePromise = redisManager.recordUpdate(
-          deploymentKey,
-          labelOrAppVersion,
-          previousDeploymentKey,
-          previousLabelOrAppVersion
-        );
+        redisUpdatePromise = 
+          redisWithTimeout(redisManager.recordUpdate(deploymentKey, labelOrAppVersion, previousDeploymentKey, previousLabelOrAppVersion));
       }
 
       redisUpdatePromise
         .then(() => {
           res.sendStatus(200);
           if (clientUniqueId) {
-            redisManager.removeDeploymentKeyClientActiveLabel(previousDeploymentKey, clientUniqueId);
+            // This cleanup call is fire-and-forget; errors are logged but don't affect the response.
+            redisWithTimeout(
+              redisManager.removeDeploymentKeyClientActiveLabel(previousDeploymentKey, clientUniqueId)
+            ).catch((err) => {
+              sendErrorToDatadog(err);
+              console.error("Error or timeout on removeDeploymentKeyClientActiveLabel:", err);
+            });
           }
         })
-        .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
+        .catch((error: any) => {
+          errorUtils.sendUnknownError(res, error, next)
+          sendErrorToDatadog(error);
+        })
     } else {
       if (!clientUniqueId) {
         return errorUtils.sendMalformedRequestError(
@@ -254,24 +294,33 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
           "A deploy status report must contain a valid appVersion, clientUniqueId and deploymentKey."
         );
       }
-
-      return redisManager
-        .getCurrentActiveLabel(deploymentKey, clientUniqueId)
+      redisWithTimeout(
+        redisManager.getCurrentActiveLabel(deploymentKey, clientUniqueId
+      ))
         .then((currentVersionLabel: string) => {
           if (req.body.label && req.body.label !== currentVersionLabel) {
-            return redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status).then(() => {
+            return redisWithTimeout(
+              redisManager.incrementLabelStatusCount(deploymentKey, req.body.label, req.body.status)
+            ).then(() => {
               if (req.body.status === redis.DEPLOYMENT_SUCCEEDED) {
-                return redisManager.updateActiveAppForClient(deploymentKey, clientUniqueId, req.body.label, currentVersionLabel);
+                return redisWithTimeout(
+                  redisManager.updateActiveAppForClient(deploymentKey, clientUniqueId, req.body.label, currentVersionLabel)
+                );
               }
             });
           } else if (!req.body.label && appVersion !== currentVersionLabel) {
-            return redisManager.updateActiveAppForClient(deploymentKey, clientUniqueId, appVersion, appVersion);
+            return redisWithTimeout(
+              redisManager.updateActiveAppForClient(deploymentKey, clientUniqueId, appVersion, appVersion)
+            );
           }
         })
         .then(() => {
           res.sendStatus(200);
         })
-        .catch((error: any) => errorUtils.sendUnknownError(res, error, next))
+        .catch((error: any) => {
+          errorUtils.sendUnknownError(res, error, next)
+          sendErrorToDatadog(error);
+        })
     }
   };
 
@@ -283,9 +332,9 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
         "A download status report must contain a valid deploymentKey and package label."
       );
     }
-    return redisManager
+    return redisWithTimeout(redisManager
       .incrementLabelStatusCount(deploymentKey, req.body.label, redis.DOWNLOADED)
-      .then(() => {
+      ).then(() => {
         res.sendStatus(200);
       })
       .catch((error: any) => errorUtils.sendUnknownError(res, error, next))

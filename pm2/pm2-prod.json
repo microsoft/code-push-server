@@ -2,9 +2,8 @@
     "apps": [
       {
         "name": "code-push-server",
-        "script": "npm",
-        "args": "run start:env",
-        "instances": "1",
+        "script": "./bin/script/server.js",
+        "instances": "-2",
         "watch": true,
         "merge_logs": true,
         "exec_mode": "cluster",

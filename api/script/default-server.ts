@@ -139,11 +139,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
 
       const limiter = rateLimit({
         windowMs: 1000, // 1 minute
-        max: 90000, // limit each IP to 100 requests per windowMs
+        max: 2000, // limit each IP to 100 requests per windowMs
         validate: { xForwardedForHeader: false }
       });
-
-      app.use(limiter);
 
       if (process.env.DISABLE_ACQUISITION !== "true") {
         app.use(api.acquisition({ storage: storage, redisManager: redisManager }));
@@ -168,7 +166,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
         } else {
           app.use(auth.router());
         }
-        app.use(auth.authenticate, fileUploadMiddleware, api.management({ storage: storage, redisManager: redisManager }));
+        app.use(auth.authenticate, fileUploadMiddleware, limiter, api.management({ storage: storage, redisManager: redisManager }));
       } else {
         app.use(auth.router());
       }

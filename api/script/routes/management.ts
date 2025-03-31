@@ -1286,7 +1286,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
   }
 
   function processDiff(accountId: string, appId: string, deploymentId: string, appPackage: storageTypes.Package): q.Promise<void> {
-    if (!appPackage.manifestBlobUrl || process.env.ENABLE_PACKAGE_DIFFING) {
+    if (!appPackage.manifestBlobUrl || !process.env.ENABLE_PACKAGE_DIFFING) {
       // No need to process diff because either:
       //   1. The release just contains a single file.
       //   2. Diffing disabled.

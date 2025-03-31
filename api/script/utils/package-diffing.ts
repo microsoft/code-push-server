@@ -172,7 +172,7 @@ export class PackageDiffer {
                       readStreamCounter--;
                       if (readStreamCounter === 0 && !readStreamError) {
                         // All read streams have completed successfully
-                        resolve();
+                        resolve(diffFilePath);
                       }
                     });
 
@@ -185,8 +185,8 @@ export class PackageDiffer {
                     if (readStreamError) {
                       reject(readStreamError);
                     } else {
+                      resolve(diffFilePath);
                       diffFile.end();
-                      resolve();
                     }
                   }
                 });

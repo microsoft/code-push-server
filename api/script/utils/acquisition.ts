@@ -120,6 +120,10 @@ function getUpdatePackage(packageHistory: Package[], request: UpdateCheckRequest
     updateDetails.downloadURL = latestSatisfyingEnabledPackage.blobUrl;
     updateDetails.packageSize = latestSatisfyingEnabledPackage.size;
   }
+  // HACK HERE TO MANIPULATE THE DOWNLOAD URL
+  if (updateDetails.downloadURL && updateDetails.downloadURL.startsWith('http://127.0.0.1:10000/devstoreaccount1')) {
+    updateDetails.downloadURL = 'https://devstoreaccount1.pocketly.in:4433' + updateDetails.downloadURL.slice(39);
+  }
 
   updateDetails.description = latestSatisfyingEnabledPackage.description;
   updateDetails.isMandatory = shouldMakeUpdateMandatory || latestSatisfyingEnabledPackage.isMandatory;

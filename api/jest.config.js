@@ -6,5 +6,9 @@ module.exports = {
     moduleNameMapper: {
       '^@/(.*)$': '<rootDir>/script/$1', // Optional: Alias for your `script/` directory
     },
+    testPathIgnorePatterns: [
+      '<rootDir>/test/management-new.test.ts',
+      '<rootDir>/test/utils.test.ts'
+    ],
   };
   

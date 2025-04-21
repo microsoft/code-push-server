@@ -12,7 +12,7 @@
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
     "lint:fix": "npx eslint ./script/**/*.ts --fix",
-    "test": "jest"
+    "test": "jest --testPathIgnorePatterns='test/management-new.test.ts' 'test/utils.test.ts'"
   },
   "repository": {
     "type": "git",

@@ -43,8 +43,9 @@ export function getFileWithField(req: Express.Request, field: string): Express.M
 }
 
 export function createTempFileFromBuffer(buffer: Buffer): string {
-  const tmpPath = require("os").tmpdir();
-  const tmpFilePath = require("path").join(tmpPath, "tempfile");
-  require("fs").writeFileSync(tmpFilePath, buffer);
-  return tmpFilePath;
+  const tempDir = require("os").tmpdir();
+  const uniqueFilename = `tempfile_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  const filePath = require("path").join(tempDir, uniqueFilename);
+  require("fs").writeFileSync(filePath, buffer);
+  return filePath;
 }

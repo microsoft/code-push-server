@@ -917,6 +917,16 @@ export class AzureStorage implements storage.Storage {
     return Promise.resolve(<void>null);
   }
 
+  public isAccessKeyValid(accessKey: string): Promise<boolean> {
+    return this.getAccountIdFromAccessKey(accessKey)
+      .then(() => true)
+      .catch(error => {
+        if (error.code === "Expired") {
+          return false;
+        }
+        return false;
+      });
+  }
   private setup(accountName?: string, accountKey?: string): Promise<void> {
     let tableServiceClient: TableServiceClient;
     let tableClient: TableClient;
@@ -983,7 +993,7 @@ export class AzureStorage implements storage.Storage {
         this._blobService = blobServiceClient;
       })
       .catch((error) => {
-        if (error.code == "ContainerAlreadyExists") {
+        if (error.code === "ContainerAlreadyExists") {
           this._tableClient = tableClient;
           this._blobService = blobServiceClient;
         } else {
@@ -1502,7 +1512,7 @@ export class AzureStorage implements storage.Storage {
       errorMessage = azureError.message;
     }
 
-    if (overrideMessage && overrideCondition == errorCodeRaw) {
+     if (overrideMessage && overrideCondition === errorCodeRaw) {
       errorMessage = overrideValue;
     }
 

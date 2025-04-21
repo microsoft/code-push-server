@@ -192,6 +192,7 @@ export interface Storage {
   getUserFromAccessToken(accessToken: string): Promise<Account>;
 
   dropAll(): Promise<void>;
+  isAccessKeyValid(accessKey: string): Promise<boolean>;
 }
 
 export function clone<T>(source: T): T {

@@ -19,6 +19,10 @@ import { JsonStorage } from "../script/storage/json-storage";
 
 import Permissions = storage.Permissions;
 
+function delaySetTimeout(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 if (!process.env.AZURE_MANAGEMENT_URL) {
   // cannot use local JSON storage when running tests against an Azure server
   describe("Management Rest API with JSON Storage", () => managementTests(/*useJsonStorage=*/ true));
@@ -59,12 +63,11 @@ function managementTests(useJsonStorage?: boolean): void {
   var isTestingMetrics: boolean = !!(process.env.REDIS_HOST && process.env.REDIS_PORT);
 
   beforeEach((): Promise<void> => {
-
     let useJsonStorage: boolean = !process.env.TEST_AZURE_STORAGE && !process.env.AZURE_ACQUISITION_URL;
     account = testUtils.makeAccount();
     otherAccount = testUtils.makeAccount();
 
-    return Promise.resolve(<void>(null))
+    return Promise.resolve(<void>null)
       .then(() => {
         if (process.env.AZURE_MANAGEMENT_URL) {
           serverUrl = process.env.AZURE_MANAGEMENT_URL;
@@ -113,14 +116,16 @@ function managementTests(useJsonStorage?: boolean): void {
         accessKey.id = accessKeyId;
 
         redisManager = new redis.RedisManager();
+
       });
   });
 
   afterEach(async (): Promise<void> => {
-    await redisManager.close();
     if (storage instanceof JsonStorage) {
-      return storage.dropAll();
+      storage.dropAll();
     }
+    await redisManager.close();
+    return;
   });
 
   describe("GET authenticated", () => {
@@ -167,27 +172,25 @@ function managementTests(useJsonStorage?: boolean): void {
   });
 
   describe("POST access key", (): void => {
-    //#MARK:check description copy
     it("creates new access key for existing account with default expiry", (done): void => {
       var accessKeyRequest: restTypes.AccessKeyRequest = testUtils.makeAccessKeyRequest();
       // Rely on the server to generate a name
       delete accessKeyRequest.name;
-      accessKeyRequest.scope="all";
-      POST("/accessKeys", accessKeyRequest, (err: any, location: string, response: { accessKey: restTypes.AccessKey }): void => {
-        if (err) return done(err);
+      accessKeyRequest.scope = "all";
+      POST("/accessKeys", accessKeyRequest, (err:any, location: string, response: { accessKey: restTypes.AccessKey }): void => {
+        if(err) return done(err);
         assert(!!response.accessKey.name);
         assert.notEqual(response.accessKey.name, accessKey.name);
         assert(response.accessKey.expires > 0);
         assert.equal(response.accessKey.friendlyName, accessKeyRequest.friendlyName);
         //assert.equal(response.accessKey.description, accessKeyRequest.friendlyName);
-        GET(location, (err:any) => {
-          if(err)return done(err);
+        GET(location, () => {
           done();
         });
       });
     });
 
-    describe("Access keys can expire", (): void => {
+   describe("Access keys can expire", (): void => {
       var oldAccessKey: storage.AccessKey;
       beforeEach(() => {
         oldAccessKey = accessKey;
@@ -196,16 +199,18 @@ function managementTests(useJsonStorage?: boolean): void {
       it("creates new access key which expires in the specified expiry for existing account", (done): void => {
         var accessKeyRequest: restTypes.AccessKeyRequest = testUtils.makeAccessKeyRequest();
         accessKeyRequest.scope="all";
-        var oldAccessKey: storage.AccessKey = accessKey;
         var delay = 1000; // 1 second
         accessKeyRequest.ttl = delay;
 
-        POST("/accessKeys", accessKeyRequest, (err:any,location: string): void => {
-          if(err)return done(err);
+        POST("/accessKeys", accessKeyRequest, (err:any, location: string, response: any): void => {
+          if(err) return done(err);
+          
+          // Don't modify global accessKey, but remember the new key name
+          const newKeyName = response.accessKey.name;
+          
           setTimeout(() => {
-            // Use the new, expired key to make an API call
-            accessKey = <storage.AccessKey>(<any>accessKeyRequest);
-            GET(location, done, 401);
+            // Use the new key name directly in GET (without changing global accessKey)
+            GET(location, done, 401, newKeyName);
           }, delay + 1000);
         });
       });
@@ -271,11 +276,10 @@ function managementTests(useJsonStorage?: boolean): void {
       POST("/accessKeys", accessKeyRequest, done, null, 409);
     });
   });
-
   describe("GET access key", (): void => {
     it("successfully gets an existing access key by name", (done): void => {
-      GET("/accessKeys/" + accessKey.name, (err:any,response: { accessKey: restTypes.AccessKey }): void => {
-        if(err)return done(err);
+      GET("/accessKeys/" + accessKey.name, (err: any, response: { accessKey: restTypes.AccessKey }): void => {
+        if (err) return done(err);
         assert.equal(response.accessKey.friendlyName, accessKey.friendlyName);
         assert(response.accessKey.expires);
         done();
@@ -283,8 +287,8 @@ function managementTests(useJsonStorage?: boolean): void {
     });
 
     it("successfully gets an existing access key by friendlyName", (done): void => {
-      GET("/accessKeys/" + accessKey.friendlyName, (err:any,response: { accessKey: restTypes.AccessKey }): void => {
-        if(err)return done(err);
+      GET("/accessKeys/" + accessKey.friendlyName, (err: any, response: { accessKey: restTypes.AccessKey }): void => {
+        if (err) return done(err);
         assert.equal(response.accessKey.friendlyName, accessKey.friendlyName);
         assert(response.accessKey.expires);
         done();
@@ -312,15 +316,15 @@ function managementTests(useJsonStorage?: boolean): void {
       var newAccessKey = <restTypes.AccessKeyRequest>{
         friendlyName: "new name",
         ttl: newTtl,
-        scope: "all"
+        scope: "all",
       };
 
       var oldUrl: string = "/accessKeys/" + accessKey.friendlyName;
       var newUrl: string = "/accessKeys/" + newAccessKey.friendlyName;
       PATCH(oldUrl, newAccessKey, (err) => {
-        if(err)return done(err);
-        GET(newUrl, (err,response: any) => {
-          if(err)return done(err);
+        if (err) return done(err);
+        GET(newUrl, (err, response: any) => {
+          if (err) return done(err);
           assert.equal(response.accessKey.friendlyName, newAccessKey.friendlyName);
           assert.equal(response.accessKey.description, newAccessKey.friendlyName);
           assert(response.accessKey.expires <= new Date().getTime() + newTtl + 1000 * 60); // One minute buffer to account for clocks being out of sync
@@ -337,7 +341,7 @@ function managementTests(useJsonStorage?: boolean): void {
 
       var url: string = "/accessKeys/" + accessKey.friendlyName;
       PATCH(url, newAccessKey, (err) => {
-        if(err)return done(err);
+        if (err) return done(err);
         setTimeout(() => {
           GET(url, done, 401);
         }, 1000);
@@ -354,16 +358,16 @@ function managementTests(useJsonStorage?: boolean): void {
       var newAccessKey = <restTypes.AccessKeyRequest>{
         friendlyName: "new friendly name",
         name: "newkey",
-        scope:"all"
+        scope: "all",
       };
 
       var oldUrl: string = "/accessKeys/" + accessKey.friendlyName;
       var newUrl: string = "/accessKeys/" + newAccessKey.friendlyName;
       var newKeyUrl: string = "/accessKeys/" + newAccessKey.name;
-      PATCH(oldUrl, newAccessKey, (err:any) => {
-        if(err)return done(err);
-        GET(newUrl, (err:any,response: any) => {
-          if(err)return done(err);
+      PATCH(oldUrl, newAccessKey, (err: any) => {
+        if (err) return done(err);
+        GET(newUrl, (err: any, response: any) => {
+          if (err) return done(err);
           assert.equal(response.accessKey.friendlyName, newAccessKey.friendlyName);
           assert.equal(response.accessKey.description, newAccessKey.friendlyName);
           GET(newKeyUrl, done, 404);
@@ -373,10 +377,10 @@ function managementTests(useJsonStorage?: boolean): void {
 
     it("does not change undefined fields", (done) => {
       var newAccessKey = <restTypes.AccessKeyRequest>{};
-      PATCH("/accessKeys/" + accessKey.friendlyName, newAccessKey, (err:any) => {
-        if(err)return done(err);
-        GET("/accessKeys/" + accessKey.friendlyName, (err:any,response: any) => {
-          if(err)return done(err);
+      PATCH("/accessKeys/" + accessKey.friendlyName, newAccessKey, (err: any) => {
+        if (err) return done(err);
+        GET("/accessKeys/" + accessKey.friendlyName, (err: any, response: any) => {
+          if (err) return done(err);
           assert.equal(response.accessKey.friendlyName, accessKey.friendlyName);
           assert.equal(response.accessKey.description, accessKey.description);
           assert.equal(response.accessKey.expires, accessKey.expires);
@@ -387,10 +391,10 @@ function managementTests(useJsonStorage?: boolean): void {
 
     it("does not change null fields", (done) => {
       var newAccessKey = <restTypes.AccessKeyRequest>{ friendlyName: null };
-      PATCH("/accessKeys/" + accessKey.friendlyName, newAccessKey, (err:any) => {
-        if(err)return done(err);
-        GET("/accessKeys/" + accessKey.friendlyName, (err:any,response: any) => {
-          if(err)return done(err);
+      PATCH("/accessKeys/" + accessKey.friendlyName, newAccessKey, (err: any) => {
+        if (err) return done(err);
+        GET("/accessKeys/" + accessKey.friendlyName, (err: any, response: any) => {
+          if (err) return done(err);
           assert.equal(response.accessKey.friendlyName, accessKey.friendlyName);
           assert.equal(response.accessKey.description, accessKey.description);
           assert.equal(response.accessKey.expires, accessKey.expires);
@@ -463,30 +467,38 @@ function managementTests(useJsonStorage?: boolean): void {
   describe("DELETE access key", (): void => {
     it("successfully deletes an existing access key by name", (done): void => {
       var accessKeyToDelete: restTypes.AccessKeyRequest = testUtils.makeAccessKeyRequest();
-      accessKeyToDelete.scope="all";
-      POST("/accessKeys", accessKeyToDelete, (err: any,keyLocation: string): void => {
-        if(err)return done(err);
-        GET(keyLocation, (err,key: { accessKey: restTypes.AccessKey }): void => {
-          if(err)return done(err);
+      accessKeyToDelete.scope = "all";
+      POST("/accessKeys", accessKeyToDelete, (err: any, keyLocation: string): void => {
+        if (err) return done(err);
+        GET(keyLocation, (err, key: { accessKey: restTypes.AccessKey }): void => {
+          if (err) return done(err);
           assert(!!key && !!key.accessKey);
-          DELETE(`/accessKeys/${accessKeyToDelete.name}`, (): void => {
-            GET(keyLocation, done, 404);
-          },201);
+          DELETE(
+            `/accessKeys/${accessKeyToDelete.name}`,
+            (): void => {
+              GET(keyLocation, done, 404);
+            },
+            201
+          );
         });
       });
     });
 
     it("successfully deletes an existing access key by friendlyName", (done): void => {
       var accessKeyToDelete: restTypes.AccessKeyRequest = testUtils.makeAccessKeyRequest();
-      accessKeyToDelete.scope="all";
+      accessKeyToDelete.scope = "all";
       POST("/accessKeys", accessKeyToDelete, (err: any, keyLocation: string): void => {
-        if(err)return done(err);
-        GET(keyLocation, (err: any,key: { accessKey: restTypes.AccessKey }): void => {
-          if(err)return done(err);
+        if (err) return done(err);
+        GET(keyLocation, (err: any, key: { accessKey: restTypes.AccessKey }): void => {
+          if (err) return done(err);
           assert(!!key && !!key.accessKey);
-          DELETE(`/accessKeys/${key.accessKey.friendlyName}`, (): void => {
-            GET(keyLocation, done, 404);
-          },201);
+          DELETE(
+            `/accessKeys/${key.accessKey.friendlyName}`,
+            (): void => {
+              GET(keyLocation, done, 404);
+            },
+            201
+          );
         });
       });
     });
@@ -507,7 +519,7 @@ function managementTests(useJsonStorage?: boolean): void {
       var newAccessKey = testUtils.makeStorageAccessKey();
       newAccessKey.createdBy = machineName;
       newAccessKey.isSession = true;
-      newAccessKey.scope="all";
+      newAccessKey.scope = "all";
       firstKeyName = newAccessKey.friendlyName;
       storage
         .addAccessKey(account.id, newAccessKey)
@@ -587,8 +599,8 @@ function managementTests(useJsonStorage?: boolean): void {
 
     describe("GET apps", () => {
       it("returns apps for existing account", (done) => {
-        GET("/apps", (err:any,response: any) => {
-          if(err)return done(err);
+        GET("/apps", (err: any, response: any) => {
+          if (err) return done(err);
           assert(response.apps.length > 0);
           done();
         });
@@ -601,18 +613,18 @@ function managementTests(useJsonStorage?: boolean): void {
 
       it("resolves apps by qualified name", (done) => {
         var duplicateApp: restTypes.App = testUtils.makeRestApp();
-        POST("/apps", duplicateApp, (err:any,response: any) => {
-          if(err)return done(err);
-          POST(`/apps/${duplicateApp.name}/transfer/${otherAccount.email}`, /*objToSend*/ {}, (err: any,response: any) => {
-            if(err)return done(err);
-            POST("/apps", duplicateApp, (err: any,response: any) => {
-              if(err)return done(err);
-              GET(`/apps/${duplicateApp.name}`, (err:any,response: any) => {
-                if(err)return done(err);
+        POST("/apps", duplicateApp, (err: any, response: any) => {
+          if (err) return done(err);
+          POST(`/apps/${duplicateApp.name}/transfer/${otherAccount.email}`, /*objToSend*/ {}, (err: any, response: any) => {
+            if (err) return done(err);
+            POST("/apps", duplicateApp, (err: any, response: any) => {
+              if (err) return done(err);
+              GET(`/apps/${duplicateApp.name}`, (err: any, response: any) => {
+                if (err) return done(err);
                 assert.equal(response.app.name, duplicateApp.name);
                 assert.equal(response.app.collaborators[account.email].permission, Permissions.Owner);
-                GET(`/apps/${otherAccount.email}:${duplicateApp.name}`, (err: any,response: any) => {
-                  if(err)return done(err);
+                GET(`/apps/${otherAccount.email}:${duplicateApp.name}`, (err: any, response: any) => {
+                  if (err) return done(err);
                   assert.equal(response.app.name, `${otherAccount.email}:${duplicateApp.name}`);
                   assert.equal(response.app.collaborators[account.email].permission, Permissions.Collaborator);
                   done();
@@ -627,10 +639,10 @@ function managementTests(useJsonStorage?: boolean): void {
     describe("POST apps", () => {
       it("creates app for existing account", function (done) {
         var newApp: restTypes.App = testUtils.makeRestApp();
-        POST("/apps", newApp, (err: any,location: string) => {
-          if(err)return done(err);
-          GET(location, (err: any,response: any) => {
-            if(err)return done(err);
+        POST("/apps", newApp, (err: any, location: string) => {
+          if (err) return done(err);
+          GET(location, (err: any, response: any) => {
+            if (err) return done(err);
             assert.equal(response.app.name, newApp.name);
             done();
           });
@@ -642,8 +654,8 @@ function managementTests(useJsonStorage?: boolean): void {
 
         var url = "/apps";
 
-        POST(url, newApp, (err: any,location: string, responseBody: any): void => {
-          if(err)return done(err);
+        POST(url, newApp, (err: any, location: string, responseBody: any): void => {
+          if (err) return done(err);
           assert(responseBody);
           var app: restTypes.App = responseBody.app;
           assert(app);
@@ -665,11 +677,11 @@ function managementTests(useJsonStorage?: boolean): void {
 
         var url = "/apps";
 
-        POST(url, newApp, (err: any,location: string): void => {
-          if(err)return done(err);
+        POST(url, newApp, (err: any, location: string): void => {
+          if (err) return done(err);
           url += "/" + newApp.name + "/deployments";
-          GET(url, (err: any,response: { deployments: restTypes.Deployment[] }): void => {
-            if(err)return done(err);
+          GET(url, (err: any, response: { deployments: restTypes.Deployment[] }): void => {
+            if (err) return done(err);
             assert.equal(response.deployments.length, 0);
             done();
           });
@@ -681,29 +693,36 @@ function managementTests(useJsonStorage?: boolean): void {
         var newApp = {};
         POST(url, newApp, done, null, 400);
       });
-      //#MARK:todo 2
+
       it("returns 409 if duplicate name provided", (done): void => {
         var newApp: restTypes.App = testUtils.makeRestApp();
 
         newApp.name = app.name;
 
-        POST("/apps", newApp, (err:any)=>{
-          if(err)return done(err);
-        }, null, 409);
+        POST(
+          "/apps",
+          newApp,
+          (err: any) => {
+            if (err) return done(err);
+            done();
+          },
+          null,
+          409
+        );
       });
 
       it("tracks creation time", (done) => {
         var newApp: restTypes.App = testUtils.makeRestApp();
         var url = "/apps";
 
-        POST(url, newApp, (err:any,location: string): void => {
-          if(err)return done(err);
+        POST(url, newApp, (err: any, location: string): void => {
+          if (err) return done(err);
           storage.getApps(account.id).then((apps: storage.App[]) => {
             for (var app of apps) {
               if (app.name === newApp.name) {
                 assert(app.createdTime);
 
-                return;
+                return done();
               }
             }
 
@@ -712,11 +731,11 @@ function managementTests(useJsonStorage?: boolean): void {
         });
       });
     });
-//MARK:end
+
     describe("GET app", () => {
       it("successfully gets an existing app", (done) => {
-        GET("/apps/" + app.name, (err:any,response: any) => {
-          if(err)return done(err);
+        GET("/apps/" + app.name, (err: any, response: any) => {
+          if (err) return done(err);
           assert.equal(response.app.name, app.name);
           done();
         });
@@ -731,9 +750,13 @@ function managementTests(useJsonStorage?: boolean): void {
     describe("DELETE app", () => {
       it("successfully deletes an existing app", (done) => {
         var url: string = "/apps/" + app.name;
-        DELETE(url, () => {
-          GET(url, done, 404);
-        },201);
+        DELETE(
+          url,
+          () => {
+            GET(url, done, 404);
+          },
+          201
+        );
       });
 
       it("returns 404 for a missing app", (done) => {
@@ -748,10 +771,10 @@ function managementTests(useJsonStorage?: boolean): void {
         var oldUrl: string = "/apps/" + app.name;
         var newUrl: string = "/apps/" + newApp.name;
 
-        PATCH(oldUrl, newApp, (err:any) => {
-          if(err)return done(err);
-          GET(newUrl, (err:any,response: any) => {
-            if(err)return done(err);
+        PATCH(oldUrl, newApp, (err: any) => {
+          if (err) return done(err);
+          GET(newUrl, (err: any, response: any) => {
+            if (err) return done(err);
             assert.equal(response.app.name, newApp.name);
             GET(oldUrl, done, 404);
           });
@@ -768,21 +791,21 @@ function managementTests(useJsonStorage?: boolean): void {
       it("does not change undefined fields", (done) => {
         var newApp = <restTypes.App>{};
         PATCH("/apps/" + app.name, newApp, () => {
-          GET("/apps/" + app.name, (err:any,response: any) => {
-            if(err)return done(err);
+          GET("/apps/" + app.name, (err: any, response: any) => {
+            if (err) return done(err);
             assert.equal(response.app.name, app.name);
             done();
           });
         });
       });
-//#MARK:todo 1
+
       it("does not change null fields", (done) => {
         var newApp: restTypes.App = testUtils.makeRestApp();
 
         newApp.name = null;
         PATCH("/apps/" + app.name, newApp, () => {
-          GET("/apps/" + app.name, (err:any,response: any) => {
-            if(err)return done(err);
+          GET("/apps/" + app.name, (err: any, response: any) => {
+            if (err) return done(err);
             assert.equal(response.app.name, app.name);
             done();
           });
@@ -811,8 +834,8 @@ function managementTests(useJsonStorage?: boolean): void {
     describe("GET deployments", () => {
       it("returns deployments for existing app", (done) => {
         var url: string = "/apps/" + app.name + "/deployments";
-        GET(url, (err:any,response: any) => {
-          if(err)return done(err);
+        GET(url, (err: any, response: any) => {
+          if (err) return done(err);
           assert.equal(response.deployments.length, 1);
           assert.equal(response.deployments[0].key, deployment.key);
           done();
@@ -831,10 +854,10 @@ function managementTests(useJsonStorage?: boolean): void {
 
         var url: string = "/apps/" + app.name + "/deployments";
 
-        POST(url, newDeployment, (err:any,location: string): void => {
-          if(err)return done(err);
-          GET(location, (err:any,response: { deployment: restTypes.Deployment }): void => {
-            if(err)return done(err);
+        POST(url, newDeployment, (err: any, location: string): void => {
+          if (err) return done(err);
+          GET(location, (err: any, response: { deployment: restTypes.Deployment }): void => {
+            if (err) return done(err);
             assert(!!response.deployment.key);
             done();
           });
@@ -848,10 +871,10 @@ function managementTests(useJsonStorage?: boolean): void {
 
         var url: string = "/apps/" + app.name + "/deployments";
 
-        POST(url, newDeployment, (err:any,location: string): void => {
-          if(err)return done(err);
-          GET(location, (err:any,response: { deployment: restTypes.Deployment }): void => {
-            if(err)return done(err);
+        POST(url, newDeployment, (err: any, location: string): void => {
+          if (err) return done(err);
+          GET(location, (err: any, response: { deployment: restTypes.Deployment }): void => {
+            if (err) return done(err);
             assert.equal(response.deployment.key, newDeployment.key);
             done();
           });
@@ -871,7 +894,7 @@ function managementTests(useJsonStorage?: boolean): void {
 
         POST(url, newDeployment, done, null, 400);
       });
-      //MARK:todo 2
+
       it("returns 409 if duplicate name provided", (done): void => {
         var newDeployment: restTypes.Deployment = testUtils.makeRestDeployment();
         newDeployment.name = deployment.name;
@@ -884,14 +907,14 @@ function managementTests(useJsonStorage?: boolean): void {
         var newDeployment: restTypes.Deployment = testUtils.makeRestDeployment();
         var url: string = "/apps/" + app.name + "/deployments";
 
-        POST(url, newDeployment, (err:any,location: string): void => {
-          if(err)return done(err);
+        POST(url, newDeployment, (err: any, location: string): void => {
+          if (err) return done(err);
           storage.getDeployments(account.id, app.id).then((deployments: storage.Deployment[]) => {
             for (var deployment of deployments) {
               if (deployment.name === newDeployment.name) {
                 assert(deployment.createdTime);
 
-                return;
+                return done();
               }
             }
 
@@ -900,11 +923,11 @@ function managementTests(useJsonStorage?: boolean): void {
         });
       });
     });
-//MARK:end
+
     describe("GET deployment", () => {
       it("successfully gets a deployment for an existing app", (done) => {
-        GET("/apps/" + app.name + "/deployments/" + deployment.name, (err:any,response: any) => {
-          if(err)return done(err);
+        GET("/apps/" + app.name + "/deployments/" + deployment.name, (err: any, response: any) => {
+          if (err) return done(err);
           assert.equal(response.deployment.name, deployment.name);
           assert.equal(response.deployment.key, deployment.key);
           done();
@@ -920,10 +943,14 @@ function managementTests(useJsonStorage?: boolean): void {
     describe("DELETE deployment", () => {
       it("successfully deletes a deployment for an existing app", (done) => {
         var url: string = "/apps/" + app.name + "/deployments/" + deployment.name;
-        DELETE(url, (err:any) => {
-          if(err)return done(err);
-          GET(url, done, 404);
-        },201);
+        DELETE(
+          url,
+          (err: any) => {
+            if (err) return done(err);
+            GET(url, done, 404);
+          },
+          201
+        );
       });
 
       it("returns 404 for a missing app", (done) => {
@@ -938,10 +965,10 @@ function managementTests(useJsonStorage?: boolean): void {
         var oldUrl: string = "/apps/" + app.name + "/deployments/" + deployment.name;
         var updatedUrl: string = "/apps/" + app.name + "/deployments/" + updatedDeployment.name;
 
-        PATCH(oldUrl, updatedDeployment, (err:any) => {
-          if(err)return done(err);
-          GET(updatedUrl, (err:any,response: any) => {
-            if(err)return done(err);
+        PATCH(oldUrl, updatedDeployment, (err: any) => {
+          if (err) return done(err);
+          GET(updatedUrl, (err: any, response: any) => {
+            if (err) return done(err);
             assert.equal(response.deployment.name, updatedDeployment.name);
             assert.equal(response.deployment.key, deployment.key);
             done();
@@ -955,17 +982,17 @@ function managementTests(useJsonStorage?: boolean): void {
 
         PATCH(url, newDeployment, done, 404);
       });
-      //#MARK:todo 1
+
       it("returns 409 if duplicate name provided", (done): void => {
         var newDeployment: restTypes.Deployment = testUtils.makeRestDeployment();
         var url: string = "/apps/" + app.name + "/deployments";
 
         newDeployment.name = "newDeployment";
 
-        POST(url, newDeployment, (err:any,location: string): void => {
-          if(err)return done(err);
-          GET(location, (err:any,response: { deployment: any }): void => {
-            if(err)return done(err);
+        POST(url, newDeployment, (err: any, location: string): void => {
+          if (err) return done(err);
+          GET(location, (err: any, response: { deployment: any }): void => {
+            if (err) return done(err);
             response.deployment.name = deployment.name;
 
             assert.notEqual(response.deployment.key, deployment.key);
@@ -979,8 +1006,8 @@ function managementTests(useJsonStorage?: boolean): void {
     describe("GET packageInfo", () => {
       it("gets info for a deployment", (done) => {
         var url: string = "/apps/" + app.name + "/deployments/" + deployment.name;
-        GET(url, (err:any,response: any) => {
-          if(err)return done(err);
+        GET(url, (err: any, response: any) => {
+          if (err) return done(err);
           assert.equal(response.deployment.package.description, packageDescription);
           assert.equal(response.deployment.package.packageHash, packageHash);
           assert.equal(response.deployment.package.label, "v1");
@@ -992,8 +1019,8 @@ function managementTests(useJsonStorage?: boolean): void {
         deployment = testUtils.makeStorageDeployment();
         storage.addDeployment(account.id, app.id, deployment).then((deploymentId: string) => {
           var url: string = "/apps/" + app.name + "/deployments/" + deployment.name + "/history";
-          GET(url, (err:any,response: any) => {
-            if(err)return done(err);
+          GET(url, (err: any, response: any) => {
+            if (err) return done(err);
             assert.equal(response.history.length, 0);
             done();
           });
@@ -1002,8 +1029,8 @@ function managementTests(useJsonStorage?: boolean): void {
 
       it("gets package history for deployment with history", (done) => {
         var url: string = "/apps/" + app.name + "/deployments/" + deployment.name + "/history";
-        GET(url, (err:any,response: any) => {
-          if(err)return done(err);
+        GET(url, (err: any, response: any) => {
+          if (err) return done(err);
           assert.equal(response.history.length, 1);
           assert.equal(response.history[0].description, packageDescription);
           done();
@@ -1014,8 +1041,8 @@ function managementTests(useJsonStorage?: boolean): void {
         it("gets metrics for deployment", (done) => {
           var url: string = "/apps/" + app.name + "/deployments/" + deployment.name + "/metrics";
 
-          GET(url, (err:any,response: any) => {
-            if(err)return done(err);
+          GET(url, (err: any, response: any) => {
+            if (err) return done(err);
             assert.equal(response.metrics.v1.installed, 1);
             done();
           });
@@ -1054,25 +1081,29 @@ function managementTests(useJsonStorage?: boolean): void {
 
       it("successfully clears the package history and relevant metrics for an existing deployment", (done) => {
         var url: string = `/apps/${app.name}/deployments/${deployment.name}/history`;
-        DELETE(url, (err:any) => {
-          if(err)return done(err);
-          GET(url, (err:any,response: any) => {
-            if(err)return done(err);
-            assert.equal(response.history.length, 0);
-            // Test that metrics has been cleared too.
-            if (isTestingMetrics) {
-              var url: string = `/apps/${app.name}/deployments/${deployment.name}/metrics`;
+        DELETE(
+          url,
+          (err: any) => {
+            if (err) return done(err);
+            GET(url, (err: any, response: any) => {
+              if (err) return done(err);
+              assert.equal(response.history.length, 0);
+              // Test that metrics has been cleared too.
+              if (isTestingMetrics) {
+                var url: string = `/apps/${app.name}/deployments/${deployment.name}/metrics`;
 
-              GET(url, (err:any,response: any) => {
-                if(err)return done(err);
-                assert.equal(JSON.stringify(response.metrics), "{}");
+                GET(url, (err: any, response: any) => {
+                  if (err) return done(err);
+                  assert.equal(JSON.stringify(response.metrics), "{}");
+                  done();
+                });
+              } else {
                 done();
-              });
-            } else {
-              done();
-            }
-          });
-        },201);
+              }
+            });
+          },
+          201
+        );
       });
 
       it("returns 403 if app with deployment history being cleared is not owned by user", (done) => {
@@ -1103,8 +1134,8 @@ function managementTests(useJsonStorage?: boolean): void {
         POST(
           url,
           { packageInfo: releasePackage },
-          (err:any) => {
-            if(err)return done(err);
+          (err: any) => {
+            if (err) return done(err);
             var releasePackage: storage.Package = testUtils.makePackage("1.*");
             POST(url, { packageInfo: releasePackage }, done, identicalPackage, 409);
           },
@@ -1118,8 +1149,8 @@ function managementTests(useJsonStorage?: boolean): void {
         POST(
           url,
           { packageInfo: releasePackage },
-          (err:any) => {
-            if(err)return done(err);
+          (err: any) => {
+            if (err) return done(err);
             var releasePackage: storage.Package = testUtils.makePackage("1.x");
             POST(url, { packageInfo: releasePackage }, done, identicalPackage, 409);
           },
@@ -1337,8 +1368,8 @@ function managementTests(useJsonStorage?: boolean): void {
             POST(
               url,
               { packageInfo: releasePackage },
-              (err:any) => {
-                if(err)return done(err);
+              (err: any) => {
+                if (err) return done(err);
                 storage.getPackageHistory(account.id, app.id, deployment.id).then((packageHistory: storage.Package[]) => {
                   assert.strictEqual(packageHistory[1].rollout, null);
                   done();
@@ -1358,8 +1389,8 @@ function managementTests(useJsonStorage?: boolean): void {
         POST(
           url,
           { packageInfo: releasePackage },
-          (err:any) => {
-            if(err)return done(err);
+          (err: any) => {
+            if (err) return done(err);
             storage.getPackageHistory(account.id, app.id, deployment.id).then((packageHistory: storage.Package[]) => {
               assert.equal(packageHistory.length, 2);
               assert.equal(packageHistory[1].isDisabled, true);
@@ -1499,26 +1530,28 @@ function managementTests(useJsonStorage?: boolean): void {
         POST(
           url,
           { packageInfo: releasePackage },
-          (err:any,location: string, result: any) => {
-            if(err)return done(err);
+          (err: any, location: string, result: any) => {
+            if (err) return done(err);
             var url: string = `/apps/${app.name}/deployments/${deployment.name}/promote/${otherDeployment.name}`;
             var newDescription: string = appPackage.description + " changed";
             var newIsMandatory: boolean = !appPackage.isMandatory;
-            POST(url, { packageInfo: { description: newDescription, isMandatory: newIsMandatory } }, (err:any) => {
-              if(err)return done(err);
-              storage.getDeployment(account.id, app.id, otherDeployment.id).then((deployment: storage.Deployment) => {
-                assert.equal(deployment.package.packageHash, result.package.packageHash);
-                assert.equal(deployment.package.description, newDescription);
-                assert.equal(deployment.package.isMandatory, newIsMandatory);
-                done();
-              })
-              .catch(done);
+            POST(url, { packageInfo: { description: newDescription, isMandatory: newIsMandatory } }, (err: any) => {
+              if (err) return done(err);
+              storage
+                .getDeployment(account.id, app.id, otherDeployment.id)
+                .then((deployment: storage.Deployment) => {
+                  assert.equal(deployment.package.packageHash, result.package.packageHash);
+                  assert.equal(deployment.package.description, newDescription);
+                  assert.equal(deployment.package.isMandatory, newIsMandatory);
+                  done();
+                })
+                .catch(done);
             });
           },
           getTestResource("test.zip")
         );
       });
-//MARK:todo 1
+
       it("returns 201 and nullifies rollout for new release as well as previous disabled release", (done) => {
         var url: string = "/apps/" + app.name + "/deployments/" + deployment.name + "/release";
         var secondAppPackage: storage.Package = testUtils.makePackage("1.0.0");
@@ -1577,15 +1610,16 @@ function managementTests(useJsonStorage?: boolean): void {
         POST(
           url,
           { packageInfo: packageToPromote },
-          (location: string, resultBody: any) => {
+          (err: any, location: string, resultBody: any) => {
+            if (err) return done(err);
             var targetDeployment: storage.Deployment = testUtils.makeStorageDeployment();
 
             storage.addDeployment(account.id, app.id, targetDeployment).then((targetDeploymentId: string) => {
               var url: string = `/apps/${app.name}/deployments/${deployment.name}/promote/${targetDeployment.name}`;
 
-              POST(url, {}, (location: string, promotedBody: any) => {
+              POST(url, {}, (err: any, location: string, promotedBody: any) => {
+                if (err) return done(err);
                 assert.equal(promotedBody.package.packageHash, resultBody.package.packageHash);
-
                 done();
               });
             });
@@ -1606,15 +1640,15 @@ function managementTests(useJsonStorage?: boolean): void {
         POST(
           url,
           { packageInfo: disabledPackage },
-          (err:any,location: string, resultBody: any) => {
-            if(err)return done(err);
+          (err: any, location: string, resultBody: any) => {
+            if (err) return done(err);
             var targetDeployment: storage.Deployment = testUtils.makeStorageDeployment();
 
             storage.addDeployment(account.id, app.id, targetDeployment).then((targetDeploymentId: string) => {
               var url: string = `/apps/${app.name}/deployments/${deployment.name}/promote/${targetDeployment.name}`;
 
-              POST(url, {}, (err:any,location: string, promotedBody: any) => {
-                  if(err)return done(err);
+              POST(url, {}, (err: any, location: string, promotedBody: any) => {
+                if (err) return done(err);
                 assert.equal(promotedBody.package.packageHash, resultBody.package.packageHash);
 
                 done();
@@ -1637,15 +1671,15 @@ function managementTests(useJsonStorage?: boolean): void {
         POST(
           url,
           { packageInfo: oldAppVersionPackage },
-          (err:any,location: string, resultBody: any) => {
-            if(err)return done(err);
+          (err: any, location: string, resultBody: any) => {
+            if (err) return done(err);
             var targetDeployment: storage.Deployment = testUtils.makeStorageDeployment();
 
             storage.addDeployment(account.id, app.id, targetDeployment).then((targetDeploymentId: string) => {
               var url: string = `/apps/${app.name}/deployments/${deployment.name}/promote/${targetDeployment.name}`;
 
-              POST(url, { packageInfo: { appVersion: "1.0.1" } }, (err:any,location: string, promotedBody: any) => {
-                if(err)return done(err);
+              POST(url, { packageInfo: { appVersion: "1.0.1" } }, (err: any, location: string, promotedBody: any) => {
+                if (err) return done(err);
                 assert.equal(promotedBody.package.packageHash, resultBody.package.packageHash);
                 assert.equal(promotedBody.package.appVersion, "1.0.1");
 
@@ -1947,7 +1981,8 @@ function managementTests(useJsonStorage?: boolean): void {
           .commitPackage(account.id, app.id, deployment.id, deployment.package)
           .then(() => {
             POST(url, /*body=*/ {}, (response: any) => {
-              GET("/apps/" + app.name + "/deployments/" + deployment.name, (response: any) => {
+              GET("/apps/" + app.name + "/deployments/" + deployment.name, (err: any, response: any) => {
+                if (err) return done(err);
                 var restPackage: restTypes.Package = response.deployment.package;
                 assert.equal(restPackage.description, packageDescription);
                 assert.equal(restPackage.releaseMethod, "Rollback");
@@ -1975,7 +2010,8 @@ function managementTests(useJsonStorage?: boolean): void {
           })
           .then(() => {
             POST(url, /*body=*/ {}, (response: any) => {
-              GET("/apps/" + app.name + "/deployments/" + deployment.name, (response: any) => {
+              GET("/apps/" + app.name + "/deployments/" + deployment.name, (err: any, response: any) => {
+                if (err) return done(err);
                 var restPackage: restTypes.Package = response.deployment.package;
                 assert.equal(restPackage.description, packageDescription);
                 assert.equal(restPackage.releaseMethod, "Rollback");
@@ -2005,7 +2041,8 @@ function managementTests(useJsonStorage?: boolean): void {
           })
           .then(() => {
             POST(url, /*body=*/ {}, (response: any) => {
-              GET("/apps/" + app.name + "/deployments/" + deployment.name, (response: any) => {
+              GET("/apps/" + app.name + "/deployments/" + deployment.name, (err: any, response: any) => {
+                if (err) return done(err);
                 var restPackage: restTypes.Package = response.deployment.package;
                 assert.equal(restPackage.description, secondPackage.description);
                 assert.equal(restPackage.releaseMethod, "Rollback");
@@ -2049,7 +2086,8 @@ function managementTests(useJsonStorage?: boolean): void {
           })
           .then(() => {
             POST(url, /*objToSend*/ {}, (response: any) => {
-              GET("/apps/" + app.name + "/deployments/" + deployment.name, (response: any) => {
+              GET("/apps/" + app.name + "/deployments/" + deployment.name, (err: any, response: any) => {
+                if (err) return done(err);
                 var restPackage: restTypes.Package = response.deployment.package;
                 assert.equal(restPackage.description, packageDescription);
                 assert.equal(restPackage.releaseMethod, "Rollback");
@@ -2081,7 +2119,8 @@ function managementTests(useJsonStorage?: boolean): void {
           .commitPackage(account.id, app.id, deployment.id, secondPackage)
           .then(() => {
             POST(url, /*objToSend*/ {}, (response: any) => {
-              GET("/apps/" + app.name + "/deployments/" + deployment.name + "/history", (response: any) => {
+              GET("/apps/" + app.name + "/deployments/" + deployment.name + "/history", (err: any, response: any) => {
+                if (err) return done(err);
                 var packageHistory: restTypes.Package[] = response.history;
 
                 packageHistory.forEach((appPackage: restTypes.Package) => {
@@ -2103,7 +2142,8 @@ function managementTests(useJsonStorage?: boolean): void {
       });
 
       it("succeeds as owner", (done) => {
-        GET("/apps/" + app.name + "/collaborators", (response: any) => {
+        GET("/apps/" + app.name + "/collaborators", (err: any, response: any) => {
+          if (err) return done(err);
           var collaboratorMap = <restTypes.CollaboratorMap>response.collaborators;
           assert(collaboratorMap);
           assert(collaboratorMap[account.email]);
@@ -2123,7 +2163,8 @@ function managementTests(useJsonStorage?: boolean): void {
             return storage.addCollaborator(otherAccount.id, otherApp.id, account.email);
           })
           .then(() => {
-            GET("/apps/" + otherApp.name + "/collaborators", (response: any) => {
+            GET("/apps/" + otherApp.name + "/collaborators", (err: any, response: any) => {
+              if (err) return done(err);
               var collaboratorMap = <restTypes.CollaboratorMap>response.collaborators;
               assert(collaboratorMap);
               assert(collaboratorMap[account.email]);
@@ -2139,7 +2180,8 @@ function managementTests(useJsonStorage?: boolean): void {
     describe("POST collaborators", () => {
       it("owner can add another collaborator", (done) => {
         POST("/apps/" + app.name + "/collaborators/" + otherAccount.email, {}, () => {
-          GET("/apps/" + app.name + "/collaborators", (response: any) => {
+          GET("/apps/" + app.name + "/collaborators", (err: any, response: any) => {
+            if (err) return done(err);
             var collaboratorMap = <restTypes.CollaboratorMap>response.collaborators;
             assert(collaboratorMap);
             assert(collaboratorMap[otherAccount.email]);
@@ -2180,12 +2222,13 @@ function managementTests(useJsonStorage?: boolean): void {
       describe("as collaborator", () => {
         var otherApp: storage.App;
 
-        beforeEach((done) => {
+        beforeEach(() => {
           otherApp = testUtils.makeStorageApp();
-          return storage.addApp(otherAccount.id, otherApp).then((storageApp) => {
-            otherApp = storageApp;
-            return storage.addCollaborator(otherAccount.id, otherApp.id, account.email);
-          });
+          return storage.addApp(otherAccount.id, otherApp)
+            .then((storageApp) => {
+              otherApp = storageApp;
+              return storage.addCollaborator(otherAccount.id, otherApp.id, account.email);
+            });
         });
 
         it("can delete itself", (done) => {
@@ -2312,7 +2355,7 @@ function managementTests(useJsonStorage?: boolean): void {
       if (err) {
         return callback(err);
       }
-      callback(null,result.headers["location"], result.body);
+      callback(null, result.headers["location"], result.body);
     });
   }
 
@@ -2329,7 +2372,7 @@ function managementTests(useJsonStorage?: boolean): void {
       });
   }
 
-  function DELETE(url: string, callback: (err:any) => void, statusCode = 204 /* No Content */): void {
+  function DELETE(url: string, callback: (err: any) => void, statusCode = 204 /* No Content */): void {
     request(server || serverUrl)
       .delete(url)
       .expect(statusCode)

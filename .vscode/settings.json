@@ -1,0 +1,8 @@
+{
+    "eslint.workingDirectories": [
+      "./api",
+      "./cli"
+    ],
+    "typescript.tsserver.experimental.enableProjectDiagnostics": true
+  }
+  

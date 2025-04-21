@@ -9,7 +9,7 @@ import * as stream from "stream";
 import * as storage from "./storage";
 
 import clone = storage.clone;
-import { isPrototypePollutionKey } from "./storage";
+import { AccessKey, isPrototypePollutionKey } from "./storage";
 
 function merge(original: any, updates: any): void {
   for (const property in updates) {
@@ -846,5 +846,18 @@ export class JsonStorage implements storage.Storage {
 
   private static getRejectedPromise(errorCode: storage.ErrorCode, message?: string): Promise<any> {
     return Promise.reject(storage.storageError(errorCode, message));
+  }
+
+  public isAccessKeyValid(keyName: string): Promise<boolean> {
+    const accessKeyInfo = this.accessKeyNameToAccountIdMap[keyName];
+    if (!accessKeyInfo) {
+      return Promise.resolve(false);
+    }
+    
+    if (accessKeyInfo.expires && accessKeyInfo.expires < Date.now()) {
+      return Promise.resolve(false);
+    }
+    
+    return Promise.resolve(true);
   }
 }

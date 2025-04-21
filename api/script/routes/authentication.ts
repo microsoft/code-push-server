@@ -76,12 +76,34 @@ export class Authentication {
   public async authenticate(req: Request, res: Response, next: (err?: Error) => void) {
     // Bypass authentication in development mode
     if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
-      if (req.body.user === undefined) {
-        req.user = {
-          id: "id_0",
-          email: "user1@example.com",
-          name: "User One",
-        };
+      // Extract token from auth header
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        
+        // Use the token to find the account
+        // First check if the key exists and is not expired
+    this._storageInstance.isAccessKeyValid(token)
+    .then(isValid => {
+      if (!isValid) {
+        // For expired or invalid keys, return 401 directly
+        res.status(401).send("Access key has expired or is invalid");
+        return;
+      }
+      
+      // If key is valid, get the associated account
+      return this._storageInstance.getAccountIdFromAccessKey(token)
+        .then(accountId => {
+          req.user = { id: accountId };
+          next();
+        });
+    })
+    .catch(() => {
+      // Only fall back to default for missing Authorization header
+      req.user = { id: "id_0" };
+      next();
+    });
+    return; // Important to prevent next() being called twice
       } else {
         req.user = req.headers.userId;
       }

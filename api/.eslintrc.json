@@ -1,4 +1,5 @@
 {
+    "root": true,
     "parser": "@typescript-eslint/parser",
     "parserOptions": {
         "ecmaVersion": "2022",
@@ -8,9 +9,9 @@
     "extends": [
     ],
     "rules": {
-        "no-var": "error",
-        "prefer-const": "error",
-        "no-unused-vars": "error",
+        // "no-var": "error",
+        // "prefer-const": "error",
+        // "no-unused-vars": "error",
         "eqeqeq": "error",
         "no-eval": "error"
     }

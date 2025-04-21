@@ -156,6 +156,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
     nameResolver
       .resolveAccessKey(accountId, accessKeyName)
       .then((accessKey: storageTypes.AccessKey): void => {
+        const currentTime = Date.now();
+
+        if (accessKey.expires && accessKey.expires < currentTime) {
+          res.status(401).send({ error: "Access key has expired" });
+          return;
+        }
         delete accessKey.name;
         res.send({ accessKey: accessKey });
       })
@@ -868,7 +874,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         }
 
         if (updateRelease) {
-          //MARK TODO: TEST THIS
+
           return storage.updatePackageHistory(accountId, appId, storageDeployment.id, packageHistory).then(() => {
             res.send({ package: converterUtils.toRestPackage(packageToUpdate) });
             return invalidateCachedPackage(storageDeployment.key);

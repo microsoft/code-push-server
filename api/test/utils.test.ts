@@ -146,21 +146,25 @@ export function getStreamAndSizeForFile(path: string): Promise<FileProps> {
 }
 
 export function retrieveStringContentsFromUrl(url: string): Promise<string> {
-  var protocol: typeof http | typeof https = null;
-  if (url.indexOf("https://") === 0) {
-    protocol = https;
-  } else {
-    protocol = http;
-  }
+  // Parse the URL to get components
+  const parsedUrl = new URL(url);
+  
+  // Determine protocol
+  const protocol = parsedUrl.protocol === 'https:' ? https : http;
 
   return new Promise((resolve: (stringValue: string) => void) => {
-    const requestOptions: https.RequestOptions = {
-      path: url,
+    const requestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'GET'
     };
+    
     protocol
       .get(requestOptions, (response: http.IncomingMessage) => {
         if (response.statusCode !== 200) {
-          return null;
+          resolve(null);
+          return;
         }
 
         makeStringFromStream(response).then((contents: string) => {

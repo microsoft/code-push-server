@@ -92,19 +92,21 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
             // Now verify that the diff package contents are correct.
             yauzl.open(diffArchiveFilePath, (error?: any, zipFile?: yauzl.ZipFile): void => {
               if (error) {
-                throw error;
+                done(error);
+                return;
               }
 
               var pend = new Pend();
 
               zipFile
                 .on("error", (error: any): void => {
-                  throw error;
+                  done(error);
                 })
                 .on("entry", (entry: yauzl.IEntry): void => {
                   zipFile.openReadStream(entry, (error?: any, readStream?: stream.Readable): void => {
                     if (error) {
-                      throw error;
+                      done(error);
+                      return;
                     }
 
                     pend.go((callback: (error?: any) => void): void => {
@@ -127,29 +129,40 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
                           }
 
                           expectedDiffContents.delete(entry.fileName);
-
                           callback(error);
-                        }, callback)
+                        })
+                        .catch(err => {
+                          callback(err);
+                        });
                     });
                   });
                 })
                 .on("close", (): void => {
                   pend.wait((error?: any): void => {
                     if (error) {
-                      throw error;
+                      done(error);
+                      return;
                     }
 
                     if (expectedDiffContents.size !== 0) {
-                      throw new Error("The diff archive contents were incorrect.");
+                      const err = new Error("The diff archive contents were incorrect.");
+                      done(err);
+                      return;
                     }
 
-                    fs.unlinkSync(diffArchiveFilePath);
-
-                    done();
+                    try {
+                      fs.unlinkSync(diffArchiveFilePath);
+                      done();
+                    } catch (err) {
+                      done(err);
+                    }
                   });
                 });
             });
           });
+        })
+        .catch((error) => {
+          done(error);
         });
     });
 
@@ -208,7 +221,7 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
                           expectedDiffContents.delete(entry.fileName);
 
                           callback(error);
-                        }, callback)
+                        }, callback);
                     });
                   });
                 })
@@ -229,6 +242,9 @@ function packageDiffTests(StorageType: new (...args: any[]) => storage.Storage):
                 });
             });
           });
+        })
+        .catch((error) => {
+          done(error);
         });
     });
   });

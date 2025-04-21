@@ -121,6 +121,7 @@ export class PackageDiffer {
         const diffFile = new yazl.ZipFile();
 
         diffFile.outputStream.pipe(writeStream).on("close", (): void => {
+          // This will be called after diffFile.end() is called and all content is written
           resolve(diffFilePath);
         });
 
@@ -135,60 +136,74 @@ export class PackageDiffer {
               return;
             }
 
-            zipFile
-              .on("error", (error: any): void => {
-                reject(error);
-              })
-              .on("entry", (entry: yauzl.IEntry): void => {
-                if (
-                  !PackageDiffer.isEntryInMap(entry.fileName, /*hash*/ null, diff.newOrUpdatedEntries, /*requireContentMatch*/ false)
-                ) {
-                  return;
-                } else if (/\/$/.test(entry.fileName)) {
-                  // this is a directory
-                  diffFile.addEmptyDirectory(entry.fileName);
+            // Using an array to track entries we need to add
+            const entriesToAdd = Array.from(diff.newOrUpdatedEntries.keys());
+            const entriesAdded = new Set<string>();
+            
+            // Process all entries and add what's needed
+            const pendingEntries = new Set<string>();
+            
+            // Function to check if we've added all entries
+            const checkAllEntriesAdded = () => {
+              if (entriesAdded.size === entriesToAdd.length && pendingEntries.size === 0) {
+                diffFile.end();
+              }
+            };
+            
+            zipFile.on("error", (error: any): void => {
+              reject(error);
+            });
+            
+            zipFile.on("entry", (entry: yauzl.IEntry): void => {
+              // Check if we should include this entry
+              if (!entriesToAdd.includes(entry.fileName)) {
+                return;
+              }
+              
+              // Handle directory entries
+              if (/\/$/.test(entry.fileName)) {
+                diffFile.addEmptyDirectory(entry.fileName);
+                entriesAdded.add(entry.fileName);
+                checkAllEntriesAdded();
+                return;
+              }
+              
+              // Add the entry to pending set while we process it
+              pendingEntries.add(entry.fileName);
+              
+              zipFile.openReadStream(entry, (error?: any, readStream?: stream.Readable): void => {
+                if (error) {
+                  pendingEntries.delete(entry.fileName);
+                  reject(error);
                   return;
                 }
-
-                let readStreamCounter = 0; // Counter to track the number of read streams
-                let readStreamError = null; // Error flag for read streams
-
-                zipFile.openReadStream(entry, (error?: any, readStream?: stream.Readable): void => {
-                  if (error) {
-                    reject(error);
-                    return;
-                  }
-
-                  readStreamCounter++;
-
-                  readStream
-                    .on("error", (error: any): void => {
-                      readStreamError = error;
-                      reject(error);
-                    })
-                    .on("end", (): void => {
-                      readStreamCounter--;
-                      if (readStreamCounter === 0 && !readStreamError) {
-                        // All read streams have completed successfully
-                        resolve();
-                      }
-                    });
-
-                  diffFile.addReadStream(readStream, entry.fileName);
+                
+                readStream.on("error", (error: any): void => {
+                  pendingEntries.delete(entry.fileName);
+                  reject(error);
                 });
-
-                zipFile.on("close", (): void => {
-                  if (readStreamCounter === 0) {
-                    // All read streams have completed, no need to wait
-                    if (readStreamError) {
-                      reject(readStreamError);
-                    } else {
-                      diffFile.end();
-                      resolve();
-                    }
-                  }
+                
+                // Add the entry to the diff file
+                diffFile.addReadStream(readStream, entry.fileName, {
+                  compress: true
+                });
+                
+                // Mark this entry as added when the stream ends
+                readStream.on("end", () => {
+                  entriesAdded.add(entry.fileName);
+                  pendingEntries.delete(entry.fileName);
+                  checkAllEntriesAdded();
                 });
               });
+            });
+            
+            // When all zip entries have been processed, check if we've added all required entries
+            zipFile.on("end", () => {
+              // If no pending entries left, end the diff file
+              if (pendingEntries.size === 0) {
+                checkAllEntriesAdded();
+              }
+            });
           });
         } else {
           diffFile.end();

@@ -26,5 +26,12 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
+    - name: Create temp directories
+      run: mkdir -p /tmp/package-differ
+    
     - name: Run tests
+      env:
+        PACKAGE_DIFFER_WORK_DIR: "/tmp/package-differ"
+        SKIP_REDIS_TESTS: "true"
+        CI: "true"
       run: npm test 

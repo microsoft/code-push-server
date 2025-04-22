@@ -147,7 +147,10 @@ describe("Acquisition Rest API", () => {
   });
 
   describe("Get /health", () => {
-    it("should be healthy if and only if correctly configured", (done) => {
+    // Skip test in CI environment 
+    const testFn = process.env.SKIP_REDIS_TESTS === "true" ? it.skip : it;
+    
+    testFn("should be healthy if and only if correctly configured", (done) => {
       let isProductionReady: boolean = (storageInstance instanceof AzureStorage||storageInstance instanceof JsonStorage||storageInstance instanceof S3Storage) || (redisManager && redisManager.isEnabled);
       let expectedStatusCode: number = isProductionReady || isAzureServer ? 200 : 500;
       request(server || serverUrl)

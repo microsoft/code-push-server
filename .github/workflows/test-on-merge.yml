@@ -29,9 +29,16 @@ jobs:
     - name: Create temp directories
       run: mkdir -p /tmp/package-differ
     
+    - name: Setup Redis
+      uses: supercharge/redis-github-action@1.7.0
+      with:
+        redis-version: 7
+    
     - name: Run tests
       env:
         PACKAGE_DIFFER_WORK_DIR: "/tmp/package-differ"
-        SKIP_REDIS_TESTS: "true"
         CI: "true"
+        REDIS_HOST: "localhost"
+        REDIS_PORT: "6379"
+        TEMP: "/tmp"
       run: npm test 

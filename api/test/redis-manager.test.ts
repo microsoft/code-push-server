@@ -36,10 +36,6 @@ const expectedResponse: CacheableResponse = {
   body: "",
 };
 
-// Skip tests if SKIP_REDIS_TESTS is set to true
-const shouldSkipTests = process.env.SKIP_REDIS_TESTS === "true";
-const conditionalIt = shouldSkipTests ? it.skip : it;
-
 describe("Redis Cache Middleware", () => {
   beforeAll(async () => {
     if (!redisManager.isEnabled) {
@@ -51,18 +47,18 @@ describe("Redis Cache Middleware", () => {
     await redisManager.close();
   });
 
-  conditionalIt("should be healthy by default", async () => {
+  it("should be healthy by default", async () => {
     await redisManager.checkHealth();
   });
 
-  conditionalIt("first cache request should return null", async () => {
+  it("first cache request should return null", async () => {
     const expiryKey = `test:${shortid.generate()}`;
     const url = shortid.generate();
     const cacheResponse = await redisManager.getCachedResponse(expiryKey, url);
     expect(cacheResponse).toBeNull();
   });
 
-  conditionalIt("should get cache request after setting it once", async () => {
+  it("should get cache request after setting it once", async () => {
     const expiryKey = `test:${shortid.generate()}`;
     const url = shortid.generate();
     expectedResponse.statusCode = 200;
@@ -82,7 +78,7 @@ describe("Redis Cache Middleware", () => {
     expect(cacheResponse).toBeNull();
   });
 
-  conditionalIt("should be able to invalidate cached request", async () => {
+  it("should be able to invalidate cached request", async () => {
     const expiryKey = `test:${shortid.generate()}`;
     const url = shortid.generate();
     expectedResponse.statusCode = 200;

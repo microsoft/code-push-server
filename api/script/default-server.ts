@@ -12,6 +12,7 @@ import { RedisManager } from "./redis-manager";
 import { Storage } from "./storage/storage";
 import { Response } from "express";
 import rateLimit from "express-rate-limit";
+import config from "../config";
 const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || "<your-s3-bucket-name>";
 const RDS_DB_INSTANCE_IDENTIFIER = process.env.RDS_DB_INSTANCE_IDENTIFIER || "<your-rds-instance>";
 const SECRETS_MANAGER_SECRET_ID = process.env.SECRETS_MANAGER_SECRET_ID || "<your-secret-id>";
@@ -51,8 +52,14 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
   Promise.resolve(<void>(null))
     .then(async () => {
       if (!useJsonStorage) {
-        //storage = new JsonStorage();
-        storage = new S3Storage();
+        // Use config layer for storage
+        if (config.storage.type === "aws") {
+          storage = new S3Storage(); // You may want to pass config values to S3Storage constructor
+        } else if (config.storage.type === "azure") {
+          storage = new AzureStorage(config.storage.account, config.storage.accessKey);
+        } else {
+          throw new Error("Unsupported storage provider");
+        }
       } else {
         storage = new JsonStorage();
       }
@@ -60,7 +67,14 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
     .then(() => {
       const app = express();
       const auth = api.auth({ storage: storage });
-      const redisManager = new RedisManager();
+      // Use config layer for cache
+      let redisManager: RedisManager;
+      if (config.cache.type === "elasticache" || config.cache.type === "redis") {
+        // The RedisManager already reads from env, but you could refactor it to accept config
+        redisManager = new RedisManager();
+      } else {
+        throw new Error("Unsupported cache provider");
+      }
 
       // First, to wrap all requests and catch all exceptions.
       app.use(domain);

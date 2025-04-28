@@ -1,32 +1,27 @@
+export enum StorageType {
+  AWS = "aws",
+  AZURE = "azure"
+}
+
 export type StorageConfig =
   | {
-      type: "aws";
-      bucketName: string;
-      region: string;
+      type: StorageType.AWS;
+      bucketName?: string;
+      region?: string;
       accessKeyId: string;
       secretAccessKey: string;
     }
   | {
-      type: "azure";
+      type: StorageType.AZURE;
       account: string;
       accessKey: string;
     };
 
-export type CacheConfig =
-  | {
-      type: "elasticache";
-      host: string;
-      port: string;
-      password?: string;
-      cluster?: boolean;
-    }
-  | {
-      type: "redis";
-      host: string;
-      port: string;
-      password?: string;
-      cluster?: boolean;
-    };
+export type CacheConfig = {
+  type: "redis";
+  host: string;
+  port: string;
+};
 
 export interface CodePushConfig {
   storage: StorageConfig;

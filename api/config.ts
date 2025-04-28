@@ -1,34 +1,40 @@
-import { defineConfig } from "./config-utils";
+import { defineConfig, StorageType } from "./config-utils";
+
+console.log("=== Loading Config ===");
+console.log("STORAGE_PROVIDER:", process.env.STORAGE_PROVIDER);
+console.log("AWS Keys Present:", !!process.env.AWS_ACCESS_KEY_ID, !!process.env.AWS_SECRET_ACCESS_KEY);
+console.log("Azure Keys Present:", !!process.env.AZURE_STORAGE_ACCOUNT, !!process.env.AZURE_STORAGE_ACCESS_KEY);
+console.log("S3 Bucket:", process.env.S3_BUCKET_NAME);
+console.log("S3 Endpoint:", process.env.S3_ENDPOINT);
+console.log("Azure Storage Account:", process.env.AZURE_STORAGE_ACCOUNT);
+console.log("Redis Host:", process.env.REDIS_HOST);
+console.log("Redis Port:", process.env.REDIS_PORT);
+
+// Fix the storage provider selection logic to properly respect STORAGE_PROVIDER
+const useAzureStorage = process.env.STORAGE_PROVIDER === "azure" && 
+                        process.env.AZURE_STORAGE_ACCOUNT && 
+                        process.env.AZURE_STORAGE_ACCESS_KEY;
+
+console.log("✅ SELECTED STORAGE PROVIDER:", useAzureStorage ? "Azure Storage" : "AWS S3");
 
 export default defineConfig({
   storage:
-    process.env.STORAGE_PROVIDER === "aws"
+    useAzureStorage
       ? {
-          type: "aws",
+          type: StorageType.AZURE,
+          account: process.env.AZURE_STORAGE_ACCOUNT!,
+          accessKey: process.env.AZURE_STORAGE_ACCESS_KEY!,
+        }
+      : {
+          type: StorageType.AWS,
           bucketName: process.env.S3_BUCKET_NAME!,
           region: process.env.AWS_REGION!,
           accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
           secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-        }
-      : {
-          type: "azure",
-          account: process.env.AZURE_STORAGE_ACCOUNT!,
-          accessKey: process.env.AZURE_STORAGE_ACCESS_KEY!,
-        },
-  cache:
-    process.env.CACHE_PROVIDER === "aws"
-      ? {
-          type: "elasticache",
-          host: process.env.ELASTICACHE_HOST!,
-          port: process.env.ELASTICACHE_PORT!,
-          password: process.env.ELASTICACHE_PASSWORD,
-          cluster: process.env.ELASTICACHE_CLUSTER === "true",
-        }
-      : {
-          type: "redis",
-          host: process.env.REDIS_HOST!,
-          port: process.env.REDIS_PORT!,
-          password: process.env.REDIS_KEY,
-          cluster: process.env.REDIS_CLUSTER_ENABLED === "true",
-        },
+      },
+  cache: {
+    type: "redis",
+    host: process.env.REDIS_HOST!,
+    port: process.env.REDIS_PORT!,
+  }
 }); 

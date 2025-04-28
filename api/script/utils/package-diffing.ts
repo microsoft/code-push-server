@@ -154,7 +154,7 @@ export class PackageDiffer {
               reject(error);
             });
             
-            zipFile.on("entry", (entry: yauzl.IEntry): void => {
+            zipFile.on("entry", (entry: yauzl.Entry): void => {
               // Check if we should include this entry
               if (!entriesToAdd.includes(entry.fileName)) {
                 return;
@@ -289,7 +289,7 @@ export class PackageDiffer {
           return;
         }
 
-        const req: superagent.Request<any> = superagent.get(appPackage.manifestBlobUrl);
+        const req: superagent.Request = superagent.get(appPackage.manifestBlobUrl);
         const writeStream = new stream.Writable();
         let json = "";
 
@@ -317,7 +317,7 @@ export class PackageDiffer {
           "temp_" + PackageDiffer.randomString(20) + ".zip"
         );
         const writeStream: stream.Writable = fs.createWriteStream(downloadedArchiveFilePath);
-        const req: request.Request<any> = request.get(url);
+        const req: request.Request = request.get(url);
 
         req.pipe(writeStream).on("finish", () => {
           resolve(downloadedArchiveFilePath);

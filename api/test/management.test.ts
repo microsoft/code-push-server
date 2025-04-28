@@ -2315,7 +2315,7 @@ function managementTests(useJsonStorage?: boolean): void {
     request(server || serverUrl)
       .get(url)
       .set("Authorization", `Bearer ${accessKeyOverride || accessKey.name}`)
-      .expect(expectedStatus)
+      .expect(typeof expectedStatus === "number" ? expectedStatus : 200)
       .end((err: any, result: any) => {
         if (err) {
           return callback(err);
@@ -2338,7 +2338,7 @@ function managementTests(useJsonStorage?: boolean): void {
     fileToUpload?: string,
     statusCode = 201 /* Created */
   ): void {
-    var newRequest: superagent.Request<any> = request(server || serverUrl)
+    var newRequest: superagent.Request = request(server || serverUrl)
       .post(url)
       .set("Content-Type", "application/json")
       .set("Authorization", `Bearer ${accessKey.name}`)

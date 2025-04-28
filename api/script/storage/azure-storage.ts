@@ -181,6 +181,10 @@ export class AzureStorage implements storage.Storage {
   private _setupPromise: Promise<void>;
 
   public constructor(accountName?: string, accountKey?: string) {
+    console.log("=== INITIALIZING AZURE STORAGE ===");
+    console.log("Account Name:", accountName);
+    console.log("Account Key present:", !!accountKey);
+    
     shortid.characters("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-");
 
     this._setupPromise = this.setup(accountName, accountKey);

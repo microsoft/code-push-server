@@ -49,18 +49,28 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
   let isSecretsManagerConfigured: boolean;
   let secretValue: any;
 
+  console.log("=== Starting Server ===");
+  console.log("Config object:", JSON.stringify({
+    storageType: config.storage.type,
+    cacheType: config.cache.type,
+    useJsonStorage: useJsonStorage
+  }));
+
   Promise.resolve(<void>(null))
     .then(async () => {
       if (!useJsonStorage) {
         // Use config layer for storage
         if (config.storage.type === "aws") {
+          console.log("Initializing S3Storage from config");
           storage = new S3Storage(); // You may want to pass config values to S3Storage constructor
         } else if (config.storage.type === "azure") {
+          console.log("Initializing AzureStorage from config with account:", config.storage.account);
           storage = new AzureStorage(config.storage.account, config.storage.accessKey);
         } else {
           throw new Error("Unsupported storage provider");
         }
       } else {
+        console.log("Using JsonStorage (useJsonStorage is true)");
         storage = new JsonStorage();
       }
     })
@@ -69,7 +79,8 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       const auth = api.auth({ storage: storage });
       // Use config layer for cache
       let redisManager: RedisManager;
-      if (config.cache.type === "elasticache" || config.cache.type === "redis") {
+      if (config.cache.type === "redis") {
+        console.log("Initializing RedisManager with config type:", config.cache.type);
         // The RedisManager already reads from env, but you could refactor it to accept config
         redisManager = new RedisManager();
       } else {

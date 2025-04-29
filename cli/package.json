@@ -38,7 +38,7 @@
     "semver": "^7.5.3",
     "simctl": "^2.0.3",
     "slash": "1.0.0",
-    "superagent": "^8.0.9",
+    "superagent": "^10.2.0",
     "temp": "^0.9.4",
     "which": "^1.2.7",
     "wordwrap": "1.0.0",

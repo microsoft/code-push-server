@@ -24,10 +24,10 @@
   },
   "author": "Microsoft",
   "dependencies": {
-    "@azure/data-tables": "^13.2.2",
+    "@azure/data-tables": "^13.3.0",
     "@azure/identity": "^4.2.1",
     "@azure/keyvault-secrets": "^4.7.0",
-    "@azure/storage-blob": "^12.14.0",
+    "@azure/storage-blob": "^12.27.0",
     "@azure/storage-queue": "^12.13.0",
     "applicationinsights": "^2.7.0",
     "aws-cloudfront-sign": "^3.0.2",

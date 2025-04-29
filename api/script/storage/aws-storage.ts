@@ -303,12 +303,6 @@ export class S3Storage implements storage.Storage {
     private sequelize:Sequelize;
     private setupPromise: Promise<void>;
     public constructor() {
-        console.log("=== INITIALIZING AWS S3 STORAGE ===");
-        console.log("AWS Access Key:", process.env.AWS_ACCESS_KEY_ID);
-        console.log("AWS Secret Key present:", !!process.env.AWS_SECRET_ACCESS_KEY);
-        console.log("S3 Endpoint:", process.env.S3_ENDPOINT);
-        console.log("S3 Bucket Name:", this.bucketName);
-        console.log("S3 Region:", process.env.S3_REGION);
         
         this.s3 = new S3({
           endpoint: process.env.S3_ENDPOINT, // LocalStack S3 endpoint

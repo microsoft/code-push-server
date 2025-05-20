@@ -1,4 +1,10 @@
-# Visual Studio App Center CodePush Standalone Version
+# Archiving this repository
+ 
+Visual Studio App Center was retired on March 31, 2025, except for its Analytics and Diagnostics features. You can learn more about the retirement and the Analytics and Diagnostics extension [here](https://aka.ms/appcenter/retire). CodePush, along with other App Center features, was also retired on March 31, 2025. Consequently, we are archiving this repository.
+
+---
+
+## Visual Studio App Center CodePush Standalone Version
 
 [CodePush](https://learn.microsoft.com/en-us/appcenter/distribution/codepush/) is an App Center feature that enables React Native developers to deploy mobile app updates directly to their users’ devices. It consists of two parts: CodePush Server where developers can publish app updates to (e.g. JS, HTML, CSS or image changes), and [CodePush React Native Client SDK](https://github.com/Microsoft/react-native-code-push) that enables querying for updates from within an app.
 
